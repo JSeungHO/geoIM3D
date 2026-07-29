@@ -1,6 +1,6 @@
 # geoIM3D
 
-![JBT geoIM3D](apps/geolibre-desktop/public/favicon.png)
+![JBT geoIM3D](apps/geolibre-desktop/public/pwa-192x192.png)
 
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
