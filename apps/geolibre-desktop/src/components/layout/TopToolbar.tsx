@@ -1410,7 +1410,7 @@ export function TopToolbar({
         <img
           src={`${import.meta.env.BASE_URL}favicon.png`}
           alt={appTitle}
-          className="h-4 w-auto"
+          className="h-[30px] w-auto"
         />
         {showProjectInfo ? <span className="hidden sm:inline">{appTitle}</span> : null}
       </span>
