@@ -60,7 +60,6 @@ import {
   Info,
   Keyboard,
   Link2,
-  Map,
   MapPin,
   MessageSquare,
   Moon,
@@ -1386,7 +1385,7 @@ export function TopToolbar({
   // its trigger Button this class instead of `toolbarButtonClass`.
   const toolbarSecondaryButtonClass = cn(toolbarButtonClass, "hidden md:inline-flex");
   const toolbarIconClassName = cn("h-3.5 w-3.5", showLabels && "sm:me-1");
-  const appTitle = isTauri() ? "GeoLibre Desktop" : "GeoLibre";
+  const appTitle = isTauri() ? "geoIM3D Desktop" : "geoIM3D";
   const renderToolbarLabel = (label: string) =>
     showLabels ? <span className="hidden sm:inline">{label}</span> : null;
   const chrome: ToolbarChrome = {
@@ -1408,7 +1407,11 @@ export function TopToolbar({
       )}
     >
       <span className="me-1 flex shrink-0 items-center gap-1.5 text-sm font-semibold text-primary md:me-2">
-        <Map className="h-4 w-4" />
+        <img
+          src={`${import.meta.env.BASE_URL}logo-im3d.png`}
+          alt={appTitle}
+          className="h-4 w-auto"
+        />
         {showProjectInfo ? <span className="hidden sm:inline">{appTitle}</span> : null}
       </span>
       {isMenuVisible(uiProfile, "project") && (

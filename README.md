@@ -1,130 +1,76 @@
-# GeoLibre
+# geoIM3D
 
-[![Launch GeoLibre Web](https://img.shields.io/badge/Launch-GeoLibre%20Web-green.svg)](https://web.geolibre.app/)
-[![GeoLibre shared project](https://img.shields.io/badge/GeoLibre-share-green.svg)](https://share.geolibre.app)
-[![GeoLibre plugins](https://img.shields.io/badge/GeoLibre-plugins-green.svg)](https://plugins.geolibre.app)
-[![image](https://img.shields.io/pypi/v/geolibre.svg)](https://pypi.python.org/pypi/geolibre)
-[![image](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/opengeos/GeoLibre/blob/main/python/examples/getting-started.ipynb)
-[![image](https://img.shields.io/conda/vn/conda-forge/geolibre.svg)](https://anaconda.org/conda-forge/geolibre)
-[![Conda Recipe](https://img.shields.io/badge/recipe-geolibre-green.svg)](https://github.com/conda-forge/geolibre-feedstock)
-[![Open in CodeSandbox](https://img.shields.io/badge/Open%20in-CodeSandbox-blue?logo=codesandbox)](https://codesandbox.io/p/github/opengeos/geolibre)
-[![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-GeoLibre-0078D4?logo=windows)](https://apps.microsoft.com/detail/9nwt67rv531x)
-[![AUR version](https://img.shields.io/aur/version/geolibre-bin?logo=archlinux&label=AUR)](https://aur.archlinux.org/packages/geolibre-bin)
-[![FlatPark](https://img.shields.io/badge/FlatPark-GeoLibre-4A90D9?logo=flatpak)](https://flatpark.org/apps/app.geolibre.GeoLibre/)
-[![image](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20785400.svg)](https://doi.org/10.5281/zenodo.20785400)
+![JBT geoIM3D](apps/geolibre-desktop/public/logo-im3d.png)
 
-A free and open-source, lightweight, cloud-native GIS platform for visualizing, exploring, and analyzing geospatial data. It runs everywhere you do, in the web browser, on the desktop, on mobile, and inside Jupyter notebooks, all while keeping your data local and private.
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-GeoLibre is built with **Tauri v2**, **React**, **TypeScript**, **MapLibre GL JS**, **DuckDB-WASM Spatial**, and **deck.gl**. The same workspace runs as a native desktop app, a native Android app, in any modern web browser, and adapts responsively to mobile and small screens.
+**JBT geoIM3D**는 3D 공간정보와 3DGS(3D Gaussian Splatting) 데이터를 웹 브라우저,
+데스크톱, 모바일에서 함께 보고 분석하기 위한 클라우드 네이티브 GIS 플랫폼입니다.
+데이터는 사용자의 환경에 그대로 두고, 브라우저 안에서 변환·분석합니다.
 
-- **[Launch GeoLibre Web](https://web.geolibre.app/)** — the full app in your browser, nothing to install
-- **[Download the desktop app](https://geolibre.app/downloads/)** — Windows, macOS, and Linux installers
-- **[Get started](https://geolibre.app/getting-started/)** — install, run from source, and configure
-- **[Features](https://geolibre.app/features/)** — the complete feature list
+**Tauri v2**, **React**, **TypeScript**, **MapLibre GL JS**, **DuckDB-WASM Spatial**,
+**deck.gl** 위에 구축되어 있으며, 하나의 코드베이스가 네이티브 데스크톱 앱, Android 앱,
+웹 브라우저, Jupyter 노트북에서 동일하게 동작합니다.
 
-## Demos
+> 이 저장소는 오픈소스 [GeoLibre](https://github.com/opengeos/GeoLibre)(MIT)를 포크하여
+> ㈜제이비티의 geoIM3D 서비스에 맞게 리브랜딩한 것입니다. 원 저작자와 기여자에게 감사드립니다.
 
-**Click any screenshot to open it at full resolution, or any animation to play the full-quality video.**
+## 주요 기능
 
-### 3D Tiles
+- **3D 시각화** — 3D Tiles, 지형, 건물 돌출, 포인트 클라우드, 3DGS 장면
+- **클라우드 네이티브 포맷** — COG, PMTiles, GeoParquet, FlatGeobuf를 원격에서 직접 열람
+- **브라우저 내 분석** — DuckDB-WASM Spatial 기반 공간 SQL, Turf.js 벡터 처리, 700+ WASM 지오프로세싱 도구
+- **어디서나 실행** — 데스크톱(Windows/macOS/Linux), 웹, Android, Jupyter
+- **플러그인** — 내장 플러그인과 외부 플러그인(zip / manifest URL) 로딩
+- **다국어** — 한국어·영어를 포함한 UI 번역, `?locale` 파라미터로 임베드 언어 지정
 
-[![GeoLibre demo showing 3D Tiles rendered on a MapLibre map](https://files.opengeos.org/GeoLibre-demo.webp)](https://files.opengeos.org/GeoLibre-demo.webp)
+## 시작하기
 
-[Open the live project](https://share.geolibre.app/giswqs/3d-tiles)
+Node **22+**, npm 사용. 저장소 루트에서 한 번의 설치로 모든 워크스페이스가 연결됩니다.
 
-### NYC buildings and subways
+```bash
+npm install
+npm run dev            # 웹 개발 서버 → http://localhost:5173
+npm run tauri:dev      # 데스크톱 앱 (파일 대화상자, 로컬 MBTiles/래스터 읽기에 필요)
+npm run build          # 웹 프로덕션 빌드 → apps/geolibre-desktop/dist/
+npm run tauri:build    # 데스크톱 설치 파일
+npm run ci             # 전체 검증 (빌드 + 프론트엔드/워커/백엔드 테스트 + rust check)
+```
 
-Manhattan building footprints extruded in 3D and colored by construction era, with the MTA subway lines and stations on top and a legend generated automatically from the layers' symbology.
+테스트, 커버리지 기준, 사전 커밋 훅 등 개발 관련 상세 내용은 [CLAUDE.md](CLAUDE.md)와
+[docs/contributing.md](docs/contributing.md)를 참고하세요.
 
-[![Manhattan buildings extruded in 3D and colored by construction era, with MTA subway lines and stations and an auto-generated legend](https://files.opengeos.org/nyc-buildings.webp)](https://files.opengeos.org/nyc-buildings.webp)
+## 구조
 
-The animation below runs the Time Slider along the buildings' construction year, from 1850 to 2025, so Manhattan fills in era by era. Click it to play the full-quality video.
+npm workspaces 모노레포(`apps/*`, `packages/*`, `workers/*`)와, npm이 아닌 두 구성요소
+(Python FastAPI 사이드카 `backend/geolibre_server`, Jupyter anywidget 패키지 `python/`)로
+이루어져 있습니다.
 
-[![Animation of Manhattan buildings appearing by construction year as the Time Slider advances from 1850 to 2025](https://files.opengeos.org/nyc-buildings-gif.gif)](https://files.opengeos.org/nyc-buildings.webm)
+| 패키지 | 역할 |
+| --- | --- |
+| `@geolibre/core` | 도메인 타입, 프로젝트 포맷, Zustand 스토어 (단일 진실 공급원) |
+| `@geolibre/map` | MapLibre 생명주기와 레이어 동기화 |
+| `@geolibre/ui` | UI 프리미티브 |
+| `@geolibre/processing` | 클라이언트 사이드 알고리즘 레지스트리 |
+| `@geolibre/plugins` | 플러그인 인터페이스 및 내장 플러그인 |
+| `geolibre-desktop` | 셸 레이아웃, Tauri I/O, 조립 |
 
-[Open the live project](https://share.geolibre.app/giswqs/nyc-buildings-and-subways)
+## 문서
 
-### Planetary basemaps
+- [아키텍처](docs/architecture.md)
+- [프로젝트 파일 포맷](docs/project-format.md)
+- [플러그인 API](docs/plugin-api.md)
+- [UI 프로필](docs/ui-profiles.md)
+- [국제화(i18n)](docs/i18n.md)
+- [Python 패키지 (Jupyter)](docs/python.md)
+- [Android](docs/android.md) · [iOS](docs/ios.md)
+- [기여 가이드](docs/contributing.md)
 
-GeoLibre is not limited to Earth. Planetary basemaps from OpenPlanetaryMap and USGS Astrogeology cover the Moon, Mars, Mercury, Venus, the Galilean moons (Io, Europa, Ganymede, Callisto), Titan, Pluto, and Charon, with a per-project ellipsoid so distance, area, and scale measurements match the body you are mapping. The deep-space starfield behind each globe comes from the Atmosphere Effects plugin.
+## 문의
 
-<table>
-  <tr>
-    <td width="33%"><a href="https://files.opengeos.org/earth.webp"><img src="https://files.opengeos.org/earth.webp" alt="GeoLibre globe view of Earth over a starfield backdrop"></a></td>
-    <td width="33%"><a href="https://files.opengeos.org/moon.webp"><img src="https://files.opengeos.org/moon.webp" alt="GeoLibre globe view of the Moon over a starfield backdrop"></a></td>
-    <td width="33%"><a href="https://files.opengeos.org/mars.webp"><img src="https://files.opengeos.org/mars.webp" alt="GeoLibre globe view of Mars over a starfield backdrop"></a></td>
-  </tr>
-  <tr>
-    <td align="center"><b>Earth</b></td>
-    <td align="center"><b>Moon</b></td>
-    <td align="center"><b>Mars</b></td>
-  </tr>
-  <tr>
-    <td width="33%"><a href="https://files.opengeos.org/mercury.webp"><img src="https://files.opengeos.org/mercury.webp" alt="GeoLibre globe view of Mercury over a starfield backdrop"></a></td>
-    <td width="33%"><a href="https://files.opengeos.org/pluto.webp"><img src="https://files.opengeos.org/pluto.webp" alt="GeoLibre globe view of Pluto over a starfield backdrop"></a></td>
-    <td width="33%"><a href="https://files.opengeos.org/venus.webp"><img src="https://files.opengeos.org/venus.webp" alt="GeoLibre globe view of Venus over a starfield backdrop"></a></td>
-  </tr>
-  <tr>
-    <td align="center"><b>Mercury</b></td>
-    <td align="center"><b>Pluto</b></td>
-    <td align="center"><b>Venus</b></td>
-  </tr>
-</table>
+㈜제이비티 — <https://www.ejbt.co.kr> · <ks.jang@ejbt.co.kr>
 
-Switch bodies from the planet switcher in the Layers panel. See [Demos](https://geolibre.app/demos/) for more.
+## 라이선스
 
-### Video tutorials
-
-- [GeoLibre 1.0: A Free, Open-Source Cloud-Native GIS That Runs Anywhere (Browser, Desktop & Jupyter)](https://youtu.be/87Cm0QagtxI)
-- [Geoprocessing in the Browser: 700+ Free GIS Tools in GeoLibre, Zero Install](https://youtu.be/W32bIQO_nG8)
-
-## Documentation
-
-Full documentation, including the User Guide and Tutorials, is published at
-**[geolibre.app](https://geolibre.app)**.
-
-- **[Getting Started](https://geolibre.app/getting-started/)** - use GeoLibre on the web, desktop, Android, or in Jupyter; run it from source; run it with Docker; and configure optional credentials.
-- **[Features](https://geolibre.app/features/)** - the complete, feature-by-feature list of what GeoLibre can do today.
-- **[Demos](https://geolibre.app/demos/)** - a visual tour: 3D Tiles, 3D city data, planetary basemaps, the SQL Workspace, and embeds.
-- **[Downloads](https://geolibre.app/downloads/)** - installers and package managers for Windows, macOS, and Linux.
-- **[User Guide](https://geolibre.app/user-guide/interface/)** - a feature-by-feature reference for the interface, adding data, layers, styling, the attribute table, map controls, processing, the SQL Workspace, data integrations, plugins, settings, and embedding.
-- **[Tutorials](https://geolibre.app/tutorials/)** - hands-on, end-to-end workflows: your first map, cloud-native data, vector analysis, terrain analysis, spatial SQL, and sharing and embedding.
-- **Reference**
-  - [Architecture](docs/architecture.md)
-  - [Android](docs/android.md)
-  - [iOS](docs/ios.md)
-  - [Project format](docs/project-format.md)
-  - [Plugin API](docs/plugin-api.md)
-  - [UI Profiles](docs/ui-profiles.md)
-  - [Internationalization](docs/i18n.md)
-  - [Python package (Jupyter)](docs/python.md)
-  - [Notebook Panel](docs/notebook.md)
-  - [Roadmap](docs/roadmap.md)
-  - [Contributing](docs/contributing.md)
-  - [How to Cite](docs/citation.md)
-
-Contributions are welcome. See the [Contributing](docs/contributing.md) guide
-for the development setup, repository layout, and quality gate.
-
-## Acknowledgements
-
-GeoLibre is built on the free and open-source geospatial and web communities — including MapLibre GL JS, deck.gl, DuckDB-WASM Spatial, Turf.js, Tauri, React, and many more. See the full [Acknowledgements](https://geolibre.app/acknowledgements/) page for the complete list of projects and community contributors.
-
-- The **Atmosphere Effects** plugin (deep-space backdrop, parallax starfield, comets, and the globe atmosphere halo) adapts the technique and visual design from [Leonel Dias](https://leoneljdias.github.io/)'s article [*Globe atmosphere, halo, and comets*](https://leoneljdias.github.io/posts/globe-atmosphere-halo-comets/) — the layered Canvas 2D approach, the halo gradient and "screen" blend, the limb-sampling that keeps the halo aligned under pitch, and the starfield/comet parameters.
-- **Community contributors** — thanks to [**Ryanphoenix**](https://github.com/Ryanphoenix) for many valued contributions, including issue reports, feedback, and improvements.
-- **Beta testers** — thanks to [**René van der Velde**](https://github.com/renevandervelde) (Netherlands) for early testing, detailed bug reports, and feature requests.
-
-## Citation
-
-If you use GeoLibre in your work, please cite it. GeoLibre is archived on [Zenodo](https://zenodo.org/), which mints a DOI for every release. The concept DOI below always resolves to the latest version.
-
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20785400.svg)](https://doi.org/10.5281/zenodo.20785400)
-
-> Wu, Q. (2026). GeoLibre: A lightweight, cloud-native GIS platform for visualizing, exploring, and analyzing geospatial data. Zenodo. <https://doi.org/10.5281/zenodo.20785400>
-
-You can also use GitHub's **"Cite this repository"** button (which reads [`CITATION.cff`](CITATION.cff)) to copy a ready-made APA or BibTeX entry. See the [How to Cite](https://geolibre.app/citation/) page for more formats.
-
-## License
-
-[MIT](LICENSE)
+[MIT](LICENSE). 업스트림 GeoLibre 및 사용된 오픈소스 프로젝트(MapLibre GL JS, deck.gl,
+DuckDB-WASM Spatial, Turf.js, Tauri, React 등)의 라이선스를 함께 따릅니다.
