@@ -1408,9 +1408,9 @@ export function TopToolbar({
     >
       <span className="me-1 flex shrink-0 items-center gap-1.5 text-sm font-semibold text-primary md:me-2">
         <img
-          src={`${import.meta.env.BASE_URL}logo-im3d.png`}
+          src={`${import.meta.env.BASE_URL}favicon.png`}
           alt={appTitle}
-          className="h-4 w-auto"
+          className="h-[30px] w-auto"
         />
         {showProjectInfo ? <span className="hidden sm:inline">{appTitle}</span> : null}
       </span>
