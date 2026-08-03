@@ -34,7 +34,13 @@ const MANAGED_CREDENTIALS: ReadonlyArray<{
   // too complex for the compiler to represent (TS2590).
   titleKey: "settings.env.vworldKeyTitle" | "settings.env.dataGoKrKeyTitle";
   descriptionKey: "settings.env.vworldKeyDescription" | "settings.env.dataGoKrKeyDescription";
-  signupUrl: string;
+  /**
+   * Where to sign up, when the description links to it. Omitted for services
+   * whose portal we do not control: a moved page does not fail loudly, it lands
+   * somewhere wrong, so those are named in the copy instead and the
+   * `<keyLink>` placeholder renders as plain text.
+   */
+  signupUrl?: string;
   /**
    * Whether to list the individual APIs that need their own 활용신청. The
    * portal issues one key per account but licenses each OpenAPI separately, so
@@ -59,7 +65,6 @@ const MANAGED_CREDENTIALS: ReadonlyArray<{
     id: "data-go-kr:service-key",
     titleKey: "settings.env.dataGoKrKeyTitle",
     descriptionKey: "settings.env.dataGoKrKeyDescription",
-    signupUrl: "https://www.data.go.kr/iim/api/selectAPIAcountView.do",
     listsPortalServices: true,
     verify: verifyKmaApiKey,
   },
@@ -188,13 +193,17 @@ export function ManagedCredentialsSection({ open }: ManagedCredentialsSectionPro
               <Trans
                 i18nKey={credential.descriptionKey}
                 components={{
-                  keyLink: (
+                  // Without a sign-up URL the placeholder still has to resolve
+                  // to an element, or the wrapped words vanish from the copy.
+                  keyLink: credential.signupUrl ? (
                     <a
                       className="underline"
                       href={credential.signupUrl}
                       target="_blank"
                       rel="noreferrer noopener"
                     />
+                  ) : (
+                    <span />
                   ),
                 }}
               />

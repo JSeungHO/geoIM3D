@@ -37,7 +37,7 @@
         "unknown": "The key could not be verified."
       },
       "dataGoKrKeyTitle": "data.go.kr service key",
-      "dataGoKrKeyDescription": "Weather, air quality, and the other Korean public-data services are published through data.go.kr and share one service key per account. <keyLink>Request a key</keyLink>, paste the decoded (not URL-encoded) form, then apply for each API you want on the portal — access is granted per service.",
+      "dataGoKrKeyDescription": "Weather, air quality, and the other Korean public-data services are published through 공공데이터포털 (data.go.kr) and share one service key per account. Sign up there, paste the decoded (not URL-encoded) form of the key, then apply for each API you want — access is granted per service.",
       "servicesTitle": "Which APIs to apply for",
       "servicesIntro": "One key covers your whole account, but each API needs its own 활용신청. Search the portal for these names. An approval takes up to an hour to take effect, so a feature can still fail right after you apply.",
       "services": {
@@ -155,7 +155,8 @@
     },
     "buildings3d": "3D buildings (current view)",
     "buildingsTruncated": "Only the first 1,000 buildings in view were returned. Zoom in for a complete set.",
-    "rawAttributes": "All source fields"
+    "rawAttributes": "All source fields",
+    "openPanelFloating": "Search and geocoding (detached)…"
   },
   "kma": {
     "title": "Weather (KMA)",
@@ -231,7 +232,8 @@
       "W",
       "NW"
     ],
-    "airQuality": "Air quality (AirKorea)"
+    "airQuality": "Air quality (AirKorea)",
+    "openPanelFloating": "Weather lookup (detached)…"
   },
   "primaryGlobe": {
     "tablist": "Map renderer",

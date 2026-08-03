@@ -37,7 +37,7 @@
         "unknown": "키를 확인하지 못했습니다."
       },
       "dataGoKrKeyTitle": "공공데이터포털 서비스 키",
-      "dataGoKrKeyDescription": "기상, 대기질 등 국내 공공데이터 서비스는 공공데이터포털에서 제공하며 계정당 서비스 키 하나를 함께 씁니다. <keyLink>키 신청</keyLink> 후 일반(Decoding) 키를 입력하세요. 이용할 API는 포털에서 각각 활용신청해야 합니다 — 권한은 서비스별로 부여됩니다.",
+      "dataGoKrKeyDescription": "기상, 대기질 등 국내 공공데이터 서비스는 공공데이터포털(data.go.kr)에서 제공하며 계정당 서비스 키 하나를 함께 씁니다. 포털에서 키를 발급받아 일반(Decoding) 키를 입력하세요. 이용할 API는 각각 활용신청해야 합니다 — 권한은 서비스별로 부여됩니다.",
       "servicesTitle": "활용신청이 필요한 API",
       "servicesIntro": "키는 계정당 하나지만, API마다 활용신청이 따로 필요합니다. 공공데이터포털에서 아래 이름으로 검색하세요. 승인 후 반영까지 최대 1시간이 걸려서, 신청 직후에는 아직 안 될 수 있습니다.",
       "services": {
@@ -155,7 +155,8 @@
     },
     "buildings3d": "3D 건물 (현재 화면)",
     "buildingsTruncated": "현재 화면의 건물 중 1,000개까지만 조회됐습니다. 더 확대하면 전부 표시됩니다.",
-    "rawAttributes": "원본 속성 전체"
+    "rawAttributes": "원본 속성 전체",
+    "openPanelFloating": "검색·좌표 변환 (창으로)…"
   },
   "kma": {
     "title": "기상청 날씨",
@@ -231,7 +232,8 @@
       "서",
       "북서"
     ],
-    "airQuality": "대기질(에어코리아)"
+    "airQuality": "대기질(에어코리아)",
+    "openPanelFloating": "날씨 조회 (창으로)…"
   },
   "primaryGlobe": {
     "tablist": "지도 렌더러",
