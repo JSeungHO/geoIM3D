@@ -131,7 +131,7 @@ export interface DataGoKrResponse {
 
 export type DataGoKrTransport = (
   url: string,
-  init?: { signal?: AbortSignal },
+  init?: { signal?: AbortSignal }
 ) => Promise<DataGoKrResponse>;
 
 /**
@@ -199,6 +199,43 @@ export function resultCodeKind(code: string): DataGoKrErrorKind {
 }
 
 /**
+ * Maps a gateway fault to a {@link DataGoKrErrorKind}.
+ *
+ * The portal's gateway answers before the service does, with an envelope of its
+ * own (`OpenAPI_ServiceResponse.cmmMsgHeader`) rather than the usual
+ * `response.header`. It carries the actual reason, and reading it is the only
+ * way to tell "this key does not exist" from "this key exists but this API was
+ * never approved for it" — both of which arrive as a bare 403.
+ *
+ * `30` is reported for either, so it maps to `access-denied`: the app checks a
+ * key when it is entered, so by the time one specific service refuses it, an
+ * unapproved or not-yet-propagated 활용신청 is the likelier of the two. The
+ * message names both.
+ *
+ * @param text - The raw response body.
+ * @returns The matching kind, or null when this is not a gateway fault.
+ */
+export function gatewayErrorKind(text: string): DataGoKrErrorKind | null {
+  const code = /<?returnReasonCode>?"?\s*[:>]\s*"?(\d+)/.exec(text)?.[1];
+  if (!code) return null;
+  switch (code) {
+    case "30": // SERVICE_KEY_IS_NOT_REGISTERED
+    case "20": // SERVICE_ACCESS_DENIED
+      return "access-denied";
+    case "31": // DEADLINE_HAS_EXPIRED
+    case "32": // UNREGISTERED_IP
+      return "invalid-key";
+    case "22": // LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS
+      return "rate-limit";
+    case "12": // NO_OPENAPI_SERVICE — a path this client got wrong, not the user.
+    case "10":
+      return "invalid-request";
+    default:
+      return null;
+  }
+}
+
+/**
  * Maps a transport-level HTTP status to a {@link DataGoKrErrorKind}.
  *
  * Verified against the live gateway: an unregistered key is answered with 403
@@ -230,7 +267,7 @@ export type FormatParam = "dataType" | "returnType";
 export async function requestDataGoKrJson(
   path: string,
   params: Record<string, string>,
-  formatParam: FormatParam = "dataType",
+  formatParam: FormatParam = "dataType"
 ): Promise<Record<string, unknown>> {
   if (!hasDataGoKrServiceKey()) throw new DataGoKrError("no-key");
 
@@ -246,8 +283,16 @@ export async function requestDataGoKrJson(
     const response = await transport(url.href, {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-    if (!response.ok) throw new DataGoKrError(httpErrorKind(response.status));
     text = await response.text();
+    // Read before classifying: the gateway states the reason in the body, and
+    // throwing on the status alone discarded it — every rejection became
+    // "check the key" even when the real answer was that this one API had not
+    // been approved for an otherwise working key.
+    if (!response.ok) {
+      throw new DataGoKrError(
+        gatewayErrorKind(text) ?? httpErrorKind(response.status)
+      );
+    }
   } catch (error) {
     if (error instanceof DataGoKrError) throw error;
     if (error instanceof DOMException && error.name === "TimeoutError") {
@@ -264,14 +309,20 @@ export async function requestDataGoKrJson(
     payload = JSON.parse(text);
   } catch {
     throw new DataGoKrError(
-      /SERVICE.?KEY|UNREGISTERED|DENIED/i.test(text) ? "invalid-key" : "unknown",
+      gatewayErrorKind(text) ??
+        (/SERVICE.?KEY|UNREGISTERED|DENIED/i.test(text)
+          ? "invalid-key"
+          : "unknown")
     );
   }
 
   const response = (payload as { response?: unknown })?.response;
-  if (!response || typeof response !== "object") throw new DataGoKrError("unknown");
+  if (!response || typeof response !== "object") {
+    throw new DataGoKrError(gatewayErrorKind(text) ?? "unknown");
+  }
   const header = (response as { header?: Record<string, unknown> }).header;
-  const resultCode = typeof header?.resultCode === "string" ? header.resultCode : "";
+  const resultCode =
+    typeof header?.resultCode === "string" ? header.resultCode : "";
   if (resultCode !== "00") throw new DataGoKrError(resultCodeKind(resultCode));
 
   const body = (response as { body?: unknown }).body;
@@ -290,7 +341,9 @@ export async function requestDataGoKrJson(
  * @param body - The response body.
  * @returns The items, always as an array.
  */
-export function itemsOf(body: Record<string, unknown>): Array<Record<string, unknown>> {
+export function itemsOf(
+  body: Record<string, unknown>
+): Array<Record<string, unknown>> {
   const container = body.items;
   const raw =
     container && typeof container === "object" && !Array.isArray(container)

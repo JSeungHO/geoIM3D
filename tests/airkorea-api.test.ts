@@ -5,7 +5,11 @@ import {
   airKoreaGeoJson,
   stationLonLat,
 } from "../packages/plugins/src/plugins/airkorea-api";
-import { itemsOf, numericField } from "../packages/plugins/src/plugins/data-go-kr";
+import {
+  gatewayErrorKind,
+  itemsOf,
+  numericField,
+} from "../packages/plugins/src/plugins/data-go-kr";
 
 describe("station coordinates", () => {
   it("converts the published TM metres to degrees inside Korea", () => {
@@ -24,14 +28,23 @@ describe("station coordinates", () => {
     // whichever landed in Korea. The swapped pair resolves to ~129.77, 35.24 —
     // also inside Korea, near Ulsan — so the guess was wrong and undetectable.
     const swapped = stationLonLat(452080, 197329);
-    assert.ok(swapped, "the swapped pair still converts to a Korean coordinate");
-    assert.ok(swapped.lon > 129, `a Seoul station must not resolve to ${swapped.lon}`);
+    assert.ok(
+      swapped,
+      "the swapped pair still converts to a Korean coordinate"
+    );
+    assert.ok(
+      swapped.lon > 129,
+      `a Seoul station must not resolve to ${swapped.lon}`
+    );
     // Which is exactly why the axis order is fixed rather than inferred.
   });
 
   it("passes through coordinates that are already degrees", () => {
     // Keeps working if the service ever starts publishing lat/lon directly.
-    assert.deepEqual(stationLonLat(126.978, 37.5665), { lon: 126.978, lat: 37.5665 });
+    assert.deepEqual(stationLonLat(126.978, 37.5665), {
+      lon: 126.978,
+      lat: 37.5665,
+    });
   });
 
   it("rejects a coordinate that lands outside Korea", () => {
@@ -88,8 +101,22 @@ describe("itemsOf", () => {
 
 describe("airKoreaGeoJson", () => {
   const stations = [
-    { name: "중구", region: "서울", address: "서울 중구", lon: 126.97, lat: 37.56, crs: "EPSG:4326" as const },
-    { name: "관측불가", region: "서울", address: "서울", lon: 127.0, lat: 37.5, crs: "EPSG:4326" as const },
+    {
+      name: "중구",
+      region: "서울",
+      address: "서울 중구",
+      lon: 126.97,
+      lat: 37.56,
+      crs: "EPSG:4326" as const,
+    },
+    {
+      name: "관측불가",
+      region: "서울",
+      address: "서울",
+      lon: 127.0,
+      lat: 37.5,
+      crs: "EPSG:4326" as const,
+    },
   ];
 
   it("folds the readings into the feature properties", () => {
@@ -140,5 +167,40 @@ describe("region list", () => {
       assert.ok(AIRKOREA_REGIONS.includes(region), `missing ${region}`);
     }
     assert.equal(new Set(AIRKOREA_REGIONS).size, AIRKOREA_REGIONS.length);
+  });
+});
+
+describe("gatewayErrorKind", () => {
+  it("reads the reason out of the live gateway's fault", () => {
+    // Captured verbatim from apis.data.go.kr/B552584 for an unregistered key.
+    const fault = JSON.stringify({
+      OpenAPI_ServiceResponse: {
+        cmmMsgHeader: {
+          errMsg: "SERVICE_KEY_IS_NOT_REGISTERED_ERROR",
+          returnAuthMsg: "등록되지 않은 서비스키",
+          returnReasonCode: "30",
+        },
+      },
+    });
+    // Not "invalid-key": the same key works for other services, so what this
+    // tells the user is to check the 활용신청 for this one.
+    assert.equal(gatewayErrorKind(fault), "access-denied");
+  });
+
+  it("separates a path this client got wrong from a key problem", () => {
+    // A bogus service path answers 400 with reason 12, not a key error.
+    assert.equal(
+      gatewayErrorKind('{"returnReasonCode":"12"}'),
+      "invalid-request"
+    );
+    assert.equal(gatewayErrorKind('{"returnReasonCode":"32"}'), "invalid-key");
+  });
+
+  it("declines to classify a body that is not a gateway fault", () => {
+    assert.equal(
+      gatewayErrorKind('{"response":{"header":{"resultCode":"00"}}}'),
+      null
+    );
+    assert.equal(gatewayErrorKind(""), null);
   });
 });

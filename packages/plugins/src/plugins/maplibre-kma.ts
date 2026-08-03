@@ -11,6 +11,7 @@
  */
 
 import type { GeoLibreAppAPI, GeoLibrePlugin } from "../types";
+import { DataGoKrError } from "./data-go-kr";
 import {
   airKoreaGeoJson,
   airKoreaReadings,
@@ -198,7 +199,15 @@ export function setKmaLabels(next: Partial<KmaLabels>): void {
  * @returns The message to show.
  */
 function errorMessage(error: unknown): string {
-  const kind: KmaErrorKind = error instanceof KmaError ? error.kind : "unknown";
+  // Both classes, because this panel shows two agencies: the weather services
+  // throw KmaError and AirKorea throws DataGoKrError. They share one kind
+  // vocabulary, but only the first was accepted, so every air-quality failure —
+  // including "this API is not approved for your key" — was flattened into the
+  // generic message and the user had nothing to act on.
+  const kind: KmaErrorKind =
+    error instanceof KmaError || error instanceof DataGoKrError
+      ? (error.kind as KmaErrorKind)
+      : "unknown";
   const messages: Record<KmaErrorKind, string> = {
     "no-key": labels.errorNoKey,
     network: labels.errorNetwork,
