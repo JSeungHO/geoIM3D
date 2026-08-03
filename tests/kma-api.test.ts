@@ -29,14 +29,18 @@ import {
 
 const TEST_KEY = "test-kma-service-key";
 
-function stubFetch(payload: unknown, options: { ok?: boolean; status?: number } = {}) {
+function stubFetch(
+  payload: unknown,
+  options: { ok?: boolean; status?: number } = {}
+) {
   const calls: string[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     calls.push(String(input));
     return {
       ok: options.ok ?? true,
       status: options.status ?? 200,
-      text: async () => (typeof payload === "string" ? payload : JSON.stringify(payload)),
+      text: async () =>
+        typeof payload === "string" ? payload : JSON.stringify(payload),
     } as Response;
   }) as typeof fetch;
   return calls;
@@ -44,7 +48,12 @@ function stubFetch(payload: unknown, options: { ok?: boolean; status?: number } 
 
 /** A successful portal envelope around `items`. */
 function envelope(items: unknown) {
-  return { response: { header: { resultCode: "00" }, body: { items: { item: items } } } };
+  return {
+    response: {
+      header: { resultCode: "00" },
+      body: { items: { item: items } },
+    },
+  };
 }
 
 const originalFetch = globalThis.fetch;
@@ -88,7 +97,7 @@ describe("KMA forecast grid", () => {
   it("rejects non-finite coordinates", () => {
     assert.throws(
       () => latLonToGrid(Number.NaN, 37.5),
-      (error: KmaError) => error.kind === "invalid-request",
+      (error: KmaError) => error.kind === "invalid-request"
     );
   });
 });
@@ -159,6 +168,37 @@ describe("base times", () => {
     assert.deepEqual(villageForecastBase(new Date("2026-07-28T16:30:00Z")), {
       baseDate: "20260728",
       baseTime: "2300",
+    });
+  });
+
+  it("steps back through earlier village-forecast runs", () => {
+    // 09:05 KST: the newest run is 08:00, and stepping back walks 05, then 02.
+    const now = new Date("2026-07-29T00:05:00Z");
+    assert.deepEqual(villageForecastBase(now, 1), {
+      baseDate: "20260729",
+      baseTime: "0500",
+    });
+    assert.deepEqual(villageForecastBase(now, 2), {
+      baseDate: "20260729",
+      baseTime: "0200",
+    });
+  });
+
+  it("crosses midnight when stepping back past the day's first run", () => {
+    // 03:05 KST: only the 02:00 run exists today, so one step back is
+    // yesterday's last run rather than a slot that was never published.
+    const now = new Date("2026-07-28T18:05:00Z");
+    assert.deepEqual(villageForecastBase(now, 0), {
+      baseDate: "20260729",
+      baseTime: "0200",
+    });
+    assert.deepEqual(villageForecastBase(now, 1), {
+      baseDate: "20260728",
+      baseTime: "2300",
+    });
+    assert.deepEqual(villageForecastBase(now, 2), {
+      baseDate: "20260728",
+      baseTime: "2000",
     });
   });
 });
@@ -237,7 +277,10 @@ describe("service key normalization", () => {
     assert.ok(query.includes("serviceKey=abc%2Bdef%2Fghi%3D%3D"), query);
     assert.ok(!query.includes("%25"), "the key went out double-encoded");
     // And the value the server will parse is the decoded key.
-    assert.equal(new URL(calls[0]).searchParams.get("serviceKey"), "abc+def/ghi==");
+    assert.equal(
+      new URL(calls[0]).searchParams.get("serviceKey"),
+      "abc+def/ghi=="
+    );
   });
 });
 
@@ -253,15 +296,15 @@ describe("key handling", () => {
     setKmaApiKey("");
     await assert.rejects(
       () => kmaCurrentConditions(126.978, 37.5665),
-      (error: KmaError) => error.kind === "no-key",
+      (error: KmaError) => error.kind === "no-key"
     );
     await assert.rejects(
       () => kmaWarnings(),
-      (error: KmaError) => error.kind === "no-key",
+      (error: KmaError) => error.kind === "no-key"
     );
     await assert.rejects(
       () => kmaStations("aws"),
-      (error: KmaError) => error.kind === "no-key",
+      (error: KmaError) => error.kind === "no-key"
     );
   });
 
@@ -274,7 +317,7 @@ describe("key handling", () => {
         assert.ok(!error.message.includes(TEST_KEY));
         assert.ok(!error.message.includes("data.go.kr"));
         return true;
-      },
+      }
     );
   });
 
@@ -282,10 +325,12 @@ describe("key handling", () => {
     // The portal answers an auth failure with an XML fault even when JSON was
     // requested, so a parse failure here is a key problem far more often than
     // it is a malformed success.
-    stubFetch("<OpenAPI_ServiceResponse><returnReasonCode>30</returnReasonCode>SERVICE KEY IS NOT REGISTERED ERROR</OpenAPI_ServiceResponse>");
+    stubFetch(
+      "<OpenAPI_ServiceResponse><returnReasonCode>30</returnReasonCode>SERVICE KEY IS NOT REGISTERED ERROR</OpenAPI_ServiceResponse>"
+    );
     await assert.rejects(
       () => kmaWarnings(),
-      (error: KmaError) => error.kind === "invalid-key",
+      (error: KmaError) => error.kind === "invalid-key"
     );
   });
 });
@@ -294,16 +339,30 @@ describe("kmaCurrentConditions", () => {
   it("requests the containing grid cell and normalizes the values", async () => {
     const calls = stubFetch(
       envelope([
-        { category: "T1H", obsrValue: "27.3", baseDate: "20260729", baseTime: "0800" },
-        { category: "PTY", obsrValue: "0", baseDate: "20260729", baseTime: "0800" },
-      ]),
+        {
+          category: "T1H",
+          obsrValue: "27.3",
+          baseDate: "20260729",
+          baseTime: "0800",
+        },
+        {
+          category: "PTY",
+          obsrValue: "0",
+          baseDate: "20260729",
+          baseTime: "0800",
+        },
+      ])
     );
 
-    const result = await kmaCurrentConditions(126.978, 37.5665, new Date("2026-07-29T00:50:00Z"));
+    const result = await kmaCurrentConditions(
+      126.978,
+      37.5665,
+      new Date("2026-07-29T00:50:00Z")
+    );
     const url = new URL(calls[0]);
     assert.equal(
       url.origin + url.pathname,
-      "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst",
+      "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst"
     );
     assert.equal(url.searchParams.get("nx"), "60");
     assert.equal(url.searchParams.get("ny"), "127");
@@ -322,7 +381,7 @@ describe("kmaCurrentConditions", () => {
     // Somewhere in the Pacific, far outside the Korean peninsula grid.
     await assert.rejects(
       () => kmaCurrentConditions(-120, 35),
-      (error: KmaError) => error.kind === "no-data",
+      (error: KmaError) => error.kind === "no-data"
     );
     assert.equal(calls.length, 0);
   });
@@ -331,7 +390,7 @@ describe("kmaCurrentConditions", () => {
     stubFetch({ response: { header: { resultCode: "03" } } });
     await assert.rejects(
       () => kmaCurrentConditions(126.978, 37.5665),
-      (error: KmaError) => error.kind === "no-data",
+      (error: KmaError) => error.kind === "no-data"
     );
   });
 });
@@ -340,10 +399,19 @@ describe("kmaVillageForecast", () => {
   it("requests the forecast operation with the newest published base time", async () => {
     const calls = stubFetch(
       envelope([
-        { category: "TMP", fcstValue: "29", fcstDate: "20260729", fcstTime: "1200" },
-      ]),
+        {
+          category: "TMP",
+          fcstValue: "29",
+          fcstDate: "20260729",
+          fcstTime: "1200",
+        },
+      ])
     );
-    const result = await kmaVillageForecast(126.978, 37.5665, new Date("2026-07-29T00:05:00Z"));
+    const result = await kmaVillageForecast(
+      126.978,
+      37.5665,
+      new Date("2026-07-29T00:05:00Z")
+    );
     const url = new URL(calls[0]);
     assert.ok(url.pathname.endsWith("/getVilageFcst"));
     assert.equal(url.searchParams.get("base_time"), "0800");
@@ -357,7 +425,14 @@ describe("kmaWarnings and kmaTyphoons", () => {
   it("unwraps a single-object item into a one-element list", async () => {
     // The portal collapses a one-element list into a bare object; assuming an
     // array would silently drop the only warning there is.
-    stubFetch(envelope({ tmFc: "202607290600", t6: "서울", title: "폭염주의보", stnId: "108" }));
+    stubFetch(
+      envelope({
+        tmFc: "202607290600",
+        t6: "서울",
+        title: "폭염주의보",
+        stnId: "108",
+      })
+    );
     const warnings = await kmaWarnings();
     assert.equal(warnings.length, 1);
     assert.equal(warnings[0].regions, "서울");
@@ -366,9 +441,15 @@ describe("kmaWarnings and kmaTyphoons", () => {
   it("drops typhoon rows with no usable position", async () => {
     stubFetch(
       envelope([
-        { typName: "카눈", typTm: "202607290600", typLon: "127.5", typLat: "30.2", typPs: "970" },
+        {
+          typName: "카눈",
+          typTm: "202607290600",
+          typLon: "127.5",
+          typLat: "30.2",
+          typPs: "970",
+        },
         { typName: "좌표없음", typTm: "202607290600" },
-      ]),
+      ])
     );
     const typhoons = await kmaTyphoons();
     assert.equal(typhoons.length, 1);
@@ -382,18 +463,22 @@ describe("kmaWarnings and kmaTyphoons", () => {
     stubFetch(envelope([]));
     await assert.rejects(
       () => kmaWarnings(),
-      (error: KmaError) => error.kind === "no-data",
+      (error: KmaError) => error.kind === "no-data"
     );
   });
 });
 
 describe("kmaStations", () => {
   it("requests the network's own operation", async () => {
-    const calls = stubFetch(envelope([{ stnId: "108", stnKo: "서울", lon: "126.9", lat: "37.5" }]));
+    const calls = stubFetch(
+      envelope([{ stnId: "108", stnKo: "서울", lon: "126.9", lat: "37.5" }])
+    );
     await kmaStations("aws");
     assert.ok(
-      new URL(calls[0]).pathname.endsWith("/1360000/WethrBasicInfoService/getAwsObsStn"),
-      "AWS stations must use the AWS operation",
+      new URL(calls[0]).pathname.endsWith(
+        "/1360000/WethrBasicInfoService/getAwsObsStn"
+      ),
+      "AWS stations must use the AWS operation"
     );
   });
 
@@ -401,7 +486,7 @@ describe("kmaStations", () => {
     const calls = stubFetch(envelope([]));
     await assert.rejects(
       () => kmaStations("not-a-network"),
-      (error: KmaError) => error.kind === "invalid-request",
+      (error: KmaError) => error.kind === "invalid-request"
     );
     assert.equal(calls.length, 0);
   });
@@ -411,7 +496,7 @@ describe("kmaStations", () => {
       envelope([
         { stnId: "108", stnKo: "서울", lon: "126.9", lat: "37.5" },
         { stnId: "999", stnKo: "좌표없음", lon: "", lat: "" },
-      ]),
+      ])
     );
     const stations = await kmaStations("aws");
     assert.equal(stations.length, 1);
@@ -427,21 +512,28 @@ describe("kmaStations", () => {
       type: "Point",
       coordinates: [126.9, 37.5],
     });
-    assert.deepEqual(geojson.features[0].properties, { stationId: "108", name: "서울" });
+    assert.deepEqual(geojson.features[0].properties, {
+      stationId: "108",
+      name: "서울",
+    });
   });
 });
 
 describe("verifyKmaApiKey", () => {
   it("passes when the service answers normally", async () => {
     stubFetch(envelope([{ category: "T1H", obsrValue: "27.3" }]));
-    assert.deepEqual(await verifyKmaApiKey(new Date("2026-07-30T00:50:00Z")), { ok: true });
+    assert.deepEqual(await verifyKmaApiKey(new Date("2026-07-30T00:50:00Z")), {
+      ok: true,
+    });
   });
 
   it("passes when the service authenticates but has no data for the cell", async () => {
     // NODATA proves the key was accepted; failing the check there would send
     // the user hunting a key problem that does not exist.
     stubFetch({ response: { header: { resultCode: "03" } } });
-    assert.deepEqual(await verifyKmaApiKey(new Date("2026-07-30T00:50:00Z")), { ok: true });
+    assert.deepEqual(await verifyKmaApiKey(new Date("2026-07-30T00:50:00Z")), {
+      ok: true,
+    });
   });
 
   it("reports a rejected key with the service's own reason", async () => {
@@ -469,7 +561,11 @@ describe("verifyKmaApiKey", () => {
   it("reports the missing key without making a request", async () => {
     setKmaApiKey("");
     const calls = stubFetch(envelope([]));
-    assert.deepEqual(await verifyKmaApiKey(), { ok: false, kind: "no-key", readable: true });
+    assert.deepEqual(await verifyKmaApiKey(), {
+      ok: false,
+      kind: "no-key",
+      readable: true,
+    });
     assert.equal(calls.length, 0);
   });
 });
@@ -490,11 +586,16 @@ describe("KMA transport injection", () => {
       return {
         ok: true,
         status: 200,
-        text: async () => JSON.stringify(envelope([{ category: "T1H", obsrValue: "27.3" }])),
+        text: async () =>
+          JSON.stringify(envelope([{ category: "T1H", obsrValue: "27.3" }])),
       };
     });
 
-    const result = await kmaCurrentConditions(126.978, 37.5665, new Date("2026-07-30T00:50:00Z"));
+    const result = await kmaCurrentConditions(
+      126.978,
+      37.5665,
+      new Date("2026-07-30T00:50:00Z")
+    );
     assert.equal(result.values[0].value, "27.3");
     assert.equal(urls.length, 1);
     assert.ok(urls[0].includes("/getUltraSrtNcst"), urls[0]);
@@ -511,7 +612,7 @@ describe("KMA transport injection", () => {
     });
     await assert.rejects(
       () => kmaWarnings(),
-      (error: KmaError) => error.kind === "network",
+      (error: KmaError) => error.kind === "network"
     );
     setKmaTransport(null);
   });
@@ -546,7 +647,7 @@ describe("forecast presentation", () => {
     ]);
     assert.deepEqual(
       slots.map((slot) => `${slot.date}${slot.time}`),
-      ["202608032300", "202608040300"],
+      ["202608032300", "202608040300"]
     );
   });
 
