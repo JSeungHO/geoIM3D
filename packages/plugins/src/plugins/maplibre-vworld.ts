@@ -48,6 +48,20 @@ import {
 
 export const VWORLD_PLUGIN_ID = "maplibre-gl-vworld";
 const PANEL_ID = "geolibre-vworld-panel";
+/**
+ * Id of the detached (floating) variant of this plugin's panel.
+ *
+ * The host keeps **one** plugin right panel active at a time — opening a second
+ * displaces the first — so activating both this plugin and its sibling left one
+ * of them switched on with nowhere to show. Floating cards have no such limit:
+ * several stay open at once. Registering the same `render` under both lets the
+ * user park one plugin in a card and keep the other docked.
+ *
+ * The two are mutually exclusive **for this plugin**: `state.container` holds a
+ * single element, so opening one closes the other rather than leaving a stale
+ * container that would never redraw.
+ */
+const FLOATING_PANEL_ID = `${PANEL_ID}-floating`;
 const MENU_ID = "geolibre-vworld-menu";
 
 /**
@@ -61,6 +75,8 @@ export interface VWorldLabels {
   /** Label of the toolbar menu this plugin registers. */
   menuLabel: string;
   openPanel: string;
+  /** Opens the same panel as a floating card, so two plugins can be up at once. */
+  openPanelFloating: string;
   basemaps: string;
   thematicLayers: string;
   buildings3d: string;
@@ -118,6 +134,7 @@ export const DEFAULT_VWORLD_LABELS: VWorldLabels = {
   title: "VWorld",
   menuLabel: "VWorld",
   openPanel: "Search and geocoding\u2026",
+  openPanelFloating: "Search and geocoding (detached)\u2026",
   basemaps: "Base maps",
   thematicLayers: "Thematic layers",
   buildings3d: "3D buildings (current view)",
@@ -490,6 +507,45 @@ async function addBuildingsInView(app: GeoLibreAppAPI): Promise<void> {
 let unregisterMenu: (() => void) | null = null;
 
 /**
+ * Mounts the panel body into whichever shell asked for it — docked or floating.
+ *
+ * @param container - The host-provided element.
+ * @returns The cleanup the host runs when that shell closes.
+ */
+function mountPanel(container: HTMLElement): () => void {
+  state.container = container;
+  renderPanel(container);
+  return () => {
+    // Only clear when this is still the mounted one: closing the docked panel
+    // after detaching would otherwise blank the card that is now showing.
+    if (state.container === container) state.container = null;
+  };
+}
+
+/**
+ * Shows the panel docked in the right sidebar, closing the detached card.
+ *
+ * @param app - The host API.
+ */
+function showDockedPanel(app: GeoLibreAppAPI): void {
+  app.closeFloatingPanel?.(FLOATING_PANEL_ID);
+  app.openRightPanel?.(PANEL_ID);
+}
+
+/**
+ * Shows the panel as a floating card, closing the docked one.
+ *
+ * Several cards stay open at once, so this is how two plugins are used side by
+ * side: the host allows only one *docked* plugin panel.
+ *
+ * @param app - The host API.
+ */
+function showFloatingPanel(app: GeoLibreAppAPI): void {
+  app.closeRightPanel?.(PANEL_ID);
+  app.openFloatingPanel?.(FLOATING_PANEL_ID);
+}
+
+/**
  * Registers (or rebuilds) the VWorld toolbar menu.
  *
  * Rebuilt rather than mutated: `registerToolbarMenu` replaces a menu with the
@@ -538,7 +594,12 @@ function buildToolbarMenu(app: GeoLibreAppAPI): void {
         {
           id: `${MENU_ID}-panel`,
           label: labels.openPanel,
-          onSelect: () => app.openRightPanel?.(PANEL_ID),
+          onSelect: () => showDockedPanel(app),
+        },
+        {
+          id: `${MENU_ID}-panel-floating`,
+          label: labels.openPanelFloating,
+          onSelect: () => showFloatingPanel(app),
         },
       ],
     }) ?? null;
@@ -944,13 +1005,13 @@ export const maplibreVWorldPlugin: GeoLibrePlugin = {
       id: PANEL_ID,
       title: () => labels.getTitle?.() ?? labels.title,
       defaultWidth: 340,
-      render(container) {
-        state.container = container;
-        renderPanel(container);
-        return () => {
-          state.container = null;
-        };
-      },
+      render: mountPanel,
+    });
+    app.registerFloatingPanel?.({
+      id: FLOATING_PANEL_ID,
+      title: () => labels.getTitle?.() ?? labels.title,
+      defaultWidth: 340,
+      render: mountPanel,
     });
     app.openRightPanel?.(PANEL_ID);
   },
@@ -964,6 +1025,8 @@ export const maplibreVWorldPlugin: GeoLibrePlugin = {
     unregisterMenu = null;
     app.closeRightPanel?.(PANEL_ID);
     app.unregisterRightPanel?.(PANEL_ID);
+    app.closeFloatingPanel?.(FLOATING_PANEL_ID);
+    app.unregisterFloatingPanel?.(FLOATING_PANEL_ID);
     // The vworld:// protocol is registered by the app at startup, not here:
     // layers added from Add Data must keep resolving after this panel closes.
     state.container = null;

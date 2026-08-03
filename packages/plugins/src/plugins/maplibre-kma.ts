@@ -38,6 +38,20 @@ import {
 
 export const KMA_PLUGIN_ID = "maplibre-gl-kma";
 const PANEL_ID = "geolibre-kma-panel";
+/**
+ * Id of the detached (floating) variant of this plugin's panel.
+ *
+ * The host keeps **one** plugin right panel active at a time — opening a second
+ * displaces the first — so activating both this plugin and its sibling left one
+ * of them switched on with nowhere to show. Floating cards have no such limit:
+ * several stay open at once. Registering the same `render` under both lets the
+ * user park one plugin in a card and keep the other docked.
+ *
+ * The two are mutually exclusive **for this plugin**: `state.container` holds a
+ * single element, so opening one closes the other rather than leaving a stale
+ * container that would never redraw.
+ */
+const FLOATING_PANEL_ID = `${PANEL_ID}-floating`;
 const MENU_ID = "geolibre-kma-menu";
 const TYPHOON_LAYER_ID = "geolibre-kma-typhoons";
 
@@ -51,6 +65,8 @@ export interface KmaLabels {
   /** Label of the toolbar menu this plugin registers. */
   menuLabel: string;
   openPanel: string;
+  /** Opens the same panel as a floating card, so two plugins can be up at once. */
+  openPanelFloating: string;
   stations: string;
   airQuality: string;
   /** Station-network labels, keyed by the labelKey in KMA_STATION_NETWORKS. */
@@ -93,6 +109,7 @@ export const DEFAULT_KMA_LABELS: KmaLabels = {
   title: "Weather (KMA)",
   menuLabel: "Weather (KMA)",
   openPanel: "Weather lookup\u2026",
+  openPanelFloating: "Weather lookup (detached)\u2026",
   stations: "Observation networks",
   airQuality: "Air quality (AirKorea)",
   networks: {
@@ -450,6 +467,45 @@ async function addAirQualityLayer(app: GeoLibreAppAPI): Promise<void> {
 let unregisterMenu: (() => void) | null = null;
 
 /**
+ * Mounts the panel body into whichever shell asked for it — docked or floating.
+ *
+ * @param container - The host-provided element.
+ * @returns The cleanup the host runs when that shell closes.
+ */
+function mountPanel(container: HTMLElement): () => void {
+  state.container = container;
+  renderPanel(container);
+  return () => {
+    // Only clear when this is still the mounted one: closing the docked panel
+    // after detaching would otherwise blank the card that is now showing.
+    if (state.container === container) state.container = null;
+  };
+}
+
+/**
+ * Shows the panel docked in the right sidebar, closing the detached card.
+ *
+ * @param app - The host API.
+ */
+function showDockedPanel(app: GeoLibreAppAPI): void {
+  app.closeFloatingPanel?.(FLOATING_PANEL_ID);
+  app.openRightPanel?.(PANEL_ID);
+}
+
+/**
+ * Shows the panel as a floating card, closing the docked one.
+ *
+ * Several cards stay open at once, so this is how two plugins are used side by
+ * side: the host allows only one *docked* plugin panel.
+ *
+ * @param app - The host API.
+ */
+function showFloatingPanel(app: GeoLibreAppAPI): void {
+  app.closeRightPanel?.(PANEL_ID);
+  app.openFloatingPanel?.(FLOATING_PANEL_ID);
+}
+
+/**
  * Registers (or rebuilds) the KMA toolbar menu. Rebuilt rather than mutated,
  * since the entries' disabled state follows the configured key.
  *
@@ -484,7 +540,12 @@ function buildToolbarMenu(app: GeoLibreAppAPI): void {
         {
           id: `${MENU_ID}-panel`,
           label: labels.openPanel,
-          onSelect: () => app.openRightPanel?.(PANEL_ID),
+          onSelect: () => showDockedPanel(app),
+        },
+        {
+          id: `${MENU_ID}-panel-floating`,
+          label: labels.openPanelFloating,
+          onSelect: () => showFloatingPanel(app),
         },
       ],
     }) ?? null;
@@ -788,13 +849,13 @@ export const maplibreKmaPlugin: GeoLibrePlugin = {
       id: PANEL_ID,
       title: () => labels.getTitle?.() ?? labels.title,
       defaultWidth: 340,
-      render(container) {
-        state.container = container;
-        renderPanel(container);
-        return () => {
-          state.container = null;
-        };
-      },
+      render: mountPanel,
+    });
+    app.registerFloatingPanel?.({
+      id: FLOATING_PANEL_ID,
+      title: () => labels.getTitle?.() ?? labels.title,
+      defaultWidth: 340,
+      render: mountPanel,
     });
   },
 
@@ -806,6 +867,8 @@ export const maplibreKmaPlugin: GeoLibrePlugin = {
     unregisterMenu = null;
     app.closeRightPanel?.(PANEL_ID);
     app.unregisterRightPanel?.(PANEL_ID);
+    app.closeFloatingPanel?.(FLOATING_PANEL_ID);
+    app.unregisterFloatingPanel?.(FLOATING_PANEL_ID);
     state.container = null;
     state.app = null;
     state.conditions = null;

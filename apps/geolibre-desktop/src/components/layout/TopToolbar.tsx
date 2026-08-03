@@ -530,6 +530,7 @@ export function TopToolbar({
       getTitle: () => i18n.t("vworld.title"),
       menuLabel: t("vworld.menuLabel"),
       openPanel: t("vworld.openPanel"),
+      openPanelFloating: t("vworld.openPanelFloating"),
       basemaps: t("vworld.basemaps"),
       thematicLayers: t("vworld.thematicLayers"),
       buildings3d: t("vworld.buildings3d"),
@@ -588,6 +589,7 @@ export function TopToolbar({
       getTitle: () => i18n.t("kma.title"),
       menuLabel: t("kma.menuLabel"),
       openPanel: t("kma.openPanel"),
+      openPanelFloating: t("kma.openPanelFloating"),
       stations: t("kma.stations"),
       airQuality: t("kma.airQuality"),
       // Returned whole: the network list lives in the plugin, so a new network
