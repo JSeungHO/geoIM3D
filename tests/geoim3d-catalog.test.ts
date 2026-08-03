@@ -24,6 +24,19 @@ function leaves(node: Record<string, unknown>, prefix = ""): Record<string, unkn
   return out;
 }
 
+/**
+ * Keys whose Korean value is deliberately the English text.
+ *
+ * Product and brand names are written the same in both locales, so the
+ * "looks untranslated" check below would flag them forever. Listed explicitly
+ * rather than pattern-matched: an accidental copy is exactly what the check
+ * exists to catch, and a rule loose enough to cover these would cover those too.
+ */
+const INTENTIONALLY_IDENTICAL = new Set([
+  "primaryGlobe.maplibre", // "OSM"
+  "primaryGlobe.cesium", // "Cesium"
+]);
+
 const UPSTREAM = "../apps/geolibre-desktop/src/i18n/locales";
 const FORK = "../apps/geolibre-desktop/src/i18n/locales-geoim3d";
 
@@ -98,6 +111,7 @@ describe("the split catalogs", () => {
     // was copied across and never translated.
     const copied = Object.keys(en).filter(
       (key) =>
+        !INTENTIONALLY_IDENTICAL.has(key) &&
         typeof en[key] === "string" &&
         ko[key] === en[key] &&
         /[a-z]/i.test(en[key] as string),

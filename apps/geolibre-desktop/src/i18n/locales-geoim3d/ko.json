@@ -218,8 +218,8 @@
   },
   "primaryGlobe": {
     "tablist": "지도 렌더러",
-    "maplibre": "OSM 지구본",
-    "cesium": "Cesium 지구본",
+    "maplibre": "OSM",
+    "cesium": "Cesium",
     "cesiumWithoutToken": "OpenStreetMap 영상으로 표시됩니다. 설정에서 Cesium Ion 토큰을 넣으면 위성영상과 지형 기복이 추가됩니다."
   }
 }
