@@ -12,6 +12,8 @@ import {
   vworldBuildings,
   buildingHeight,
   formatAttribute,
+  narrowToClicked,
+  pointInGeometry,
   isSecondaryAttribute,
   VWORLD_PRIMARY_ATTRIBUTES,
   ASSUMED_STOREY_HEIGHT_M,
@@ -28,7 +30,10 @@ import {
 const TEST_KEY = "test-vworld-key";
 
 /** Captures the URLs the client requests so assertions can inspect them. */
-function stubFetch(payload: unknown, options: { ok?: boolean; status?: number } = {}) {
+function stubFetch(
+  payload: unknown,
+  options: { ok?: boolean; status?: number } = {}
+) {
   const calls: string[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     calls.push(String(input));
@@ -39,7 +44,8 @@ function stubFetch(payload: unknown, options: { ok?: boolean; status?: number } 
       // supply a string (see setVWorldTransport). A string payload is passed
       // through raw so a test can feed a non-JSON body — VWorld's OGC endpoints
       // report failure as an XML ServiceExceptionReport.
-      text: async () => (typeof payload === "string" ? payload : JSON.stringify(payload)),
+      text: async () =>
+        typeof payload === "string" ? payload : JSON.stringify(payload),
     } as Response;
   }) as typeof fetch;
   return calls;
@@ -68,18 +74,21 @@ describe("VWorld API key handling", () => {
 
   it("refuses every request when no key is set", async () => {
     setVWorldApiKey("");
-    await assert.rejects(() => vworldSearch("서울"), (error: VWorldError) => error.kind === "no-key");
+    await assert.rejects(
+      () => vworldSearch("서울"),
+      (error: VWorldError) => error.kind === "no-key"
+    );
     await assert.rejects(
       () => vworldGeocode("세종대로 110"),
-      (error: VWorldError) => error.kind === "no-key",
+      (error: VWorldError) => error.kind === "no-key"
     );
     await assert.rejects(
       () => vworldReverseGeocode(126.97, 37.56),
-      (error: VWorldError) => error.kind === "no-key",
+      (error: VWorldError) => error.kind === "no-key"
     );
     assert.throws(
       () => resolveVWorldProtocolUrl("vworld://wmts/Base/10/300/800.png"),
-      (error: VWorldError) => error.kind === "no-key",
+      (error: VWorldError) => error.kind === "no-key"
     );
   });
 });
@@ -100,7 +109,9 @@ describe("vworldErrorKind", () => {
   });
 
   it("carries no key or request URL on the error itself", async () => {
-    stubFetch({ response: { status: "ERROR", error: { code: "INVALID_KEY" } } });
+    stubFetch({
+      response: { status: "ERROR", error: { code: "INVALID_KEY" } },
+    });
     await assert.rejects(
       () => vworldSearch("서울"),
       (error: VWorldError) => {
@@ -108,7 +119,7 @@ describe("vworldErrorKind", () => {
         assert.ok(!error.message.includes(TEST_KEY));
         assert.ok(!error.message.includes("api.vworld.kr"));
         return true;
-      },
+      }
     );
   });
 });
@@ -117,26 +128,41 @@ describe("tile and protocol URLs", () => {
   it("builds a key-free tile template so the key never reaches a saved project", () => {
     for (const map of VWORLD_BASE_MAPS) {
       const template = vworldTileTemplate(map);
-      assert.ok(!template.includes(TEST_KEY), `${map.id} template leaked the key`);
+      assert.ok(
+        !template.includes(TEST_KEY),
+        `${map.id} template leaked the key`
+      );
       assert.ok(template.startsWith("vworld://wmts/"));
       // WMTS orders the path {tileMatrix}/{tileRow}/{tileCol} — z/y/x, not the
       // z/x/y an XYZ service would use. Getting this backwards silently serves
       // the wrong tiles rather than failing.
-      assert.ok(template.includes("/{z}/{y}/{x}."), `${map.id} template has the wrong axis order`);
+      assert.ok(
+        template.includes("/{z}/{y}/{x}."),
+        `${map.id} template has the wrong axis order`
+      );
     }
   });
 
   it("uses the documented per-layer image format", () => {
     const satellite = VWORLD_BASE_MAPS.find((map) => map.id === "Satellite");
     assert.equal(satellite?.extension, "jpeg");
-    assert.equal(VWORLD_BASE_MAPS.find((map) => map.id === "Base")?.extension, "png");
+    assert.equal(
+      VWORLD_BASE_MAPS.find((map) => map.id === "Base")?.extension,
+      "png"
+    );
   });
 
   it("keeps each layer's documented zoom range", () => {
     // white/midnight stop at 18; Base/Hybrid/Satellite reach 19. A too-deep
     // maxzoom shows blank tiles instead of overzooming the last good level.
-    assert.equal(VWORLD_BASE_MAPS.find((map) => map.id === "white")?.maxzoom, 18);
-    assert.equal(VWORLD_BASE_MAPS.find((map) => map.id === "midnight")?.maxzoom, 18);
+    assert.equal(
+      VWORLD_BASE_MAPS.find((map) => map.id === "white")?.maxzoom,
+      18
+    );
+    assert.equal(
+      VWORLD_BASE_MAPS.find((map) => map.id === "midnight")?.maxzoom,
+      18
+    );
     for (const id of ["Base", "Hybrid", "Satellite"] as const) {
       assert.equal(VWORLD_BASE_MAPS.find((map) => map.id === id)?.maxzoom, 19);
     }
@@ -144,16 +170,18 @@ describe("tile and protocol URLs", () => {
   });
 
   it("injects the key as a WMTS path segment at request time", () => {
-    const resolved = resolveVWorldProtocolUrl("vworld://wmts/Base/10/300/800.png");
+    const resolved = resolveVWorldProtocolUrl(
+      "vworld://wmts/Base/10/300/800.png"
+    );
     assert.equal(
       resolved,
-      `https://api.vworld.kr/req/wmts/1.0.0/${TEST_KEY}/Base/10/300/800.png`,
+      `https://api.vworld.kr/req/wmts/1.0.0/${TEST_KEY}/Base/10/300/800.png`
     );
   });
 
   it("injects the key as a query parameter for WMS, preserving GetMap params", () => {
     const resolved = resolveVWorldProtocolUrl(
-      "vworld://wms?SERVICE=WMS&REQUEST=GetMap&LAYERS=lp_pa_cbnd_bubun&BBOX=1,2,3,4",
+      "vworld://wms?SERVICE=WMS&REQUEST=GetMap&LAYERS=lp_pa_cbnd_bubun&BBOX=1,2,3,4"
     );
     const url = new URL(resolved);
     assert.equal(url.origin + url.pathname, "https://api.vworld.kr/req/wms");
@@ -165,14 +193,16 @@ describe("tile and protocol URLs", () => {
   it("rejects a URL that is not a VWorld resource", () => {
     assert.throws(
       () => resolveVWorldProtocolUrl("vworld://evil/../../etc/passwd"),
-      (error: VWorldError) => error.kind === "invalid-request",
+      (error: VWorldError) => error.kind === "invalid-request"
     );
   });
 });
 
 describe("thematic layers", () => {
   it("uses the documented VWorld typenames", () => {
-    const byId = new Map(VWORLD_THEMATIC_LAYERS.map((layer) => [layer.id, layer.typename]));
+    const byId = new Map(
+      VWORLD_THEMATIC_LAYERS.map((layer) => [layer.id, layer.typename])
+    );
     // A typo here yields an empty tile rather than an error, so the identifiers
     // are pinned against the official WMS/WFS reference.
     assert.equal(byId.get("cadastral"), "lp_pa_cbnd_bubun");
@@ -203,19 +233,25 @@ describe("search category", () => {
   it("puts a category on the DISTRICT request", async () => {
     // The regression this guards: a DISTRICT search without `category` fails
     // with PARAM_REQUIRED, which the UI reported as a rejected API key.
-    const calls = stubFetch({ response: { status: "OK", result: { items: [] } } });
+    const calls = stubFetch({
+      response: { status: "OK", result: { items: [] } },
+    });
     await vworldSearch("서울", "DISTRICT");
     assert.equal(new URL(calls[0]).searchParams.get("category"), "L4");
   });
 
   it("omits the parameter for types that take none", async () => {
-    const calls = stubFetch({ response: { status: "OK", result: { items: [] } } });
+    const calls = stubFetch({
+      response: { status: "OK", result: { items: [] } },
+    });
     await vworldSearch("서울시청", "PLACE");
     assert.equal(new URL(calls[0]).searchParams.has("category"), false);
   });
 
   it("lets a caller choose another administrative level", async () => {
-    const calls = stubFetch({ response: { status: "OK", result: { items: [] } } });
+    const calls = stubFetch({
+      response: { status: "OK", result: { items: [] } },
+    });
     await vworldSearch("서울", "DISTRICT", { category: "L2" });
     assert.equal(new URL(calls[0]).searchParams.get("category"), "L2");
   });
@@ -232,7 +268,7 @@ describe("thematic feature lookup", () => {
     return vworldFeatureInfo(
       [{ id: "building", typename: "lt_c_bldginfo" }],
       126.978,
-      37.5665,
+      37.5665
     ).then(() => {
       const url = new URL(calls[0]);
       assert.equal(url.searchParams.get("domain"), "http://localhost:5173");
@@ -246,7 +282,11 @@ describe("thematic feature lookup", () => {
     // lands in the ocean off Somalia and quietly returns nothing.
     setVWorldDomain("http://localhost:5173");
     const calls = stubFetch({ type: "FeatureCollection", features: [] });
-    await vworldFeatureInfo([{ id: "building", typename: "lt_c_bldginfo" }], 126.978, 37.5665);
+    await vworldFeatureInfo(
+      [{ id: "building", typename: "lt_c_bldginfo" }],
+      126.978,
+      37.5665
+    );
     const bbox = new URL(calls[0]).searchParams.get("BBOX") ?? "";
     const [south, west, north, east] = bbox.split(",").map(Number);
     assert.ok(south > 37 && south < 38, `south ${south}`);
@@ -269,7 +309,7 @@ describe("thematic feature lookup", () => {
     const found = await vworldFeatureInfo(
       [{ id: "building", typename: "lt_c_bldginfo" }],
       126.978,
-      37.5665,
+      37.5665
     );
     assert.equal(found.length, 1);
     assert.equal(found[0].layerId, "building");
@@ -284,11 +324,16 @@ describe("thematic feature lookup", () => {
     // field the other endpoints use, so the code has to be dug out of the XML.
     stubFetch(
       '<?xml version="1.0"?><ServiceExceptionReport><ServiceException code="INCORRECT_KEY">' +
-        "인증키 정보가 올바르지 않습니다.</ServiceException></ServiceExceptionReport>",
+        "인증키 정보가 올바르지 않습니다.</ServiceException></ServiceExceptionReport>"
     );
     await assert.rejects(
-      () => vworldFeatureInfo([{ id: "building", typename: "lt_c_bldginfo" }], 126.978, 37.5665),
-      (error: VWorldError) => error.kind === "invalid-key",
+      () =>
+        vworldFeatureInfo(
+          [{ id: "building", typename: "lt_c_bldginfo" }],
+          126.978,
+          37.5665
+        ),
+      (error: VWorldError) => error.kind === "invalid-key"
     );
   });
 
@@ -303,8 +348,12 @@ describe("thematic feature lookup", () => {
     setVWorldDomain("http://localhost:5173");
     stubFetch({ type: "FeatureCollection", features: [] });
     assert.deepEqual(
-      await vworldFeatureInfo([{ id: "building", typename: "lt_c_bldginfo" }], 126.978, 37.5665),
-      [],
+      await vworldFeatureInfo(
+        [{ id: "building", typename: "lt_c_bldginfo" }],
+        126.978,
+        37.5665
+      ),
+      []
     );
   });
 });
@@ -317,31 +366,43 @@ describe("building extrusion height", () => {
   it("estimates from storeys when no height is recorded", () => {
     // Most VWorld records carry storeys but no measured height, so the estimate
     // is the normal path rather than a fallback.
-    assert.equal(buildingHeight({ height: 0, grnd_flr: 13 }), 13 * ASSUMED_STOREY_HEIGHT_M);
-    assert.equal(buildingHeight({ grnd_flr: "3" }), 3 * ASSUMED_STOREY_HEIGHT_M);
+    assert.equal(
+      buildingHeight({ height: 0, grnd_flr: 13 }),
+      13 * ASSUMED_STOREY_HEIGHT_M
+    );
+    assert.equal(
+      buildingHeight({ grnd_flr: "3" }),
+      3 * ASSUMED_STOREY_HEIGHT_M
+    );
   });
 
   it("gives a building with neither a visible height", () => {
     // A zero would flatten it into the ground plane, reading as missing data
     // rather than an unrecorded height.
     assert.equal(buildingHeight({}), ASSUMED_STOREY_HEIGHT_M);
-    assert.equal(buildingHeight({ height: "0", grnd_flr: "0" }), ASSUMED_STOREY_HEIGHT_M);
+    assert.equal(
+      buildingHeight({ height: "0", grnd_flr: "0" }),
+      ASSUMED_STOREY_HEIGHT_M
+    );
   });
 
   it("writes the height onto every feature and reports truncation", async () => {
     setVWorldDomain("http://localhost:5173");
-    const features = Array.from({ length: VWORLD_WFS_MAX_FEATURES }, (_, index) => ({
-      id: `lt_c_bldginfo.${index}`,
-      geometry: { type: "Polygon", coordinates: [] },
-      properties: { grnd_flr: 5 },
-    }));
+    const features = Array.from(
+      { length: VWORLD_WFS_MAX_FEATURES },
+      (_, index) => ({
+        id: `lt_c_bldginfo.${index}`,
+        geometry: { type: "Polygon", coordinates: [] },
+        properties: { grnd_flr: 5 },
+      })
+    );
     stubFetch({ type: "FeatureCollection", features });
 
     const result = await vworldBuildings([126.97, 37.56, 126.98, 37.57]);
     assert.equal(result.geojson.features.length, VWORLD_WFS_MAX_FEATURES);
     assert.equal(
       result.geojson.features[0].properties[VWORLD_HEIGHT_PROPERTY],
-      5 * ASSUMED_STOREY_HEIGHT_M,
+      5 * ASSUMED_STOREY_HEIGHT_M
     );
     // A full page means the view was cut off, and a partial city that looks
     // complete is worse than one the user knows is partial.
@@ -352,7 +413,12 @@ describe("building extrusion height", () => {
     setVWorldDomain("http://localhost:5173");
     stubFetch({
       type: "FeatureCollection",
-      features: [{ geometry: { type: "Polygon", coordinates: [] }, properties: { grnd_flr: 2 } }],
+      features: [
+        {
+          geometry: { type: "Polygon", coordinates: [] },
+          properties: { grnd_flr: 2 },
+        },
+      ],
     });
     const result = await vworldBuildings([126.97, 37.56, 126.98, 37.57]);
     assert.equal(result.truncated, false);
@@ -364,7 +430,10 @@ describe("building extrusion height", () => {
       type: "FeatureCollection",
       features: [
         { geometry: null, properties: { grnd_flr: 2 } },
-        { geometry: { type: "Polygon", coordinates: [] }, properties: { grnd_flr: 2 } },
+        {
+          geometry: { type: "Polygon", coordinates: [] },
+          properties: { grnd_flr: 2 },
+        },
       ],
     });
     const result = await vworldBuildings([126.97, 37.56, 126.98, 37.57]);
@@ -400,7 +469,11 @@ describe("attribute formatting", () => {
 
   it("treats the service's empty markers as absent", () => {
     for (const empty of [null, undefined, "", "None", "null"]) {
-      assert.equal(formatAttribute(empty), "", `${String(empty)} should render as empty`);
+      assert.equal(
+        formatAttribute(empty),
+        "",
+        `${String(empty)} should render as empty`
+      );
     }
   });
 
@@ -410,8 +483,18 @@ describe("attribute formatting", () => {
     for (const field of ["grnd_flr", "totalarea", "pnu", "useapr_day"]) {
       assert.equal(isSecondaryAttribute(field), false, `${field} should lead`);
     }
-    for (const field of ["ufid", "geoidn", "sgg_oid", "col_adm_se", "strct_cd"]) {
-      assert.equal(isSecondaryAttribute(field), true, `${field} should be folded away`);
+    for (const field of [
+      "ufid",
+      "geoidn",
+      "sgg_oid",
+      "col_adm_se",
+      "strct_cd",
+    ]) {
+      assert.equal(
+        isSecondaryAttribute(field),
+        true,
+        `${field} should be folded away`
+      );
     }
   });
 
@@ -421,5 +504,151 @@ describe("attribute formatting", () => {
     assert.ok(fields.indexOf("bld_nm") < fields.indexOf("pnu"));
     assert.ok(fields.indexOf("grnd_flr") < fields.indexOf("bd_mgt_sn"));
     assert.equal(new Set(fields).size, fields.length);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+describe("narrowing a click to one feature", () => {
+  /* Narrowing a click to one feature                                             */
+  /* -------------------------------------------------------------------------- */
+
+  /** A unit square from (0,0) to (1,1). */
+  const SQUARE = {
+    type: "Polygon",
+    coordinates: [
+      [
+        [0, 0],
+        [1, 0],
+        [1, 1],
+        [0, 1],
+        [0, 0],
+      ],
+    ],
+  };
+
+  /** The same square with a hole from (0.4,0.4) to (0.6,0.6). */
+  const SQUARE_WITH_COURTYARD = {
+    type: "Polygon",
+    coordinates: [
+      SQUARE.coordinates[0],
+      [
+        [0.4, 0.4],
+        [0.6, 0.4],
+        [0.6, 0.6],
+        [0.4, 0.6],
+        [0.4, 0.4],
+      ],
+    ],
+  };
+
+  function feature(id: string, geometry: unknown, layerId = "building") {
+    return { layerId, featureId: id, properties: {}, geometry };
+  }
+
+  it("pointInGeometry accepts a point inside and rejects one outside", () => {
+    assert.equal(pointInGeometry(0.5, 0.5, SQUARE), true);
+    assert.equal(pointInGeometry(1.5, 0.5, SQUARE), false);
+    assert.equal(pointInGeometry(0.5, 1.5, SQUARE), false);
+  });
+
+  it("pointInGeometry treats a hole as outside", () => {
+    assert.equal(pointInGeometry(0.5, 0.5, SQUARE_WITH_COURTYARD), false);
+    assert.equal(pointInGeometry(0.2, 0.2, SQUARE_WITH_COURTYARD), true);
+  });
+
+  it("pointInGeometry handles MultiPolygon parts", () => {
+    const multi = {
+      type: "MultiPolygon",
+      coordinates: [
+        SQUARE.coordinates,
+        [
+          [
+            [5, 5],
+            [6, 5],
+            [6, 6],
+            [5, 6],
+            [5, 5],
+          ],
+        ],
+      ],
+    };
+    assert.equal(pointInGeometry(5.5, 5.5, multi), true);
+    assert.equal(pointInGeometry(3, 3, multi), false);
+  });
+
+  it("pointInGeometry rejects geometry it cannot test", () => {
+    assert.equal(pointInGeometry(0, 0, null), false);
+    assert.equal(
+      pointInGeometry(0, 0, { type: "Point", coordinates: [0, 0] }),
+      false
+    );
+  });
+
+  it("narrowToClicked keeps only the feature under the pointer", () => {
+    const neighbour = {
+      type: "Polygon",
+      coordinates: [
+        [
+          [2, 0],
+          [3, 0],
+          [3, 1],
+          [2, 1],
+          [2, 0],
+        ],
+      ],
+    };
+    const narrowed = narrowToClicked(
+      [feature("a", SQUARE), feature("b", neighbour)],
+      0.5,
+      0.5
+    );
+    assert.deepEqual(
+      narrowed.map((info) => info.featureId),
+      ["a"]
+    );
+  });
+
+  it("narrowToClicked falls back to the nearest when a click lands in a gap", () => {
+    const far = {
+      type: "Polygon",
+      coordinates: [
+        [
+          [10, 10],
+          [11, 10],
+          [11, 11],
+          [10, 11],
+          [10, 10],
+        ],
+      ],
+    };
+    // (1.1, 0.5) is just outside the unit square and nowhere near the far one.
+    const narrowed = narrowToClicked(
+      [feature("far", far), feature("near", SQUARE)],
+      1.1,
+      0.5
+    );
+    assert.deepEqual(
+      narrowed.map((info) => info.featureId),
+      ["near"]
+    );
+  });
+
+  it("narrowToClicked keeps one hit per layer", () => {
+    // A click can legitimately match a parcel and the building on it.
+    const narrowed = narrowToClicked(
+      [feature("bld", SQUARE, "building"), feature("lot", SQUARE, "cadastral")],
+      0.5,
+      0.5
+    );
+    assert.deepEqual(narrowed.map((info) => info.layerId).sort(), [
+      "building",
+      "cadastral",
+    ]);
+  });
+
+  it("narrowToClicked leaves a single result alone", () => {
+    // Even when the click is outside it: one hit is the answer either way.
+    const narrowed = narrowToClicked([feature("only", SQUARE)], 9, 9);
+    assert.equal(narrowed.length, 1);
   });
 });

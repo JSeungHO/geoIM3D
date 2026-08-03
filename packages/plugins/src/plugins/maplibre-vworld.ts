@@ -19,6 +19,7 @@
  *   VWorld's redistribution terms, so nothing here persists tiles.
  */
 
+import { useAppStore } from "@geolibre/core";
 import type { GeoLibreAppAPI, GeoLibrePlugin } from "../types";
 import {
   VWORLD_ATTRIBUTION,
@@ -243,7 +244,7 @@ interface PanelState {
   addressType: VWorldAddressType;
   reverseActive: boolean;
   /** Thematic layer ids currently on the map, in the order they were added. */
-  thematicLayers: Set<string>;
+  thematicLayers: Map<string, string>;
   inspectActive: boolean;
   featureInfo: VWorldFeatureInfo[];
   featureInfoEmpty: boolean;
@@ -259,7 +260,7 @@ const state: PanelState = {
   searchResults: [],
   addressType: "ROAD",
   reverseActive: false,
-  thematicLayers: new Set<string>(),
+  thematicLayers: new Map<string, string>(),
   inspectActive: false,
   featureInfo: [],
   featureInfoEmpty: false,
@@ -386,7 +387,7 @@ function addBaseMapLayer(app: GeoLibreAppAPI, id: string): void {
 function addThematicLayer(app: GeoLibreAppAPI, id: string): void {
   const layer = VWORLD_THEMATIC_LAYERS.find((entry) => entry.id === id);
   if (!layer) return;
-  app.addWmsLayer?.(labelFor(layer.labelKey), {
+  const layerId = app.addWmsLayer?.(labelFor(layer.labelKey), {
     // The host appends the GetMap query to this endpoint; the protocol handler
     // then rewrites the whole URL and appends the key.
     url: "vworld://wms",
@@ -400,8 +401,9 @@ function addThematicLayer(app: GeoLibreAppAPI, id: string): void {
     minzoom: layer.minzoom,
   });
   // Remembered so a map click knows which typenames to query: the WMS tiles
-  // themselves carry no features, so the click has to ask WFS instead.
-  state.thematicLayers.add(layer.id);
+  // themselves carry no features, so the click has to ask WFS instead. The
+  // host's layer id is kept, not just a flag, so removal can be noticed.
+  if (layerId) state.thematicLayers.set(layer.id, layerId);
   rerenderPanel();
 }
 
@@ -542,6 +544,27 @@ function buildToolbarMenu(app: GeoLibreAppAPI): void {
 /* -------------------------------------------------------------------------- */
 
 /**
+ * The thematic layers still on the map, as WFS typenames.
+ *
+ * Checked against the store rather than trusting this plugin's own record of
+ * what it added: the user can delete a layer from the layer panel, and a click
+ * was still querying layers that were no longer there — the panel answered with
+ * 건물정보 for a map showing none. Stale ids are dropped as they are found, so
+ * removing and re-adding a layer does not accumulate entries.
+ *
+ * @returns One entry per live thematic layer.
+ */
+function activeThematicTypenames(): Array<{ id: string; typename: string }> {
+  const live = new Set(useAppStore.getState().layers.map((layer) => layer.id));
+  for (const [thematicId, layerId] of state.thematicLayers) {
+    if (!live.has(layerId)) state.thematicLayers.delete(thematicId);
+  }
+  return VWORLD_THEMATIC_LAYERS.filter((layer) => state.thematicLayers.has(layer.id)).map(
+    (layer) => ({ id: layer.id, typename: layer.typename }),
+  );
+}
+
+/**
  * Looks up the thematic features under a clicked point.
  *
  * The thematic layers render as WMS images, which carry no features, so a click
@@ -552,9 +575,7 @@ function buildToolbarMenu(app: GeoLibreAppAPI): void {
  * @param lat - Latitude in EPSG:4326.
  */
 async function runFeatureInfo(lon: number, lat: number): Promise<void> {
-  const typenames = VWORLD_THEMATIC_LAYERS.filter((layer) =>
-    state.thematicLayers.has(layer.id),
-  ).map((layer) => ({ id: layer.id, typename: layer.typename }));
+  const typenames = activeThematicTypenames();
   if (typenames.length === 0) {
     setStatus(labels.featureInfoNoLayers);
     return;

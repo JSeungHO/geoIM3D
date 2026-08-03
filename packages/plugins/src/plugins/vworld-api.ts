@@ -588,7 +588,7 @@ export async function vworldFeatureInfo(
   // Nothing found is not a failure — the user may simply have clicked a road.
   // A failure with nothing found is, and its reason is worth reporting.
   if (found.length === 0 && firstError instanceof VWorldError) throw firstError;
-  return found;
+  return narrowToClicked(found, lon, lat);
 }
 
 /**
@@ -791,6 +791,136 @@ export function formatAttribute(value: unknown, format: AttributeFormat = "text"
     return numeric.toLocaleString("en-US", { maximumFractionDigits: 2 });
   }
   return text;
+}
+
+/**
+ * Whether a point lies inside a ring, by ray casting.
+ *
+ * @param lon - Longitude of the test point.
+ * @param lat - Latitude of the test point.
+ * @param ring - A linear ring as `[lon, lat]` pairs.
+ * @returns True when the point is inside.
+ */
+function pointInRing(lon: number, lat: number, ring: number[][]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    // Count crossings of a ray cast east from the point. The half-open
+    // comparison on latitude keeps a vertex exactly on the ray from being
+    // counted twice.
+    const straddles = yi > lat !== yj > lat;
+    if (!straddles) continue;
+    if (lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Whether a point lies inside a GeoJSON Polygon or MultiPolygon.
+ *
+ * Holes are honoured: a point in a courtyard is outside the building.
+ *
+ * @param lon - Longitude of the test point.
+ * @param lat - Latitude of the test point.
+ * @param geometry - The feature geometry.
+ * @returns True when the point is inside the shape.
+ */
+export function pointInGeometry(lon: number, lat: number, geometry: unknown): boolean {
+  const shape = geometry as { type?: string; coordinates?: unknown } | null;
+  if (!shape?.coordinates) return false;
+  const polygons =
+    shape.type === "MultiPolygon"
+      ? (shape.coordinates as number[][][][])
+      : shape.type === "Polygon"
+        ? [shape.coordinates as number[][][]]
+        : [];
+  for (const rings of polygons) {
+    if (rings.length === 0) continue;
+    if (!pointInRing(lon, lat, rings[0])) continue;
+    // Inside the outer ring — unless it falls in one of the holes.
+    if (rings.slice(1).some((hole) => pointInRing(lon, lat, hole))) continue;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Narrows bbox hits to the feature the user actually clicked.
+ *
+ * The WFS query uses a small box around the pointer because a click is not a
+ * coordinate the service can match exactly. In dense blocks that box spans
+ * several buildings, so every one of them came back and the panel listed four
+ * "건물정보" cards for one click. The box is only a coarse filter; containment
+ * decides.
+ *
+ * When nothing contains the point — a click that landed a couple of metres off
+ * the footprint, or in a gap between buildings — the single nearest hit is kept
+ * rather than reporting nothing, since the user plainly meant something.
+ *
+ * @param found - Features returned for the query box.
+ * @param lon - Longitude clicked.
+ * @param lat - Latitude clicked.
+ * @returns The features to show.
+ */
+export function narrowToClicked(
+  found: readonly VWorldFeatureInfo[],
+  lon: number,
+  lat: number,
+): VWorldFeatureInfo[] {
+  if (found.length <= 1) return [...found];
+
+  // One hit per layer: a click can legitimately match a parcel *and* the
+  // building standing on it, and both are worth showing.
+  const byLayer = new Map<string, VWorldFeatureInfo[]>();
+  for (const info of found) {
+    const list = byLayer.get(info.layerId);
+    if (list) list.push(info);
+    else byLayer.set(info.layerId, [info]);
+  }
+
+  const narrowed: VWorldFeatureInfo[] = [];
+  for (const candidates of byLayer.values()) {
+    const containing = candidates.filter((info) => pointInGeometry(lon, lat, info.geometry));
+    if (containing.length > 0) {
+      narrowed.push(...containing);
+      continue;
+    }
+    const nearest = candidates.reduce((best, info) =>
+      geometryDistance(lon, lat, info.geometry) < geometryDistance(lon, lat, best.geometry)
+        ? info
+        : best,
+    );
+    narrowed.push(nearest);
+  }
+  return narrowed;
+}
+
+/**
+ * Squared distance from a point to a geometry's nearest vertex.
+ *
+ * Squared and in degrees: only used to rank candidates against each other, so
+ * the square root and a proper projection would change nothing.
+ *
+ * @param lon - Longitude of the test point.
+ * @param lat - Latitude of the test point.
+ * @param geometry - The feature geometry.
+ * @returns The squared distance, or Infinity when there are no coordinates.
+ */
+function geometryDistance(lon: number, lat: number, geometry: unknown): number {
+  let best = Number.POSITIVE_INFINITY;
+  const visit = (node: unknown): void => {
+    if (!Array.isArray(node)) return;
+    if (typeof node[0] === "number" && typeof node[1] === "number") {
+      const dx = (node[0] as number) - lon;
+      const dy = (node[1] as number) - lat;
+      best = Math.min(best, dx * dx + dy * dy);
+      return;
+    }
+    for (const child of node) visit(child);
+  };
+  visit((geometry as { coordinates?: unknown } | null)?.coordinates);
+  return best;
 }
 
 /* -------------------------------------------------------------------------- */
