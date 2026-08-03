@@ -131,7 +131,7 @@ export interface DataGoKrResponse {
 
 export type DataGoKrTransport = (
   url: string,
-  init?: { signal?: AbortSignal }
+  init?: { signal?: AbortSignal },
 ) => Promise<DataGoKrResponse>;
 
 /**
@@ -267,7 +267,7 @@ export type FormatParam = "dataType" | "returnType";
 export async function requestDataGoKrJson(
   path: string,
   params: Record<string, string>,
-  formatParam: FormatParam = "dataType"
+  formatParam: FormatParam = "dataType",
 ): Promise<Record<string, unknown>> {
   if (!hasDataGoKrServiceKey()) throw new DataGoKrError("no-key");
 
@@ -289,9 +289,7 @@ export async function requestDataGoKrJson(
     // "check the key" even when the real answer was that this one API had not
     // been approved for an otherwise working key.
     if (!response.ok) {
-      throw new DataGoKrError(
-        gatewayErrorKind(text) ?? httpErrorKind(response.status)
-      );
+      throw new DataGoKrError(gatewayErrorKind(text) ?? httpErrorKind(response.status));
     }
   } catch (error) {
     if (error instanceof DataGoKrError) throw error;
@@ -310,9 +308,7 @@ export async function requestDataGoKrJson(
   } catch {
     throw new DataGoKrError(
       gatewayErrorKind(text) ??
-        (/SERVICE.?KEY|UNREGISTERED|DENIED/i.test(text)
-          ? "invalid-key"
-          : "unknown")
+        (/SERVICE.?KEY|UNREGISTERED|DENIED/i.test(text) ? "invalid-key" : "unknown"),
     );
   }
 
@@ -321,8 +317,7 @@ export async function requestDataGoKrJson(
     throw new DataGoKrError(gatewayErrorKind(text) ?? "unknown");
   }
   const header = (response as { header?: Record<string, unknown> }).header;
-  const resultCode =
-    typeof header?.resultCode === "string" ? header.resultCode : "";
+  const resultCode = typeof header?.resultCode === "string" ? header.resultCode : "";
   if (resultCode !== "00") throw new DataGoKrError(resultCodeKind(resultCode));
 
   const body = (response as { body?: unknown }).body;
@@ -341,9 +336,7 @@ export async function requestDataGoKrJson(
  * @param body - The response body.
  * @returns The items, always as an array.
  */
-export function itemsOf(
-  body: Record<string, unknown>
-): Array<Record<string, unknown>> {
+export function itemsOf(body: Record<string, unknown>): Array<Record<string, unknown>> {
   const container = body.items;
   const raw =
     container && typeof container === "object" && !Array.isArray(container)

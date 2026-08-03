@@ -28,14 +28,8 @@ describe("station coordinates", () => {
     // whichever landed in Korea. The swapped pair resolves to ~129.77, 35.24 —
     // also inside Korea, near Ulsan — so the guess was wrong and undetectable.
     const swapped = stationLonLat(452080, 197329);
-    assert.ok(
-      swapped,
-      "the swapped pair still converts to a Korean coordinate"
-    );
-    assert.ok(
-      swapped.lon > 129,
-      `a Seoul station must not resolve to ${swapped.lon}`
-    );
+    assert.ok(swapped, "the swapped pair still converts to a Korean coordinate");
+    assert.ok(swapped.lon > 129, `a Seoul station must not resolve to ${swapped.lon}`);
     // Which is exactly why the axis order is fixed rather than inferred.
   });
 
@@ -189,18 +183,12 @@ describe("gatewayErrorKind", () => {
 
   it("separates a path this client got wrong from a key problem", () => {
     // A bogus service path answers 400 with reason 12, not a key error.
-    assert.equal(
-      gatewayErrorKind('{"returnReasonCode":"12"}'),
-      "invalid-request"
-    );
+    assert.equal(gatewayErrorKind('{"returnReasonCode":"12"}'), "invalid-request");
     assert.equal(gatewayErrorKind('{"returnReasonCode":"32"}'), "invalid-key");
   });
 
   it("declines to classify a body that is not a gateway fault", () => {
-    assert.equal(
-      gatewayErrorKind('{"response":{"header":{"resultCode":"00"}}}'),
-      null
-    );
+    assert.equal(gatewayErrorKind('{"response":{"header":{"resultCode":"00"}}}'), null);
     assert.equal(gatewayErrorKind(""), null);
   });
 });

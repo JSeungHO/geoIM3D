@@ -12,11 +12,7 @@
 
 import type { GeoLibreAppAPI, GeoLibrePlugin } from "../types";
 import { DataGoKrError } from "./data-go-kr";
-import {
-  airKoreaGeoJson,
-  airKoreaReadings,
-  airKoreaStations,
-} from "./airkorea-api";
+import { airKoreaGeoJson, airKoreaReadings, airKoreaStations } from "./airkorea-api";
 import {
   KMA_PTY_LABELS,
   KMA_SKY_LABELS,
@@ -158,8 +154,7 @@ export const DEFAULT_KMA_LABELS: KmaLabels = {
   errorNetwork:
     "Could not reach the weather service. The same error appears when the service key is not registered, has not activated yet (this can take up to an hour after signing up), or this particular API has not been requested for it.",
   errorTimeout: "The weather service did not respond in time.",
-  errorInvalidKey:
-    "The KMA service key was rejected. Check the key and its registered caller IP.",
+  errorInvalidKey: "The KMA service key was rejected. Check the key and its registered caller IP.",
   errorAccessDenied:
     "Your key is not approved for this service yet. Each KMA API on the public-data portal needs its own request, and an approval can take up to an hour to take effect — check this API in 활용신청 현황, then try again.",
   errorRateLimit: "The daily request limit for this key has been reached.",
@@ -330,8 +325,7 @@ async function loadTyphoons(): Promise<void> {
 function toggleTyphoonLayer(app: GeoLibreAppAPI): void {
   if (state.typhoonLayerId) {
     const map = app.getMap?.();
-    if (map?.getLayer(state.typhoonLayerId))
-      map.removeLayer(state.typhoonLayerId);
+    if (map?.getLayer(state.typhoonLayerId)) map.removeLayer(state.typhoonLayerId);
     app.unregisterExternalNativeLayer?.(state.typhoonLayerId);
     state.typhoonLayerId = null;
     rerenderPanel();
@@ -357,7 +351,7 @@ function toggleTyphoonLayer(app: GeoLibreAppAPI): void {
           },
         })),
       },
-      `kma://typhoons/${TYPHOON_LAYER_ID}`
+      `kma://typhoons/${TYPHOON_LAYER_ID}`,
     ) || null;
   rerenderPanel();
 }
@@ -382,8 +376,7 @@ function setPickActive(app: GeoLibreAppAPI, active: boolean): void {
   const map = app.getMap?.();
   if (map) map.getCanvas().style.cursor = active ? "crosshair" : "";
   if (active) {
-    unsubscribePick =
-      app.onMapClick?.(({ lng, lat }) => void loadPoint(lng, lat)) ?? null;
+    unsubscribePick = app.onMapClick?.(({ lng, lat }) => void loadPoint(lng, lat)) ?? null;
   }
   rerenderPanel();
 }
@@ -402,10 +395,7 @@ function setPickActive(app: GeoLibreAppAPI, active: boolean): void {
  * @param app - The host API.
  * @param networkId - The network id from `KMA_STATION_NETWORKS`.
  */
-async function addStationLayer(
-  app: GeoLibreAppAPI,
-  networkId: string
-): Promise<void> {
+async function addStationLayer(app: GeoLibreAppAPI, networkId: string): Promise<void> {
   const network = KMA_STATION_NETWORKS.find((entry) => entry.id === networkId);
   if (!network) return;
   const name = labels.networks[network.labelKey] ?? network.labelKey;
@@ -414,11 +404,7 @@ async function addStationLayer(
   rerenderPanel();
   try {
     const stations = await kmaStations(networkId);
-    app.addGeoJsonLayer(
-      name,
-      kmaStationsToGeoJson(stations),
-      `kma://stations/${networkId}`
-    );
+    app.addGeoJsonLayer(name, kmaStationsToGeoJson(stations), `kma://stations/${networkId}`);
   } catch (error) {
     // The panel is this plugin's own error surface; a menu click that fails
     // would otherwise look like it did nothing at all.
@@ -446,14 +432,11 @@ async function addAirQualityLayer(app: GeoLibreAppAPI): Promise<void> {
   try {
     // Issued together: the station list does not change hour to hour, but
     // fetching it in sequence would double the wait for no benefit.
-    const [stations, readings] = await Promise.all([
-      airKoreaStations(),
-      airKoreaReadings(),
-    ]);
+    const [stations, readings] = await Promise.all([airKoreaStations(), airKoreaReadings()]);
     app.addGeoJsonLayer(
       labels.airQuality,
       airKoreaGeoJson(stations, readings),
-      "airkorea://stations"
+      "airkorea://stations",
     );
   } catch (error) {
     state.status = `${labels.airQuality}: ${errorMessage(error)}`;
@@ -514,7 +497,7 @@ function buildToolbarMenu(app: GeoLibreAppAPI): void {
 function element<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className: string,
-  text?: string
+  text?: string,
 ): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
   node.className = className;
@@ -543,11 +526,11 @@ function displayValue(category: string, value: string): string {
   if (isMissingValue(value)) return labels.missingValue;
   if (category === "SKY") {
     const name = KMA_SKY_LABELS[value.trim()];
-    return name ? labels.conditions[name] ?? name : value;
+    return name ? (labels.conditions[name] ?? name) : value;
   }
   if (category === "PTY") {
     const name = KMA_PTY_LABELS[value.trim()];
-    return name ? labels.conditions[name] ?? name : value;
+    return name ? (labels.conditions[name] ?? name) : value;
   }
   return value;
 }
@@ -567,7 +550,7 @@ function windSummary(values: Record<string, string>): string {
   const speed = values.WSD;
   if (!speed || isMissingValue(speed)) return "";
   const index = values.VEC ? compassIndex(values.VEC) : null;
-  const point = index === null ? "" : labels.compass[index] ?? "";
+  const point = index === null ? "" : (labels.compass[index] ?? "");
   return point ? `${point} ${speed}` : speed;
 }
 
@@ -584,48 +567,31 @@ function conditionsBlock(conditions: KmaPointConditions): HTMLElement {
 
   const temperature = values.T1H ?? values.TMP;
   if (temperature && !isMissingValue(temperature)) {
-    wrapper.appendChild(
-      element("div", "kma-conditions__temp", `${temperature}°`)
-    );
+    wrapper.appendChild(element("div", "kma-conditions__temp", `${temperature}°`));
   }
   const sky = values.SKY ? displayValue("SKY", values.SKY) : "";
   const precipitation = values.PTY ? displayValue("PTY", values.PTY) : "";
   // "없음" as a headline reads as a failure; the sky state is the useful word
   // when there is no precipitation.
-  const headline = [
-    sky,
-    precipitation !== labels.conditions.none ? precipitation : "",
-  ]
+  const headline = [sky, precipitation !== labels.conditions.none ? precipitation : ""]
     .filter(Boolean)
     .join(" · ");
-  if (headline)
-    wrapper.appendChild(element("div", "kma-conditions__headline", headline));
+  if (headline) wrapper.appendChild(element("div", "kma-conditions__headline", headline));
 
   const list = element("dl", "geolibre-plugin-panel__address");
   for (const entry of displayableValues(conditions.values)) {
     // Already in the headline.
-    if (
-      entry.category === "T1H" ||
-      entry.category === "SKY" ||
-      entry.category === "PTY"
-    )
-      continue;
+    if (entry.category === "T1H" || entry.category === "SKY" || entry.category === "PTY") continue;
     if (entry.category === "VEC") continue; // folded into the wind row
     const label =
       entry.category === "WSD"
         ? labels.wind
-        : labels.categories[entry.category] ?? entry.category;
+        : (labels.categories[entry.category] ?? entry.category);
     const text =
-      entry.category === "WSD"
-        ? windSummary(values)
-        : displayValue(entry.category, entry.value);
+      entry.category === "WSD" ? windSummary(values) : displayValue(entry.category, entry.value);
     if (!text) continue;
-    list.appendChild(
-      element("dt", "geolibre-plugin-panel__address-term", label)
-    );
-    list.appendChild(
-      element("dd", "geolibre-plugin-panel__address-value", text)
-    );
+    list.appendChild(element("dt", "geolibre-plugin-panel__address-term", label));
+    list.appendChild(element("dd", "geolibre-plugin-panel__address-value", text));
   }
   wrapper.appendChild(list);
   return wrapper;
@@ -638,10 +604,7 @@ function conditionsBlock(conditions: KmaPointConditions): HTMLElement {
  * hour. Rendered in that order it is unreadable — the same labels over and over
  * with no time attached — so it is pivoted into time slots first.
  */
-function forecastBlock(
-  forecast: KmaPointConditions,
-  hours: number
-): HTMLElement {
+function forecastBlock(forecast: KmaPointConditions, hours: number): HTMLElement {
   const wrapper = element("div", "kma-forecast");
   const slots = groupForecastSlots(forecast.values).slice(0, hours);
 
@@ -649,23 +612,15 @@ function forecastBlock(
   for (const slot of slots) {
     if (slot.date !== renderedDate) {
       renderedDate = slot.date;
-      wrapper.appendChild(
-        element("div", "kma-forecast__day", formatDate(slot.date))
-      );
+      wrapper.appendChild(element("div", "kma-forecast__day", formatDate(slot.date)));
     }
     const row = element("div", "kma-forecast__row");
-    row.appendChild(
-      element("span", "kma-forecast__time", formatTime(slot.time))
-    );
+    row.appendChild(element("span", "kma-forecast__time", formatTime(slot.time)));
 
     const sky = slot.values.SKY ? displayValue("SKY", slot.values.SKY) : "";
     const pty = slot.values.PTY ? displayValue("PTY", slot.values.PTY) : "";
     row.appendChild(
-      element(
-        "span",
-        "kma-forecast__sky",
-        pty && pty !== labels.conditions.none ? pty : sky
-      )
+      element("span", "kma-forecast__sky", pty && pty !== labels.conditions.none ? pty : sky),
     );
 
     const temperature = slot.values.TMP;
@@ -673,8 +628,8 @@ function forecastBlock(
       element(
         "span",
         "kma-forecast__temp",
-        temperature && !isMissingValue(temperature) ? `${temperature}°` : ""
-      )
+        temperature && !isMissingValue(temperature) ? `${temperature}°` : "",
+      ),
     );
 
     // Chance of precipitation only earns its column when there is some.
@@ -683,25 +638,19 @@ function forecastBlock(
       element(
         "span",
         "kma-forecast__pop",
-        Number.isFinite(pop) && pop > 0 ? `${slot.values.POP}%` : ""
-      )
+        Number.isFinite(pop) && pop > 0 ? `${slot.values.POP}%` : "",
+      ),
     );
     wrapper.appendChild(row);
   }
   return wrapper;
 }
 
-function actionButton(
-  text: string,
-  onClick: () => void,
-  wide = false
-): HTMLButtonElement {
+function actionButton(text: string, onClick: () => void, wide = false): HTMLButtonElement {
   const button = element(
     "button",
-    `geolibre-plugin-panel__button${
-      wide ? " geolibre-plugin-panel__button--wide" : ""
-    }`,
-    text
+    `geolibre-plugin-panel__button${wide ? " geolibre-plugin-panel__button--wide" : ""}`,
+    text,
   );
   button.type = "button";
   button.disabled = state.busy;
@@ -716,9 +665,7 @@ function renderPanel(container: HTMLElement): void {
   container.className = "geolibre-plugin-panel";
 
   if (!hasKmaApiKey()) {
-    container.appendChild(
-      element("p", "geolibre-plugin-panel__notice", labels.noKey)
-    );
+    container.appendChild(element("p", "geolibre-plugin-panel__notice", labels.noKey));
     return;
   }
 
@@ -729,18 +676,14 @@ function renderPanel(container: HTMLElement): void {
     `geolibre-plugin-panel__button geolibre-plugin-panel__button--wide${
       state.pickActive ? " geolibre-plugin-panel__button--active" : ""
     }`,
-    state.pickActive ? labels.pickPointActive : labels.pickPoint
+    state.pickActive ? labels.pickPointActive : labels.pickPoint,
   );
   pickButton.type = "button";
-  pickButton.addEventListener("click", () =>
-    setPickActive(app, !state.pickActive)
-  );
+  pickButton.addEventListener("click", () => setPickActive(app, !state.pickActive));
   container.appendChild(pickButton);
 
   if (state.busy) {
-    container.appendChild(
-      element("p", "geolibre-plugin-panel__status", labels.loading)
-    );
+    container.appendChild(element("p", "geolibre-plugin-panel__status", labels.loading));
   }
 
   if (state.conditions) {
@@ -748,8 +691,8 @@ function renderPanel(container: HTMLElement): void {
       element(
         "p",
         "geolibre-plugin-panel__status",
-        `${labels.gridCell}: ${state.conditions.grid.nx}, ${state.conditions.grid.ny}`
-      )
+        `${labels.gridCell}: ${state.conditions.grid.nx}, ${state.conditions.grid.ny}`,
+      ),
     );
     container.appendChild(conditionsBlock(state.conditions));
   }
@@ -761,36 +704,22 @@ function renderPanel(container: HTMLElement): void {
       // a panel this size can show without becoming a scroll of its own.
       container.appendChild(forecastBlock(state.forecast, 24));
     } else {
-      container.appendChild(
-        element("p", "geolibre-plugin-panel__status", state.forecastStatus)
-      );
+      container.appendChild(element("p", "geolibre-plugin-panel__status", state.forecastStatus));
     }
   }
 
   // Warnings.
   container.appendChild(sectionTitle(labels.warnings));
-  container.appendChild(
-    actionButton(labels.refresh, () => void loadWarnings(), true)
-  );
+  container.appendChild(actionButton(labels.refresh, () => void loadWarnings(), true));
   if (state.warnings.length > 0) {
     const list = element("ul", "geolibre-plugin-panel__results");
     for (const warning of state.warnings) {
       const item = element("li", "geolibre-plugin-panel__result");
       const body = element("div", "geolibre-plugin-panel__result-button");
       body.appendChild(
-        element(
-          "span",
-          "geolibre-plugin-panel__result-title",
-          warning.title || warning.regions
-        )
+        element("span", "geolibre-plugin-panel__result-title", warning.title || warning.regions),
       );
-      body.appendChild(
-        element(
-          "span",
-          "geolibre-plugin-panel__result-subtitle",
-          warning.issuedAt
-        )
-      );
+      body.appendChild(element("span", "geolibre-plugin-panel__result-subtitle", warning.issuedAt));
       item.appendChild(body);
       list.appendChild(item);
     }
@@ -800,17 +729,12 @@ function renderPanel(container: HTMLElement): void {
   // Typhoons.
   container.appendChild(sectionTitle(labels.typhoons));
   const typhoonActions = element("div", "geolibre-plugin-panel__form");
-  typhoonActions.appendChild(
-    actionButton(labels.refresh, () => void loadTyphoons())
-  );
+  typhoonActions.appendChild(actionButton(labels.refresh, () => void loadTyphoons()));
   if (state.typhoons.length > 0) {
     typhoonActions.appendChild(
-      actionButton(
-        state.typhoonLayerId
-          ? labels.removeTyphoonLayer
-          : labels.addTyphoonLayer,
-        () => toggleTyphoonLayer(app)
-      )
+      actionButton(state.typhoonLayerId ? labels.removeTyphoonLayer : labels.addTyphoonLayer, () =>
+        toggleTyphoonLayer(app),
+      ),
     );
   }
   container.appendChild(typhoonActions);
@@ -821,15 +745,9 @@ function renderPanel(container: HTMLElement): void {
       const button = element("button", "geolibre-plugin-panel__result-button");
       button.type = "button";
       button.appendChild(
-        element(
-          "span",
-          "geolibre-plugin-panel__result-title",
-          position.name || position.time
-        )
+        element("span", "geolibre-plugin-panel__result-title", position.name || position.time),
       );
-      button.appendChild(
-        element("span", "geolibre-plugin-panel__result-subtitle", position.time)
-      );
+      button.appendChild(element("span", "geolibre-plugin-panel__result-subtitle", position.time));
       button.addEventListener("click", () => {
         const map = app.getMap?.();
         map?.flyTo({
@@ -844,9 +762,7 @@ function renderPanel(container: HTMLElement): void {
   }
 
   if (state.status) {
-    container.appendChild(
-      element("p", "geolibre-plugin-panel__status", state.status)
-    );
+    container.appendChild(element("p", "geolibre-plugin-panel__status", state.status));
   }
 }
 

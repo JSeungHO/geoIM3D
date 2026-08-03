@@ -623,8 +623,7 @@ function setInspectActive(app: GeoLibreAppAPI, active: boolean): void {
     // Mutually exclusive with reverse geocoding: both consume a map click, and
     // leaving both on would run two lookups per click.
     if (state.reverseActive) setReverseActive(app, false);
-    unsubscribeInspect =
-      app.onMapClick?.(({ lng, lat }) => void runFeatureInfo(lng, lat)) ?? null;
+    unsubscribeInspect = app.onMapClick?.(({ lng, lat }) => void runFeatureInfo(lng, lat)) ?? null;
     setMapCursor(app, true);
   }
   rerenderPanel();
@@ -796,9 +795,7 @@ function renderPanel(container: HTMLElement): void {
   container.appendChild(inspectButton);
 
   if (state.featureInfoEmpty) {
-    container.appendChild(
-      element("p", "geolibre-plugin-panel__status", labels.featureInfoEmpty),
-    );
+    container.appendChild(element("p", "geolibre-plugin-panel__status", labels.featureInfoEmpty));
   }
   for (const info of state.featureInfo) {
     container.appendChild(featureInfoBlock(app, info));
@@ -844,7 +841,9 @@ function renderPanel(container: HTMLElement): void {
       button.type = "button";
       button.appendChild(element("span", "geolibre-plugin-panel__result-title", result.title));
       if (result.subtitle) {
-        button.appendChild(element("span", "geolibre-plugin-panel__result-subtitle", result.subtitle));
+        button.appendChild(
+          element("span", "geolibre-plugin-panel__result-subtitle", result.subtitle),
+        );
       }
       button.addEventListener("click", () => flyTo(app, result.lng, result.lat));
       item.appendChild(button);

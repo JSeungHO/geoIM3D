@@ -31,10 +31,7 @@ export interface KmaResponse {
   text(): Promise<string>;
 }
 
-export type KmaTransport = (
-  url: string,
-  init?: { signal?: AbortSignal }
-) => Promise<KmaResponse>;
+export type KmaTransport = (url: string, init?: { signal?: AbortSignal }) => Promise<KmaResponse>;
 
 /**
  * How requests leave the app. Defaults to the browser's `fetch`.
@@ -306,8 +303,7 @@ export interface KmaGridPoint {
  * @throws {KmaError} When the coordinates are not finite.
  */
 export function latLonToGrid(lon: number, lat: number): KmaGridPoint {
-  if (!Number.isFinite(lon) || !Number.isFinite(lat))
-    throw new KmaError("invalid-request");
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) throw new KmaError("invalid-request");
 
   const re = GRID.earthRadiusKm / GRID.spacingKm;
   const slat1 = GRID.standardParallel1 * DEG_TO_RAD;
@@ -315,9 +311,7 @@ export function latLonToGrid(lon: number, lat: number): KmaGridPoint {
   const olon = GRID.originLon * DEG_TO_RAD;
   const olat = GRID.originLat * DEG_TO_RAD;
 
-  let sn =
-    Math.tan(Math.PI * 0.25 + slat2 * 0.5) /
-    Math.tan(Math.PI * 0.25 + slat1 * 0.5);
+  let sn = Math.tan(Math.PI * 0.25 + slat2 * 0.5) / Math.tan(Math.PI * 0.25 + slat1 * 0.5);
   sn = Math.log(Math.cos(slat1) / Math.cos(slat2)) / Math.log(sn);
   let sf = Math.tan(Math.PI * 0.25 + slat1 * 0.5);
   sf = (Math.pow(sf, sn) * Math.cos(slat1)) / sn;
@@ -347,12 +341,7 @@ export function latLonToGrid(lon: number, lat: number): KmaGridPoint {
  * @returns True when the cell is within the published 149 × 253 domain.
  */
 export function isWithinKmaGrid(point: KmaGridPoint): boolean {
-  return (
-    point.nx >= 1 &&
-    point.nx <= GRID.width &&
-    point.ny >= 1 &&
-    point.ny <= GRID.height
-  );
+  return point.nx >= 1 && point.nx <= GRID.width && point.ny >= 1 && point.ny <= GRID.height;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -369,7 +358,7 @@ export function isWithinKmaGrid(point: KmaGridPoint): boolean {
  */
 async function requestJson(
   path: string,
-  params: Record<string, string>
+  params: Record<string, string>,
 ): Promise<Record<string, unknown>> {
   if (!hasKmaApiKey()) throw new KmaError("no-key");
 
@@ -395,9 +384,7 @@ async function requestJson(
     // "check the key and its caller IP" even when the real answer was that
     // this one API had not been approved for an otherwise working key.
     if (!response.ok) {
-      throw new KmaError(
-        gatewayErrorKind(text) ?? httpErrorKind(response.status)
-      );
+      throw new KmaError(gatewayErrorKind(text) ?? httpErrorKind(response.status));
     }
   } catch (error) {
     if (error instanceof KmaError) throw error;
@@ -416,9 +403,7 @@ async function requestJson(
   } catch {
     throw new KmaError(
       gatewayErrorKind(text) ??
-        (/SERVICE.?KEY|UNREGISTERED|DENIED/i.test(text)
-          ? "invalid-key"
-          : "unknown")
+        (/SERVICE.?KEY|UNREGISTERED|DENIED/i.test(text) ? "invalid-key" : "unknown"),
     );
   }
 
@@ -427,8 +412,7 @@ async function requestJson(
     throw new KmaError(gatewayErrorKind(text) ?? "unknown");
   }
   const header = (response as { header?: Record<string, unknown> }).header;
-  const resultCode =
-    typeof header?.resultCode === "string" ? header.resultCode : "";
+  const resultCode = typeof header?.resultCode === "string" ? header.resultCode : "";
   if (resultCode !== "00") throw new KmaError(kmaErrorKind(resultCode));
 
   const body = (response as { body?: unknown }).body;
@@ -445,19 +429,15 @@ async function requestJson(
  * @param body - The response body.
  * @returns The items, always as an array.
  */
-function itemsOf(
-  body: Record<string, unknown>
-): Array<Record<string, unknown>> {
+function itemsOf(body: Record<string, unknown>): Array<Record<string, unknown>> {
   const items = (body.items as { item?: unknown } | undefined)?.item;
   if (Array.isArray(items)) return items as Array<Record<string, unknown>>;
-  if (items && typeof items === "object")
-    return [items as Record<string, unknown>];
+  if (items && typeof items === "object") return [items as Record<string, unknown>];
   return [];
 }
 
 function numeric(value: unknown): number | null {
-  const parsed =
-    typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
+  const parsed = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
   return Number.isFinite(parsed) ? parsed : null;
 }
 
@@ -474,13 +454,9 @@ export function kmaBaseDateTime(date: Date): {
 } {
   // KST is UTC+9 year-round (no DST), so a fixed offset is exact here.
   const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
-  const pad = (value: number, width: number) =>
-    String(value).padStart(width, "0");
+  const pad = (value: number, width: number) => String(value).padStart(width, "0");
   return {
-    baseDate: `${kst.getUTCFullYear()}${pad(kst.getUTCMonth() + 1, 2)}${pad(
-      kst.getUTCDate(),
-      2
-    )}`,
+    baseDate: `${kst.getUTCFullYear()}${pad(kst.getUTCMonth() + 1, 2)}${pad(kst.getUTCDate(), 2)}`,
     baseTime: `${pad(kst.getUTCHours(), 2)}${pad(kst.getUTCMinutes(), 2)}`,
   };
 }
@@ -573,23 +549,20 @@ export function ultraShortNowcastBase(now: Date): {
 export async function kmaCurrentConditions(
   lon: number,
   lat: number,
-  now: Date = new Date()
+  now: Date = new Date(),
 ): Promise<KmaPointConditions> {
   const grid = latLonToGrid(lon, lat);
   if (!isWithinKmaGrid(grid)) throw new KmaError("no-data");
   const { baseDate, baseTime } = ultraShortNowcastBase(now);
 
-  const body = await requestJson(
-    "/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst",
-    {
-      pageNo: "1",
-      numOfRows: "100",
-      base_date: baseDate,
-      base_time: baseTime,
-      nx: String(grid.nx),
-      ny: String(grid.ny),
-    }
-  );
+  const body = await requestJson("/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst", {
+    pageNo: "1",
+    numOfRows: "100",
+    base_date: baseDate,
+    base_time: baseTime,
+    nx: String(grid.nx),
+    ny: String(grid.ny),
+  });
 
   const values = itemsOf(body).map((item) => ({
     category: String(item.category ?? ""),
@@ -617,32 +590,25 @@ export async function kmaCurrentConditions(
 export async function kmaVillageForecast(
   lon: number,
   lat: number,
-  now: Date = new Date()
+  now: Date = new Date(),
 ): Promise<KmaPointConditions> {
   const grid = latLonToGrid(lon, lat);
   if (!isWithinKmaGrid(grid)) throw new KmaError("no-data");
 
   let lastError: unknown = new KmaError("no-data");
-  for (
-    let stepsBack = 0;
-    stepsBack <= VILLAGE_FORECAST_FALLBACK_RUNS;
-    stepsBack += 1
-  ) {
+  for (let stepsBack = 0; stepsBack <= VILLAGE_FORECAST_FALLBACK_RUNS; stepsBack += 1) {
     const { baseDate, baseTime } = villageForecastBase(now, stepsBack);
     let body: Record<string, unknown>;
     try {
-      body = await requestJson(
-        "/1360000/VilageFcstInfoService_2.0/getVilageFcst",
-        {
-          pageNo: "1",
-          // A full run is 600-900 rows; 1000 is the documented maximum per page.
-          numOfRows: "1000",
-          base_date: baseDate,
-          base_time: baseTime,
-          nx: String(grid.nx),
-          ny: String(grid.ny),
-        }
-      );
+      body = await requestJson("/1360000/VilageFcstInfoService_2.0/getVilageFcst", {
+        pageNo: "1",
+        // A full run is 600-900 rows; 1000 is the documented maximum per page.
+        numOfRows: "1000",
+        base_date: baseDate,
+        base_time: baseTime,
+        nx: String(grid.nx),
+        ny: String(grid.ny),
+      });
     } catch (error) {
       lastError = error;
       // Only an empty result is worth another run. A rejected key or an
@@ -718,9 +684,7 @@ export const KMA_DISPLAY_CATEGORIES: readonly string[] = [
   "WAV", // 파고
 ];
 
-const DISPLAY_ORDER = new Map(
-  KMA_DISPLAY_CATEGORIES.map((code, index) => [code, index])
-);
+const DISPLAY_ORDER = new Map(KMA_DISPLAY_CATEGORIES.map((code, index) => [code, index]));
 
 /**
  * Filters and orders values for display.
@@ -728,16 +692,10 @@ const DISPLAY_ORDER = new Map(
  * @param values - Raw values from a nowcast or forecast.
  * @returns Only the categories worth showing, in {@link KMA_DISPLAY_CATEGORIES} order.
  */
-export function displayableValues(
-  values: readonly KmaObservationValue[]
-): KmaObservationValue[] {
+export function displayableValues(values: readonly KmaObservationValue[]): KmaObservationValue[] {
   return values
     .filter((entry) => DISPLAY_ORDER.has(entry.category))
-    .sort(
-      (a, b) =>
-        (DISPLAY_ORDER.get(a.category) ?? 0) -
-        (DISPLAY_ORDER.get(b.category) ?? 0)
-    );
+    .sort((a, b) => (DISPLAY_ORDER.get(a.category) ?? 0) - (DISPLAY_ORDER.get(b.category) ?? 0));
 }
 
 /** One forecast time step, with its categories collapsed into a single record. */
@@ -760,9 +718,7 @@ export interface KmaForecastSlot {
  * @param values - Raw forecast values.
  * @returns Slots in chronological order.
  */
-export function groupForecastSlots(
-  values: readonly KmaObservationValue[]
-): KmaForecastSlot[] {
+export function groupForecastSlots(values: readonly KmaObservationValue[]): KmaForecastSlot[] {
   const slots = new Map<string, KmaForecastSlot>();
   for (const entry of values) {
     if (!entry.date || !entry.time) continue;
@@ -775,7 +731,7 @@ export function groupForecastSlots(
     slot.values[entry.category] = entry.value;
   }
   return [...slots.values()].sort((a, b) =>
-    `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`)
+    `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`),
   );
 }
 
@@ -801,13 +757,13 @@ export function compassIndex(degrees: string): number | null {
  */
 export function villageForecastBase(
   now: Date,
-  stepsBack = 0
+  stepsBack = 0,
 ): { baseDate: string; baseTime: string } {
   const { baseDate, baseTime } = kmaBaseDateTime(now);
   const hour = Number(baseTime.slice(0, 2));
   const minute = Number(baseTime.slice(2));
   const available = VILLAGE_FORECAST_HOURS.filter(
-    (slot) => slot < hour || (slot === hour && minute >= VILLAGE_PUBLISH_MINUTE)
+    (slot) => slot < hour || (slot === hour && minute >= VILLAGE_PUBLISH_MINUTE),
   );
 
   // Walk back through today's published runs, then into yesterday's.
@@ -817,9 +773,7 @@ export function villageForecastBase(
   while (index < 0) {
     daysBack += 1;
     index += VILLAGE_FORECAST_HOURS.length;
-    date = kmaBaseDateTime(
-      new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000)
-    ).baseDate;
+    date = kmaBaseDateTime(new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000)).baseDate;
   }
   const slots = daysBack === 0 ? available : VILLAGE_FORECAST_HOURS;
   const slot = slots[Math.min(index, slots.length - 1)];
@@ -862,9 +816,7 @@ export type KmaKeyCheck =
  * @param now - The current moment (injectable for testing).
  * @returns Whether the key was accepted, and why not when it was not.
  */
-export async function verifyKmaApiKey(
-  now: Date = new Date()
-): Promise<KmaKeyCheck> {
+export async function verifyKmaApiKey(now: Date = new Date()): Promise<KmaKeyCheck> {
   if (!hasKmaApiKey()) return { ok: false, kind: "no-key", readable: true };
   const { baseDate, baseTime } = ultraShortNowcastBase(now);
   try {
@@ -913,7 +865,7 @@ export interface KmaWarning {
  * @throws {KmaError} On any failure, including an empty list (`no-data`).
  */
 export async function kmaWarnings(
-  options: { fromDate?: string; toDate?: string } = {}
+  options: { fromDate?: string; toDate?: string } = {},
 ): Promise<KmaWarning[]> {
   const today = kmaBaseDateTime(new Date()).baseDate;
   const body = await requestJson("/1360000/WthrWrnInfoService/getWthrWrnList", {
@@ -955,7 +907,7 @@ export interface KmaTyphoonPosition {
  * @throws {KmaError} On any failure, including no active typhoon (`no-data`).
  */
 export async function kmaTyphoons(
-  options: { fromDate?: string; toDate?: string } = {}
+  options: { fromDate?: string; toDate?: string } = {},
 ): Promise<KmaTyphoonPosition[]> {
   const today = kmaBaseDateTime(new Date()).baseDate;
   const body = await requestJson("/1360000/TyphoonInfoService/getTyphoonInfo", {
@@ -1034,15 +986,12 @@ export async function kmaStations(networkId: string): Promise<KmaStation[]> {
   const network = KMA_STATION_NETWORKS.find((entry) => entry.id === networkId);
   if (!network) throw new KmaError("invalid-request");
 
-  const body = await requestJson(
-    `/1360000/WethrBasicInfoService/${network.operation}`,
-    {
-      pageNo: "1",
-      // Comfortably above the largest network (AWS, ~500 stations) so the layer
-      // is complete without paging.
-      numOfRows: "1000",
-    }
-  );
+  const body = await requestJson(`/1360000/WethrBasicInfoService/${network.operation}`, {
+    pageNo: "1",
+    // Comfortably above the largest network (AWS, ~500 stations) so the layer
+    // is complete without paging.
+    numOfRows: "1000",
+  });
 
   const stations: KmaStation[] = [];
   for (const item of itemsOf(body)) {

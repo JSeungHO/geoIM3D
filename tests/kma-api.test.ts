@@ -30,18 +30,14 @@ import {
 
 const TEST_KEY = "test-kma-service-key";
 
-function stubFetch(
-  payload: unknown,
-  options: { ok?: boolean; status?: number } = {}
-) {
+function stubFetch(payload: unknown, options: { ok?: boolean; status?: number } = {}) {
   const calls: string[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     calls.push(String(input));
     return {
       ok: options.ok ?? true,
       status: options.status ?? 200,
-      text: async () =>
-        typeof payload === "string" ? payload : JSON.stringify(payload),
+      text: async () => (typeof payload === "string" ? payload : JSON.stringify(payload)),
     } as Response;
   }) as typeof fetch;
   return calls;
@@ -98,7 +94,7 @@ describe("KMA forecast grid", () => {
   it("rejects non-finite coordinates", () => {
     assert.throws(
       () => latLonToGrid(Number.NaN, 37.5),
-      (error: KmaError) => error.kind === "invalid-request"
+      (error: KmaError) => error.kind === "invalid-request",
     );
   });
 });
@@ -278,10 +274,7 @@ describe("service key normalization", () => {
     assert.ok(query.includes("serviceKey=abc%2Bdef%2Fghi%3D%3D"), query);
     assert.ok(!query.includes("%25"), "the key went out double-encoded");
     // And the value the server will parse is the decoded key.
-    assert.equal(
-      new URL(calls[0]).searchParams.get("serviceKey"),
-      "abc+def/ghi=="
-    );
+    assert.equal(new URL(calls[0]).searchParams.get("serviceKey"), "abc+def/ghi==");
   });
 });
 
@@ -297,15 +290,15 @@ describe("key handling", () => {
     setKmaApiKey("");
     await assert.rejects(
       () => kmaCurrentConditions(126.978, 37.5665),
-      (error: KmaError) => error.kind === "no-key"
+      (error: KmaError) => error.kind === "no-key",
     );
     await assert.rejects(
       () => kmaWarnings(),
-      (error: KmaError) => error.kind === "no-key"
+      (error: KmaError) => error.kind === "no-key",
     );
     await assert.rejects(
       () => kmaStations("aws"),
-      (error: KmaError) => error.kind === "no-key"
+      (error: KmaError) => error.kind === "no-key",
     );
   });
 
@@ -318,7 +311,7 @@ describe("key handling", () => {
         assert.ok(!error.message.includes(TEST_KEY));
         assert.ok(!error.message.includes("data.go.kr"));
         return true;
-      }
+      },
     );
   });
 
@@ -328,11 +321,11 @@ describe("key handling", () => {
     // for one this API was never approved for; the app checks the key when it
     // is entered, so the latter is what a per-service refusal usually means.
     stubFetch(
-      "<OpenAPI_ServiceResponse><returnReasonCode>30</returnReasonCode>SERVICE KEY IS NOT REGISTERED ERROR</OpenAPI_ServiceResponse>"
+      "<OpenAPI_ServiceResponse><returnReasonCode>30</returnReasonCode>SERVICE KEY IS NOT REGISTERED ERROR</OpenAPI_ServiceResponse>",
     );
     await assert.rejects(
       () => kmaWarnings(),
-      (error: KmaError) => error.kind === "access-denied"
+      (error: KmaError) => error.kind === "access-denied",
     );
   });
 
@@ -346,11 +339,11 @@ describe("key handling", () => {
           },
         },
       }),
-      { ok: false, status: 403 }
+      { ok: false, status: 403 },
     );
     await assert.rejects(
       () => kmaWarnings(),
-      (error: KmaError) => error.kind === "access-denied"
+      (error: KmaError) => error.kind === "access-denied",
     );
   });
 });
@@ -371,18 +364,14 @@ describe("kmaCurrentConditions", () => {
           baseDate: "20260729",
           baseTime: "0800",
         },
-      ])
+      ]),
     );
 
-    const result = await kmaCurrentConditions(
-      126.978,
-      37.5665,
-      new Date("2026-07-29T00:50:00Z")
-    );
+    const result = await kmaCurrentConditions(126.978, 37.5665, new Date("2026-07-29T00:50:00Z"));
     const url = new URL(calls[0]);
     assert.equal(
       url.origin + url.pathname,
-      "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst"
+      "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst",
     );
     assert.equal(url.searchParams.get("nx"), "60");
     assert.equal(url.searchParams.get("ny"), "127");
@@ -401,7 +390,7 @@ describe("kmaCurrentConditions", () => {
     // Somewhere in the Pacific, far outside the Korean peninsula grid.
     await assert.rejects(
       () => kmaCurrentConditions(-120, 35),
-      (error: KmaError) => error.kind === "no-data"
+      (error: KmaError) => error.kind === "no-data",
     );
     assert.equal(calls.length, 0);
   });
@@ -410,7 +399,7 @@ describe("kmaCurrentConditions", () => {
     stubFetch({ response: { header: { resultCode: "03" } } });
     await assert.rejects(
       () => kmaCurrentConditions(126.978, 37.5665),
-      (error: KmaError) => error.kind === "no-data"
+      (error: KmaError) => error.kind === "no-data",
     );
   });
 });
@@ -425,13 +414,9 @@ describe("kmaVillageForecast", () => {
           fcstDate: "20260729",
           fcstTime: "1200",
         },
-      ])
+      ]),
     );
-    const result = await kmaVillageForecast(
-      126.978,
-      37.5665,
-      new Date("2026-07-29T00:05:00Z")
-    );
+    const result = await kmaVillageForecast(126.978, 37.5665, new Date("2026-07-29T00:05:00Z"));
     const url = new URL(calls[0]);
     assert.ok(url.pathname.endsWith("/getVilageFcst"));
     assert.equal(url.searchParams.get("base_time"), "0800");
@@ -451,7 +436,7 @@ describe("kmaWarnings and kmaTyphoons", () => {
         t6: "서울",
         title: "폭염주의보",
         stnId: "108",
-      })
+      }),
     );
     const warnings = await kmaWarnings();
     assert.equal(warnings.length, 1);
@@ -469,7 +454,7 @@ describe("kmaWarnings and kmaTyphoons", () => {
           typPs: "970",
         },
         { typName: "좌표없음", typTm: "202607290600" },
-      ])
+      ]),
     );
     const typhoons = await kmaTyphoons();
     assert.equal(typhoons.length, 1);
@@ -483,22 +468,18 @@ describe("kmaWarnings and kmaTyphoons", () => {
     stubFetch(envelope([]));
     await assert.rejects(
       () => kmaWarnings(),
-      (error: KmaError) => error.kind === "no-data"
+      (error: KmaError) => error.kind === "no-data",
     );
   });
 });
 
 describe("kmaStations", () => {
   it("requests the network's own operation", async () => {
-    const calls = stubFetch(
-      envelope([{ stnId: "108", stnKo: "서울", lon: "126.9", lat: "37.5" }])
-    );
+    const calls = stubFetch(envelope([{ stnId: "108", stnKo: "서울", lon: "126.9", lat: "37.5" }]));
     await kmaStations("aws");
     assert.ok(
-      new URL(calls[0]).pathname.endsWith(
-        "/1360000/WethrBasicInfoService/getAwsObsStn"
-      ),
-      "AWS stations must use the AWS operation"
+      new URL(calls[0]).pathname.endsWith("/1360000/WethrBasicInfoService/getAwsObsStn"),
+      "AWS stations must use the AWS operation",
     );
   });
 
@@ -506,7 +487,7 @@ describe("kmaStations", () => {
     const calls = stubFetch(envelope([]));
     await assert.rejects(
       () => kmaStations("not-a-network"),
-      (error: KmaError) => error.kind === "invalid-request"
+      (error: KmaError) => error.kind === "invalid-request",
     );
     assert.equal(calls.length, 0);
   });
@@ -516,7 +497,7 @@ describe("kmaStations", () => {
       envelope([
         { stnId: "108", stnKo: "서울", lon: "126.9", lat: "37.5" },
         { stnId: "999", stnKo: "좌표없음", lon: "", lat: "" },
-      ])
+      ]),
     );
     const stations = await kmaStations("aws");
     assert.equal(stations.length, 1);
@@ -606,16 +587,11 @@ describe("KMA transport injection", () => {
       return {
         ok: true,
         status: 200,
-        text: async () =>
-          JSON.stringify(envelope([{ category: "T1H", obsrValue: "27.3" }])),
+        text: async () => JSON.stringify(envelope([{ category: "T1H", obsrValue: "27.3" }])),
       };
     });
 
-    const result = await kmaCurrentConditions(
-      126.978,
-      37.5665,
-      new Date("2026-07-30T00:50:00Z")
-    );
+    const result = await kmaCurrentConditions(126.978, 37.5665, new Date("2026-07-30T00:50:00Z"));
     assert.equal(result.values[0].value, "27.3");
     assert.equal(urls.length, 1);
     assert.ok(urls[0].includes("/getUltraSrtNcst"), urls[0]);
@@ -632,7 +608,7 @@ describe("KMA transport injection", () => {
     });
     await assert.rejects(
       () => kmaWarnings(),
-      (error: KmaError) => error.kind === "network"
+      (error: KmaError) => error.kind === "network",
     );
     setKmaTransport(null);
   });
@@ -667,7 +643,7 @@ describe("forecast presentation", () => {
     ]);
     assert.deepEqual(
       slots.map((slot) => `${slot.date}${slot.time}`),
-      ["202608032300", "202608040300"]
+      ["202608032300", "202608040300"],
     );
   });
 
@@ -738,18 +714,12 @@ describe("gatewayErrorKind", () => {
 
   it("separates a path this client got wrong from a key problem", () => {
     // A bogus service path answers 400 with reason 12, not a key error.
-    assert.equal(
-      gatewayErrorKind('{"returnReasonCode":"12"}'),
-      "invalid-request"
-    );
+    assert.equal(gatewayErrorKind('{"returnReasonCode":"12"}'), "invalid-request");
     assert.equal(gatewayErrorKind('{"returnReasonCode":"32"}'), "invalid-key");
   });
 
   it("declines to classify a body that is not a gateway fault", () => {
-    assert.equal(
-      gatewayErrorKind('{"response":{"header":{"resultCode":"00"}}}'),
-      null
-    );
+    assert.equal(gatewayErrorKind('{"response":{"header":{"resultCode":"00"}}}'), null);
     assert.equal(gatewayErrorKind(""), null);
   });
 });

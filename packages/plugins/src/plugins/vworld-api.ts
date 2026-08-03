@@ -458,7 +458,12 @@ export interface VWorldThematicLayer {
 export const VWORLD_THEMATIC_LAYERS: readonly VWorldThematicLayer[] = [
   // 지적도 — parcel boundaries (본번/부번).
   { id: "cadastral", labelKey: "cadastral", typename: "lp_pa_cbnd_bubun", minzoom: 14 },
-  { id: "cadastral-bonbun", labelKey: "cadastralBonbun", typename: "lp_pa_cbnd_bonbun", minzoom: 14 },
+  {
+    id: "cadastral-bonbun",
+    labelKey: "cadastralBonbun",
+    typename: "lp_pa_cbnd_bonbun",
+    minzoom: 14,
+  },
   // 건물 정보.
   { id: "building", labelKey: "building", typename: "lt_c_bldginfo", minzoom: 13 },
   // 용도지역 — urban / management / agricultural-forestry, plus green belt.
@@ -724,26 +729,26 @@ export interface AttributeSpec {
  * available, just collapsed behind the raw-attribute disclosure.
  */
 export const VWORLD_PRIMARY_ATTRIBUTES: readonly AttributeSpec[] = [
-  { field: "bld_nm", format: "text" },       // 건물명
-  { field: "dong_nm", format: "text" },      // 동명
-  { field: "grnd_flr", format: "number" },   // 지상층수
-  { field: "ugrnd_flr", format: "number" },  // 지하층수
-  { field: "height", format: "number" },     // 높이(m)
-  { field: "archarea", format: "area" },     // 건축면적
-  { field: "totalarea", format: "area" },    // 연면적
-  { field: "platarea", format: "area" },     // 대지면적
-  { field: "bc_rat", format: "ratio" },      // 건폐율
-  { field: "vl_rat", format: "ratio" },      // 용적률
-  { field: "useapr_day", format: "date" },   // 사용승인일
-  { field: "regist_day", format: "date" },   // 등록일
+  { field: "bld_nm", format: "text" }, // 건물명
+  { field: "dong_nm", format: "text" }, // 동명
+  { field: "grnd_flr", format: "number" }, // 지상층수
+  { field: "ugrnd_flr", format: "number" }, // 지하층수
+  { field: "height", format: "number" }, // 높이(m)
+  { field: "archarea", format: "area" }, // 건축면적
+  { field: "totalarea", format: "area" }, // 연면적
+  { field: "platarea", format: "area" }, // 대지면적
+  { field: "bc_rat", format: "ratio" }, // 건폐율
+  { field: "vl_rat", format: "ratio" }, // 용적률
+  { field: "useapr_day", format: "date" }, // 사용승인일
+  { field: "regist_day", format: "date" }, // 등록일
   { field: "jibun", format: "text" },
   { field: "addr", format: "text" },
   { field: "sido_nm", format: "text" },
   { field: "sgg_nm", format: "text" },
   { field: "emd_nm", format: "text" },
   { field: "ri_nm", format: "text" },
-  { field: "pnu", format: "text" },          // 필지고유번호
-  { field: "bd_mgt_sn", format: "text" },    // 건축물대장 관리번호
+  { field: "pnu", format: "text" }, // 필지고유번호
+  { field: "bd_mgt_sn", format: "text" }, // 건축물대장 관리번호
 ];
 
 const PRIMARY_FIELDS = new Set(VWORLD_PRIMARY_ATTRIBUTES.map((spec) => spec.field));
