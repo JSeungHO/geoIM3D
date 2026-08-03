@@ -9,6 +9,7 @@ import { useProjectUrlLoader } from "./hooks/useProjectUrlLoader";
 import { useBeforeUnloadGuard } from "./hooks/useBeforeUnloadGuard";
 import { useRecentProjectsPersistence } from "./hooks/useRecentProjectsPersistence";
 import { useStyleLibraryPersistence } from "./hooks/useStyleLibraryPersistence";
+import { useCredentials } from "./hooks/useCredentials";
 import { useRuntimeEnvironmentVariables } from "./hooks/useRuntimeEnvironmentVariables";
 import { useStartupUpdateCheck } from "./hooks/useStartupUpdateCheck";
 import { useThemeMode } from "./hooks/useThemeMode";
@@ -33,6 +34,10 @@ export default function App() {
   useRecentProjectsPersistence();
   useStyleLibraryPersistence();
   useRuntimeEnvironmentVariables();
+  // Loads the OS/memory credential store and pushes each value into the
+  // consumer that needs it. Kept separate from the runtime environment above:
+  // credentials must never land in the public env map plugins can read.
+  useCredentials();
   useUndoRedoShortcuts();
   useBeforeUnloadGuard();
   useWhiteboxToolUrl();

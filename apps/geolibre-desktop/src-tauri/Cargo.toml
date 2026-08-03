@@ -74,3 +74,10 @@ reqwest = { version = "0.12", default-features = false, features = ["native-tls"
 # Runtime WebKitGTK version check (already an indirect dep via tauri/wry).
 [target."cfg(target_os = \"linux\")".dependencies]
 webkit2gtk-sys = "2"
+
+# Backs the OS credential store (Windows Credential Manager) for device-local
+# API keys — see src/credential_store.rs. Windows-only: the other targets return
+# credential_backend_unavailable and the frontend falls back to memory-only, so
+# there is no reason to build the dependency for them.
+[target."cfg(target_os = \"windows\")".dependencies]
+keyring = { version = "3", features = ["windows-native"] }
