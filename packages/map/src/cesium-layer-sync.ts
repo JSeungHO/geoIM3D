@@ -76,7 +76,39 @@ function entryKind(layer: GeoLibreLayer): EntryKind {
 // alpha instead of reloading the whole GeoJsonDataSource on every tick.
 function styleSignature(layer: GeoLibreLayer): string {
   const style = layer.style ?? {};
-  return [style.fillColor, style.strokeColor, style.strokeWidth, style.markerColor].join("|");
+  return [
+    style.fillColor,
+    style.strokeColor,
+    style.strokeWidth,
+    style.markerColor,
+    // Extrusion is part of the signature because `clampToGround` is a *load*
+    // option: a polygon draped on terrain cannot be lifted off it by restyling,
+    // so turning extrusion on (or changing what drives its height) has to
+    // rebuild the data source.
+    style.extrusionEnabled,
+    style.extrusionHeightProperty,
+    style.extrusionHeightScale,
+    style.extrusionBase,
+    style.extrusionColor,
+  ].join("|");
+}
+
+/**
+ * Reads a feature's extrusion height in metres.
+ *
+ * @param properties - The entity's Cesium property bag.
+ * @param style - The layer style driving the extrusion.
+ * @returns The height, or 0 when the feature carries no usable value.
+ */
+export function extrusionHeightOf(
+  properties: { getValue?: (time?: unknown) => Record<string, unknown> } | undefined,
+  style: { extrusionHeightProperty?: string; extrusionHeightScale?: number },
+): number {
+  const bag = properties?.getValue?.();
+  const raw = bag?.[style.extrusionHeightProperty ?? "height"];
+  const value = typeof raw === "number" ? raw : Number.parseFloat(String(raw ?? ""));
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return value * (style.extrusionHeightScale ?? 1);
 }
 
 /**
@@ -116,6 +148,44 @@ function needsRebuild(prev: GeoLibreLayer, next: GeoLibreLayer): boolean {
       );
   }
 }
+
+/**
+ * Stands a loaded data source's polygons up on the globe.
+ *
+ * Cesium extrudes between `polygon.height` (the base) and
+ * `polygon.extrudedHeight`, both in metres above the ellipsoid — so each entity
+ * gets its own value read from the feature property the style names. Entities
+ * with no usable height are left flat rather than given an arbitrary one; a
+ * building drawn at a made-up height reads as data.
+ *
+ * Colour is left to `applyGeoJsonStyle`, which owns the polygon material and
+ * runs immediately after this — setting it here would be overwritten.
+ *
+ * @param dataSource - The freshly loaded GeoJsonDataSource.
+ * @param style - The layer style driving the extrusion.
+ */
+function applyExtrusion(
+  dataSource: { entities: { values: Array<Record<string, any>> } },
+  style: Record<string, any>,
+): void {
+  const base = Number.isFinite(style.extrusionBase) ? Number(style.extrusionBase) : 0;
+
+  for (const entity of dataSource.entities.values) {
+    const polygon = entity.polygon;
+    if (!polygon) continue;
+    const height = extrusionHeightOf(entity.properties, style);
+    if (height <= 0) continue;
+    polygon.height = base;
+    polygon.extrudedHeight = base + height;
+    // The footprint's own vertices sit at ground level; letting each one keep
+    // its terrain height would shear the walls on a slope.
+    polygon.perPositionHeight = false;
+    // Cesium clamps a *draped* polygon to terrain and ignores height; an
+    // extruded one must opt out or it snaps back down.
+    polygon.classificationType = undefined;
+  }
+}
+
 
 export class CesiumLayerSync {
   private readonly entries = new Map<string, LayerEntry>();
@@ -260,12 +330,15 @@ export class CesiumLayerSync {
     // (applyGeoJsonStyle) rather than reloading the whole data source.
     const fillAlpha = (style.fillOpacity ?? 0.6) * layer.opacity;
     try {
+      // A draped polygon is painted onto the terrain and has no height of its
+      // own, so extrusion requires loading it unclamped.
+      const extruded = Boolean(style.extrusionEnabled);
       const dataSource = await Cesium.GeoJsonDataSource.load(layer.geojson, {
         stroke,
         strokeWidth: style.strokeWidth ?? 2,
         fill: fill.withAlpha(fillAlpha),
         markerColor: Cesium.Color.fromCssColorString(style.markerColor ?? "#3b82f6"),
-        clampToGround: true,
+        clampToGround: !extruded,
       });
       if (entry.cancelled) return;
       await viewer.dataSources.add(dataSource);
@@ -274,6 +347,7 @@ export class CesiumLayerSync {
         return;
       }
       entry.handle = dataSource;
+      if (extruded) applyExtrusion(dataSource, style);
       // applyAppearance → applyGeoJsonStyle fades every entity kind (fill,
       // stroke, marker) by the layer opacity right after load, so points/lines
       // match the 2D map instead of rendering fully opaque.
@@ -355,11 +429,18 @@ export class CesiumLayerSync {
     const fillAlpha = (style.fillOpacity ?? 0.6) * opacity;
     // Key on both alphas so any opacity change is picked up (e.g. a lines-only
     // layer whose fill alpha never varies).
-    const key = `${fillAlpha}|${opacity}`;
+    const key = `${fillAlpha}|${opacity}|${style.extrusionEnabled}|${style.extrusionOpacity}|${style.extrusionColor}`;
     if (entry.appliedAlpha === key) return;
     entry.appliedAlpha = key;
     const { Cesium } = this;
-    const fill = Cesium.Color.fromCssColorString(style.fillColor ?? "#3b82f6").withAlpha(fillAlpha);
+    // An extruded polygon is painted with the extrusion colour, not the flat
+    // fill: this runs right after load and on every opacity change, so reading
+    // the wrong one here would overwrite the extrusion colour immediately.
+    const extruded = Boolean(style.extrusionEnabled);
+    const polygonAlpha = extruded ? (style.extrusionOpacity ?? 1) * opacity : fillAlpha;
+    const fill = Cesium.Color.fromCssColorString(
+      (extruded ? style.extrusionColor : style.fillColor) ?? style.fillColor ?? "#3b82f6",
+    ).withAlpha(polygonAlpha);
     const stroke = Cesium.Color.fromCssColorString(style.strokeColor ?? "#1e40af").withAlpha(
       opacity,
     );
