@@ -7,7 +7,11 @@ import enTranslation from "./locales/en.json";
 // geoIM3D: this fork's own strings live in their own catalogs so the
 // upstream locale files stay untouched and merge cleanly. See
 // `locales-geoim3d/README.md`.
-import { loadGeoim3dCatalog, withGeoim3dEnglish } from "./geoim3d-catalog";
+import {
+  geoim3dOverlayFor,
+  loadGeoim3dCatalog,
+  withGeoim3dEnglish,
+} from "./geoim3d-catalog";
 
 /**
  * English is the fallback baseline (and the source of truth `i18next.d.ts` types
@@ -196,7 +200,13 @@ export const i18nReady: Promise<unknown> = (async () => {
   if (initialLanguage !== DEFAULT_LANGUAGE && loaders[initialLanguage]) {
     try {
       const mod = await loaders[initialLanguage]();
-      resources[initialLanguage] = { translation: mod.default };
+      // The fork's own strings are merged in here too, not only in
+      // `loadCatalog`: this path registers the initial locale *before* init, so
+      // an app that boots straight into Korean would otherwise never pick them
+      // up and would render every geoIM3D string in English.
+      resources[initialLanguage] = {
+        translation: await geoim3dOverlayFor(initialLanguage, mod.default),
+      };
     } catch (error) {
       // The catalog fetch failed (e.g. offline first visit): boot in English
       // rather than in a locale whose strings are absent, which would render

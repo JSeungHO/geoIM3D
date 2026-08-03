@@ -10,6 +10,20 @@ function read(path: string): Record<string, unknown> {
   >;
 }
 
+/** Flattens a catalog to dotted keys so leaves can be compared across locales. */
+function leaves(node: Record<string, unknown>, prefix = ""): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(node)) {
+    const path = `${prefix}${key}`;
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      Object.assign(out, leaves(value as Record<string, unknown>, `${path}.`));
+      continue;
+    }
+    out[path] = value;
+  }
+  return out;
+}
+
 const UPSTREAM = "../apps/geolibre-desktop/src/i18n/locales";
 const FORK = "../apps/geolibre-desktop/src/i18n/locales-geoim3d";
 
@@ -70,11 +84,24 @@ describe("the split catalogs", () => {
     }
   });
 
-  it("translates the fork's sections into Korean", () => {
-    const en = read(`${FORK}/en.json`);
-    const ko = read(`${FORK}/ko.json`);
-    for (const section of Object.keys(en)) {
-      assert.ok(ko[section], `ko.json is missing the ${section} section`);
-    }
+  it("translates every fork string into Korean", () => {
+    // Korean is the product's primary language, so an untranslated key is a
+    // visible defect rather than a cosmetic gap. Checking leaves, not just
+    // top-level sections: a section can exist and still be half empty.
+    const en = leaves(read(`${FORK}/en.json`));
+    const ko = leaves(read(`${FORK}/ko.json`));
+
+    const missing = Object.keys(en).filter((key) => !(key in ko));
+    assert.deepEqual(missing, [], `ko.json is missing: ${missing.join(", ")}`);
+
+    // A Korean value identical to the English one is almost always a key that
+    // was copied across and never translated.
+    const copied = Object.keys(en).filter(
+      (key) =>
+        typeof en[key] === "string" &&
+        ko[key] === en[key] &&
+        /[a-z]/i.test(en[key] as string),
+    );
+    assert.deepEqual(copied, [], `ko.json still holds the English text for: ${copied.join(", ")}`);
   });
 });

@@ -47,6 +47,27 @@ export function withGeoim3dEnglish(base: Record<string, unknown>): Record<string
 }
 
 /**
+ * Merges the fork's strings for a locale into a catalog, before i18next has it.
+ *
+ * Used by the boot path, which builds the initial locale's resources *before*
+ * `i18n.init` — there is no bundle to add to yet, so the merge has to happen on
+ * the plain object.
+ *
+ * @param code - The locale code.
+ * @param base - The upstream catalog for that locale.
+ * @returns The merged catalog, or `base` when the fork has no strings for it.
+ */
+export async function geoim3dOverlayFor(
+  code: string,
+  base: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const loader = overlays[code];
+  if (!loader) return base;
+  const { default: bundle } = await loader();
+  return mergeCatalogs(base, bundle);
+}
+
+/**
  * Adds the fork's strings for a non-English locale, if it has any.
  *
  * i18next's own deep merge handles the overlay here, so this only has to fetch
