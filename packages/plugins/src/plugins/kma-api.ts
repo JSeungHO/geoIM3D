@@ -207,6 +207,43 @@ export function kmaErrorKind(code: string): KmaErrorKind {
 }
 
 /**
+ * Maps a gateway fault to a {@link KmaErrorKind}.
+ *
+ * The portal's gateway answers before the service does, with an envelope of its
+ * own (`OpenAPI_ServiceResponse.cmmMsgHeader`) rather than the usual
+ * `response.header`. It carries the actual reason, and reading it is the only
+ * way to tell "this key does not exist" from "this key exists but this API was
+ * never approved for it" — both of which arrive as a bare 403.
+ *
+ * `30` is reported for either, so it maps to `access-denied`: the app checks
+ * the key itself when it is entered, so by the time a specific service refuses
+ * it, an unapproved or not-yet-propagated 활용신청 is the likelier of the two.
+ * The message names both.
+ *
+ * @param text - The raw response body.
+ * @returns The matching kind, or null when this is not a gateway fault.
+ */
+export function gatewayErrorKind(text: string): KmaErrorKind | null {
+  const code = /<?returnReasonCode>?"?\s*[:>]\s*"?(\d+)/.exec(text)?.[1];
+  if (!code) return null;
+  switch (code) {
+    case "30": // SERVICE_KEY_IS_NOT_REGISTERED
+    case "20": // SERVICE_ACCESS_DENIED
+      return "access-denied";
+    case "31": // DEADLINE_HAS_EXPIRED
+    case "32": // UNREGISTERED_IP
+      return "invalid-key";
+    case "22": // LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS
+      return "rate-limit";
+    case "12": // NO_OPENAPI_SERVICE — a path this client got wrong, not the user.
+    case "10":
+      return "invalid-request";
+    default:
+      return null;
+  }
+}
+
+/**
  * Maps a transport-level HTTP status to a {@link KmaErrorKind}.
  *
  * @param status - The HTTP status code.
@@ -352,8 +389,16 @@ async function requestJson(
     // statuses mean different things: 401 is a key it does not recognize, 403 is
     // a key that is recognized but not licensed for this particular API. Folding
     // either into a generic transport failure hides the only actionable part.
-    if (!response.ok) throw new KmaError(httpErrorKind(response.status));
     text = await response.text();
+    // Read before classifying: the gateway states the reason in the body, and
+    // throwing on the status alone discarded it — every rejection became
+    // "check the key and its caller IP" even when the real answer was that
+    // this one API had not been approved for an otherwise working key.
+    if (!response.ok) {
+      throw new KmaError(
+        gatewayErrorKind(text) ?? httpErrorKind(response.status)
+      );
+    }
   } catch (error) {
     if (error instanceof KmaError) throw error;
     if (error instanceof DOMException && error.name === "TimeoutError") {
@@ -370,12 +415,17 @@ async function requestJson(
     payload = JSON.parse(text);
   } catch {
     throw new KmaError(
-      /SERVICE.?KEY|UNREGISTERED|DENIED/i.test(text) ? "invalid-key" : "unknown"
+      gatewayErrorKind(text) ??
+        (/SERVICE.?KEY|UNREGISTERED|DENIED/i.test(text)
+          ? "invalid-key"
+          : "unknown")
     );
   }
 
   const response = (payload as { response?: unknown })?.response;
-  if (!response || typeof response !== "object") throw new KmaError("unknown");
+  if (!response || typeof response !== "object") {
+    throw new KmaError(gatewayErrorKind(text) ?? "unknown");
+  }
   const header = (response as { header?: Record<string, unknown> }).header;
   const resultCode =
     typeof header?.resultCode === "string" ? header.resultCode : "";

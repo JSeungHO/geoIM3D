@@ -24,6 +24,7 @@ import {
   setKmaTransport,
   ultraShortNowcastBase,
   verifyKmaApiKey,
+  gatewayErrorKind,
   villageForecastBase,
 } from "../packages/plugins/src/plugins/kma-api";
 
@@ -321,16 +322,35 @@ describe("key handling", () => {
     );
   });
 
-  it("reads a non-JSON authentication fault as a rejected key", async () => {
+  it("reads the reason out of a non-JSON authentication fault", async () => {
     // The portal answers an auth failure with an XML fault even when JSON was
-    // requested, so a parse failure here is a key problem far more often than
-    // it is a malformed success.
+    // requested. Reason 30 is reported both for a key that does not exist and
+    // for one this API was never approved for; the app checks the key when it
+    // is entered, so the latter is what a per-service refusal usually means.
     stubFetch(
       "<OpenAPI_ServiceResponse><returnReasonCode>30</returnReasonCode>SERVICE KEY IS NOT REGISTERED ERROR</OpenAPI_ServiceResponse>"
     );
     await assert.rejects(
       () => kmaWarnings(),
-      (error: KmaError) => error.kind === "invalid-key"
+      (error: KmaError) => error.kind === "access-denied"
+    );
+  });
+
+  it("classifies a 403 from the gateway body, not the status alone", async () => {
+    stubFetch(
+      JSON.stringify({
+        OpenAPI_ServiceResponse: {
+          cmmMsgHeader: {
+            errMsg: "SERVICE_KEY_IS_NOT_REGISTERED_ERROR",
+            returnReasonCode: "30",
+          },
+        },
+      }),
+      { ok: false, status: 403 }
+    );
+    await assert.rejects(
+      () => kmaWarnings(),
+      (error: KmaError) => error.kind === "access-denied"
     );
   });
 });
@@ -688,5 +708,48 @@ describe("forecast presentation", () => {
     assert.equal(compassIndex("-45"), 7); // negative bearings normalize
     assert.equal(compassIndex("-999"), null); // missing sentinel
     assert.equal(compassIndex(""), null);
+  });
+});
+
+describe("gatewayErrorKind", () => {
+  it("reads the reason out of the live gateway's JSON fault", () => {
+    // Captured verbatim from apis.data.go.kr for an unregistered key.
+    const fault = JSON.stringify({
+      OpenAPI_ServiceResponse: {
+        cmmMsgHeader: {
+          errMsg: "SERVICE_KEY_IS_NOT_REGISTERED_ERROR",
+          returnAuthMsg: "등록되지 않은 서비스키",
+          returnReasonCode: "30",
+        },
+      },
+    });
+    // Not "invalid-key": the same key works for other services, so what this
+    // tells the user is to check the 활용신청 for this one.
+    assert.equal(gatewayErrorKind(fault), "access-denied");
+  });
+
+  it("reads the XML form the gateway uses for the same fault", () => {
+    const fault =
+      "<OpenAPI_ServiceResponse><cmmMsgHeader>" +
+      "<errMsg>SERVICE_ERROR</errMsg><returnReasonCode>22</returnReasonCode>" +
+      "</cmmMsgHeader></OpenAPI_ServiceResponse>";
+    assert.equal(gatewayErrorKind(fault), "rate-limit");
+  });
+
+  it("separates a path this client got wrong from a key problem", () => {
+    // A bogus service path answers 400 with reason 12, not a key error.
+    assert.equal(
+      gatewayErrorKind('{"returnReasonCode":"12"}'),
+      "invalid-request"
+    );
+    assert.equal(gatewayErrorKind('{"returnReasonCode":"32"}'), "invalid-key");
+  });
+
+  it("declines to classify a body that is not a gateway fault", () => {
+    assert.equal(
+      gatewayErrorKind('{"response":{"header":{"resultCode":"00"}}}'),
+      null
+    );
+    assert.equal(gatewayErrorKind(""), null);
   });
 });

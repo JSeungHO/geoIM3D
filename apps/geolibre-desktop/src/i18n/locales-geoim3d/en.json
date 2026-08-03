@@ -193,7 +193,7 @@
       "network": "Could not reach the weather service. The same error appears when the service key is not registered, has not activated yet (this can take up to an hour after signing up), or this particular API has not been requested for it.",
       "timeout": "The weather service did not respond in time.",
       "invalid-key": "The KMA service key was rejected. Check the key and its registered caller IP.",
-      "access-denied": "Your key is not approved for this service yet. Each KMA API on the public-data portal needs its own request — apply for this one, then try again.",
+      "access-denied": "Your key is not approved for this service yet. Each KMA API on the public-data portal needs its own request, and an approval can take up to an hour to take effect — check this API in 활용신청 현황, then try again.",
       "rate-limit": "The daily request limit for this key has been reached.",
       "invalid-request": "The weather service rejected the request.",
       "no-data": "No data for this point or time.",

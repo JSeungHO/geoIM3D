@@ -160,7 +160,7 @@ export const DEFAULT_KMA_LABELS: KmaLabels = {
   errorInvalidKey:
     "The KMA service key was rejected. Check the key and its registered caller IP.",
   errorAccessDenied:
-    "Your key is not approved for this service yet. Each KMA API on the public-data portal needs its own request — apply for this one, then try again.",
+    "Your key is not approved for this service yet. Each KMA API on the public-data portal needs its own request, and an approval can take up to an hour to take effect — check this API in 활용신청 현황, then try again.",
   errorRateLimit: "The daily request limit for this key has been reached.",
   errorInvalidRequest: "The weather service rejected the request.",
   errorNoData: "No data for this point or time.",
