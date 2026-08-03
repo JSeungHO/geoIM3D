@@ -207,6 +207,11 @@ export function setVWorldLabels(next: Partial<VWorldLabels>): void {
     attributes: { ...labels.attributes, ...(next.attributes ?? {}) },
   };
   rerenderPanel();
+  // The menu copies its labels when it is built, so a language change left it
+  // in the old one — the panel kept up because its title is a getter, and the
+  // menu beside it did not. (The host's menu label is a plain string, so the
+  // menu is rebuilt rather than made lazy; that would be an upstream change.)
+  if (state.app) buildToolbarMenu(state.app);
 }
 
 /**
