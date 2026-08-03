@@ -119,6 +119,7 @@ import { MapContextMenu } from "./MapContextMenu";
 import { KnowledgeCardPanel, type KnowledgePlace } from "./KnowledgeCardPanel";
 import { KnowledgeCardConsentDialog } from "./KnowledgeCardConsentDialog";
 import { MapGrid } from "./MapGrid";
+import { PrimaryGlobeSwitch } from "./PrimaryGlobeSwitch";
 import { RemoteCursorsOverlay } from "./RemoteCursorsOverlay";
 import { useCommandBridge } from "../../hooks/useCommandBridge";
 import { useEmbedApi } from "../../hooks/useEmbedApi";
@@ -2004,6 +2005,10 @@ export function DesktopShell({
             fallbackClassName="h-full w-full"
           >
             <MapGrid>
+              {/* geoIM3D: tabs that switch the primary view between the 2D map
+                  and the Cesium globe. All of it lives in PrimaryGlobeSwitch —
+                  this file only gains the wrapper. */}
+              <PrimaryGlobeSwitch>
               <MapCanvas
                 controllerRef={mapControllerRef}
                 onMapDiagnosticEvent={handleMapDiagnosticEvent}
@@ -2055,6 +2060,7 @@ export function DesktopShell({
               </Suspense>
               <TerrainSettingsDialog mapControllerRef={mapControllerRef} />
               <StoryMapComposeBar mapControllerRef={mapControllerRef} />
+              </PrimaryGlobeSwitch>
             </MapGrid>
           </SectionErrorBoundary>
           <SectionErrorBoundary
