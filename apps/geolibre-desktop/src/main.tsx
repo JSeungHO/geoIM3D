@@ -25,6 +25,9 @@ import "maplibre-gl-usgs-lidar/style.css";
 import "maplibre-gl-vector/style.css";
 import "mapillary-js/dist/mapillary.css";
 import "./index.css";
+// geoIM3D styles, in their own sheet so index.css stays byte-identical to
+// upstream. Imported after it so equal-specificity rules win.
+import "./styles/geoim3d.css";
 import "./lib/basemap-style";
 import "./lib/geoagent-style";
 import "./lib/lidar-style";

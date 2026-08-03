@@ -1,19 +1,31 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { mergeCatalogs } from "../apps/geolibre-desktop/src/i18n/merge-catalogs";
 import {
   PLUGIN_MENU_GROUPS,
   pluginMenuGroupFor,
 } from "../packages/plugins/src/plugins/plugin-menu-groups";
 
-/** Reads a locale catalog without pulling in the i18n runtime. */
-function locale(name: string): Record<string, unknown> {
-  return JSON.parse(
-    readFileSync(
-      new URL(`../apps/geolibre-desktop/src/i18n/locales/${name}.json`, import.meta.url),
-      "utf8",
-    ),
-  ) as Record<string, unknown>;
+/**
+ * The catalog the app actually resolves: upstream plus this fork's overlay.
+ *
+ * The fork keeps its strings in `locales-geoim3d/` so the upstream files stay
+ * mergeable, and merges them at load time — so a test that read only the
+ * upstream file would be asserting against something the app never uses.
+ */
+function locale(name: string): Record<string, any> {
+  const read = (dir: string) =>
+    JSON.parse(
+      readFileSync(
+        new URL(
+          `../apps/geolibre-desktop/src/i18n/${dir}/${name}.json`,
+          import.meta.url
+        ),
+        "utf8"
+      )
+    ) as Record<string, unknown>;
+  return mergeCatalogs(read("locales"), read("locales-geoim3d"));
 }
 
 /** Resolves a dotted i18n key against a catalog. */
@@ -28,7 +40,11 @@ describe("plugin menu groups", () => {
   it("maps every member id back to its group", () => {
     for (const group of PLUGIN_MENU_GROUPS) {
       for (const pluginId of group.pluginIds) {
-        assert.equal(pluginMenuGroupFor(pluginId)?.id, group.id, `${pluginId} -> ${group.id}`);
+        assert.equal(
+          pluginMenuGroupFor(pluginId)?.id,
+          group.id,
+          `${pluginId} -> ${group.id}`
+        );
       }
     }
   });
@@ -46,7 +62,11 @@ describe("plugin menu groups", () => {
     const seen = new Set<string>();
     for (const group of PLUGIN_MENU_GROUPS) {
       for (const pluginId of group.pluginIds) {
-        assert.equal(seen.has(pluginId), false, `${pluginId} is claimed by two groups`);
+        assert.equal(
+          seen.has(pluginId),
+          false,
+          `${pluginId} is claimed by two groups`
+        );
         seen.add(pluginId);
       }
     }
@@ -60,7 +80,7 @@ describe("plugin menu groups", () => {
         assert.equal(
           typeof lookup(locale(name), group.labelKey),
           "string",
-          `${name}.json is missing ${group.labelKey}`,
+          `${name}.json is missing ${group.labelKey}`
         );
       }
     }
@@ -76,7 +96,7 @@ describe("plugin menu groups", () => {
         assert.equal(
           typeof lookup(ko, `toolbar.plugin.${pluginId}`),
           "string",
-          `ko.json is missing toolbar.plugin.${pluginId}`,
+          `ko.json is missing toolbar.plugin.${pluginId}`
         );
       }
     }

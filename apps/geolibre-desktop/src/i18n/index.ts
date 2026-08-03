@@ -4,6 +4,10 @@ import { initReactI18next } from "react-i18next";
 import { DESKTOP_SETTINGS_STORAGE_KEY } from "../lib/storage-keys";
 import { DEFAULT_LANGUAGE, languageDirection, resolveLanguage } from "./languages";
 import enTranslation from "./locales/en.json";
+// geoIM3D: this fork's own strings live in their own catalogs so the
+// upstream locale files stay untouched and merge cleanly. See
+// `locales-geoim3d/README.md`.
+import { loadGeoim3dCatalog, withGeoim3dEnglish } from "./geoim3d-catalog";
 
 /**
  * English is the fallback baseline (and the source of truth `i18next.d.ts` types
@@ -31,7 +35,9 @@ export const AVAILABLE_LANGUAGES: string[] = [DEFAULT_LANGUAGE, ...Object.keys(l
 
 /** English is registered up front; other locales are added on demand. */
 const resources: Record<string, { translation: Record<string, unknown> }> = {
-  [DEFAULT_LANGUAGE]: { translation: enTranslation as Record<string, unknown> },
+  [DEFAULT_LANGUAGE]: {
+    translation: withGeoim3dEnglish(enTranslation as Record<string, unknown>),
+  },
 };
 
 /**
@@ -48,6 +54,7 @@ export async function loadCatalog(code: string): Promise<void> {
   if (!loader) return;
   const mod = await loader();
   i18n.addResourceBundle(code, "translation", mod.default, true, true);
+  await loadGeoim3dCatalog(code);
 }
 
 /**

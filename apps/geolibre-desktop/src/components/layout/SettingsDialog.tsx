@@ -67,7 +67,6 @@ import {
   TriangleAlert,
   Puzzle,
 } from "lucide-react";
-import type { ParseKeys } from "i18next";
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import {
@@ -83,9 +82,7 @@ import {
   type UiProfileSettings,
   type UpdateSettings,
 } from "../../hooks/useDesktopSettings";
-import { verifyKmaApiKey, verifyVWorldApiKey } from "@geolibre/plugins";
-import { useCredentialStore } from "../../hooks/useCredentials";
-import type { CredentialId } from "../../lib/credentials";
+import { ManagedCredentialsSection } from "../settings/ManagedCredentialsSection";
 import { useLanguage } from "../../hooks/useLanguage";
 import { BROWSER_PANEL_ID } from "../../hooks/useRegisterBrowserPanel";
 import { useRightPanelState } from "../../hooks/useRightPanels";
@@ -230,51 +227,6 @@ interface DraftPreferences {
   environmentVariables: DraftEnvironmentVariable[];
   geocoding: ProjectPreferences["geocoding"];
 }
-
-/**
- * The managed credentials the Environment section offers a field for, in render
- * order. Every entry renders the same write-only replacement box; only the
- * copy and the sign-up link differ, so adding a provider is one row here plus
- * its id in `lib/credentials.ts` and `credential_store.rs`.
- */
-// The key types are the exact literals rather than i18next's ParseKeys: a
-// `<Trans i18nKey>` typed against the whole catalog union expands to a type too
-// complex for the compiler to represent (TS2590).
-const MANAGED_CREDENTIALS: ReadonlyArray<{
-  id: CredentialId;
-  titleKey: "settings.env.vworldKeyTitle" | "settings.env.dataGoKrKeyTitle";
-  descriptionKey: "settings.env.vworldKeyDescription" | "settings.env.dataGoKrKeyDescription";
-  signupUrl: string;
-  /**
-   * Runs one small live request to prove the saved key works. Reads the key
-   * from the plugin module it was injected into, so the secret is not passed
-   * back through the UI to test it.
-   */
-  verify: () => Promise<{ ok: boolean; kind?: string; readable?: boolean }>;
-}> = [
-  {
-    id: "vworld:api-key",
-    titleKey: "settings.env.vworldKeyTitle",
-    descriptionKey: "settings.env.vworldKeyDescription",
-    signupUrl: "https://www.vworld.kr/dev/v4api.do",
-    verify: verifyVWorldApiKey,
-  },
-  {
-    id: "data-go-kr:service-key",
-    titleKey: "settings.env.dataGoKrKeyTitle",
-    descriptionKey: "settings.env.dataGoKrKeyDescription",
-    // The KMA weather services are published through the public-data portal,
-    // so the key is issued there rather than by the agency directly.
-    signupUrl: "https://www.data.go.kr/iim/api/selectAPIAcountView.do",
-    verify: verifyKmaApiKey,
-  },
-];
-
-/** Per-credential result of the "test key" button. */
-type CredentialCheck =
-  | { status: "checking" }
-  | { status: "ok" }
-  | { status: "failed"; kind: string; readable: boolean };
 
 interface DraftDesktopSettings {
   layout: DesktopLayoutSettings;
@@ -499,47 +451,6 @@ export function SettingsDialog({
   // Ids of variables whose value is temporarily revealed; values are masked
   // by default so secrets are not shown on screen.
   const [revealedValueIds, setRevealedValueIds] = useState<Set<string>>(() => new Set());
-  // Managed-credential state. Only "is it configured" and the backend kind are
-  // read — never the stored value, its length, or any fingerprint of it. The
-  // drafts are replacement boxes, cleared once a save succeeds.
-  const [credentialDrafts, setCredentialDrafts] = useState<Partial<Record<CredentialId, string>>>(
-    {},
-  );
-  const setCredentialDraft = useCallback((id: CredentialId, value: string) => {
-    setCredentialDrafts((current) => ({ ...current, [id]: value }));
-  }, []);
-  const [credentialChecks, setCredentialChecks] = useState<
-    Partial<Record<CredentialId, CredentialCheck>>
-  >({});
-  const runCredentialCheck = useCallback(
-    (credential: (typeof MANAGED_CREDENTIALS)[number]) => {
-      setCredentialChecks((current) => ({ ...current, [credential.id]: { status: "checking" } }));
-      void credential.verify().then(
-        (result) =>
-          setCredentialChecks((current) => ({
-            ...current,
-            [credential.id]: result.ok
-              ? { status: "ok" }
-              : {
-                  status: "failed",
-                  kind: result.kind ?? "unknown",
-                  readable: result.readable ?? true,
-                },
-          })),
-        () =>
-          setCredentialChecks((current) => ({
-            ...current,
-            [credential.id]: { status: "failed", kind: "unknown", readable: false },
-          })),
-      );
-    },
-    [],
-  );
-  const credentialBackend = useCredentialStore((s) => s.backend);
-  const credentialErrorCode = useCredentialStore((s) => s.errorCode);
-  const credentialValues = useCredentialStore((s) => s.values);
-  const setCredential = useCredentialStore((s) => s.setCredential);
-  const deleteCredential = useCredentialStore((s) => s.deleteCredential);
   const enabledVariableCount = useMemo(
     () =>
       draftPreferences.environmentVariables.filter(
@@ -644,10 +555,6 @@ export function SettingsDialog({
       // first edit of the next session.
       skipCustomColorCommitRef.current = false;
       setCustomColorDraft(null);
-      // Never carry a typed credential across a close: the boxes are one-shot
-      // replacement drafts, and leaving one populated would also leave the value
-      // sitting in component state for the rest of the session.
-      setCredentialDrafts({});
       return;
     }
     const seededPreferences = clonePreferences(useAppStore.getState().preferences);
@@ -2390,120 +2297,7 @@ export function SettingsDialog({
                       {t("settings.env.cesiumTokenStorageNote")}
                     </p>
                   </div>
-                  {/*
-                    Managed credentials. Unlike the settings fields above these
-                    are not bound to a draft of the stored value: each input is a
-                    write-only replacement box that starts empty every time the
-                    dialog opens, and the stored value is never read back into
-                    it. Saving a blank box changes nothing; removing a key is the
-                    explicit Delete button.
-                  */}
-                  {MANAGED_CREDENTIALS.map((credential) => {
-                    const configured = Boolean(credentialValues[credential.id]);
-                    const draft = credentialDrafts[credential.id] ?? "";
-                    const check = credentialChecks[credential.id];
-                    return (
-                      <div key={credential.id} className="space-y-2 border-t pt-5">
-                        <h3 className="text-sm font-semibold">{t(credential.titleKey)}</h3>
-                        <p className="text-xs text-muted-foreground">
-                          <Trans
-                            i18nKey={credential.descriptionKey}
-                            components={{
-                              keyLink: (
-                                <a
-                                  className="underline"
-                                  href={credential.signupUrl}
-                                  target="_blank"
-                                  rel="noreferrer noopener"
-                                />
-                              ),
-                            }}
-                          />
-                        </p>
-                        <div className="flex gap-2">
-                          <Input
-                            aria-label={t(credential.titleKey)}
-                            type="password"
-                            autoComplete="new-password"
-                            placeholder={t(
-                              configured
-                                ? "settings.env.credentialConfigured"
-                                : "settings.env.credentialPlaceholder",
-                            )}
-                            value={draft}
-                            onChange={(event) =>
-                              setCredentialDraft(credential.id, event.target.value)
-                            }
-                          />
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            disabled={!draft.trim()}
-                            onClick={() => {
-                              void setCredential(credential.id, draft).then((saved) => {
-                                if (saved) setCredentialDraft(credential.id, "");
-                              });
-                            }}
-                          >
-                            {t("settings.env.credentialSave")}
-                          </Button>
-                          {configured ? (
-                            <>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                disabled={check?.status === "checking"}
-                                onClick={() => runCredentialCheck(credential)}
-                              >
-                                {check?.status === "checking"
-                                  ? t("settings.env.credentialTesting")
-                                  : t("settings.env.credentialTest")}
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => void deleteCredential(credential.id)}
-                              >
-                                {t("settings.env.credentialDelete")}
-                              </Button>
-                            </>
-                          ) : null}
-                        </div>
-                        {check?.status === "ok" ? (
-                          <p className="text-xs text-emerald-600 dark:text-emerald-500">
-                            {t("settings.env.credentialTestOk")}
-                          </p>
-                        ) : null}
-                        {check?.status === "failed" ? (
-                          <p className="text-xs text-destructive">
-                            {/* A readable answer carries the service's own reason;
-                                an unreadable one (the portal omits CORS headers on
-                                errors) can only be reported as inconclusive. */}
-                            {check.readable
-                              ? t(`settings.env.credentialTestFailed.${check.kind}`, {
-                                  defaultValue: t("settings.env.credentialTestFailed.unknown"),
-                                })
-                              : t("settings.env.credentialTestUnreadable")}
-                          </p>
-                        ) : null}
-                        <p className="text-xs text-muted-foreground">
-                          {t(
-                            credentialBackend === "os"
-                              ? "settings.env.credentialStorageOs"
-                              : "settings.env.credentialStorageMemory",
-                          )}
-                        </p>
-                      </div>
-                    );
-                  })}
-                  {credentialErrorCode ? (
-                    <p className="text-xs text-destructive">
-                      {t(`settings.env.credentialError.${credentialErrorCode}`)}
-                    </p>
-                  ) : null}
+                  <ManagedCredentialsSection open={open} />
                   <div className="flex items-center justify-between gap-3 border-t pt-5">
                     <div>
                       <h3 className="text-sm font-semibold">{t("settings.env.variablesTitle")}</h3>

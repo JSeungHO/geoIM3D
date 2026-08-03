@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import { mergeCatalogs } from "../apps/geolibre-desktop/src/i18n/merge-catalogs";
 import {
   assistantConsentKey,
   hasAssistantConsent,
@@ -75,13 +76,17 @@ describe("assistant transmission consent", () => {
   it("namespaces its storage key", () => {
     assert.equal(
       assistantConsentKey("google"),
-      "geolibre:assistant-transmission-notice:google",
+      "geolibre:assistant-transmission-notice:google"
     );
   });
 });
 
 describe("summarizeAssistantTransmission", () => {
-  const provider = { providerId: "google", modelId: "gemini-3.5-flash", viaProxy: false };
+  const provider = {
+    providerId: "google",
+    modelId: "gemini-3.5-flash",
+    viaProxy: false,
+  };
 
   it("counts what the notice claims it will send", () => {
     const summary = summarizeAssistantTransmission(
@@ -95,9 +100,12 @@ describe("summarizeAssistantTransmission", () => {
             ],
           },
         },
-        { name: "roads", geojson: { features: [{ properties: { ref: "1", owner: "c" } }] } },
+        {
+          name: "roads",
+          geojson: { features: [{ properties: { ref: "1", owner: "c" } }] },
+        },
       ],
-      provider,
+      provider
     );
     assert.equal(summary.layerCount, 2);
     assert.equal(summary.featureCount, 3);
@@ -110,7 +118,7 @@ describe("summarizeAssistantTransmission", () => {
   it("handles layers with no vector data", () => {
     const summary = summarizeAssistantTransmission(
       [{ name: "basemap", geojson: null }, { name: "raster" }],
-      provider,
+      provider
     );
     assert.equal(summary.layerCount, 2);
     assert.equal(summary.featureCount, 0);
@@ -120,8 +128,12 @@ describe("summarizeAssistantTransmission", () => {
   it("reports an empty map without inventing counts", () => {
     const summary = summarizeAssistantTransmission([], provider);
     assert.deepEqual(
-      { layers: summary.layerCount, features: summary.featureCount, fields: summary.fieldCount },
-      { layers: 0, features: 0, fields: 0 },
+      {
+        layers: summary.layerCount,
+        features: summary.featureCount,
+        fields: summary.fieldCount,
+      },
+      { layers: 0, features: 0, fields: 0 }
     );
   });
 
@@ -136,14 +148,25 @@ describe("summarizeAssistantTransmission", () => {
 });
 
 describe("the notice's copy", () => {
-  /** Reads a locale catalog without the i18n runtime. */
-  function locale(name: string): Record<string, Record<string, string>> {
-    return JSON.parse(
-      readFileSync(
-        new URL(`../apps/geolibre-desktop/src/i18n/locales/${name}.json`, import.meta.url),
-        "utf8",
-      ),
-    ) as Record<string, Record<string, string>>;
+  /**
+   * The catalog the app actually resolves: upstream plus this fork's overlay.
+   *
+   * The fork keeps its strings in `locales-geoim3d/` so the upstream files stay
+   * mergeable, and merges them at load time — so a test that read only the
+   * upstream file would be asserting against something the app never uses.
+   */
+  function locale(name: string): Record<string, any> {
+    const read = (dir: string) =>
+      JSON.parse(
+        readFileSync(
+          new URL(
+            `../apps/geolibre-desktop/src/i18n/${dir}/${name}.json`,
+            import.meta.url
+          ),
+          "utf8"
+        )
+      ) as Record<string, unknown>;
+    return mergeCatalogs(read("locales"), read("locales-geoim3d"));
   }
 
   it("states all four things the directive requires, in every shipped locale", () => {
@@ -163,15 +186,23 @@ describe("the notice's copy", () => {
     for (const name of ["en", "ko"]) {
       const assistant = locale(name).assistant;
       for (const key of required) {
-        assert.equal(typeof assistant[key], "string", `${name}.json is missing assistant.${key}`);
-        assert.notEqual(assistant[key].trim(), "", `${name}.json has an empty assistant.${key}`);
+        assert.equal(
+          typeof assistant[key],
+          "string",
+          `${name}.json is missing assistant.${key}`
+        );
+        assert.notEqual(
+          assistant[key].trim(),
+          "",
+          `${name}.json has an empty assistant.${key}`
+        );
       }
       // The counts are interpolated, so the placeholders have to survive
       // translation or the user sees a sentence with no numbers in it.
       for (const placeholder of ["{{layers}}", "{{features}}", "{{fields}}"]) {
         assert.ok(
           assistant.transmissionScopeValue.includes(placeholder),
-          `${name}.json transmissionScopeValue lost ${placeholder}`,
+          `${name}.json transmissionScopeValue lost ${placeholder}`
         );
       }
     }
