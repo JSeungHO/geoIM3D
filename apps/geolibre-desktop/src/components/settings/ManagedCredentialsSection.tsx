@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { useCredentialStore } from "../../hooks/useCredentials";
 import type { CredentialId } from "../../lib/credentials";
+import { DATA_GO_KR_SERVICES } from "../../lib/data-go-kr-services";
 
 /**
  * The Settings → Environment block for API keys the app manages on the user's
@@ -35,6 +36,12 @@ const MANAGED_CREDENTIALS: ReadonlyArray<{
   descriptionKey: "settings.env.vworldKeyDescription" | "settings.env.dataGoKrKeyDescription";
   signupUrl: string;
   /**
+   * Whether to list the individual APIs that need their own 활용신청. The
+   * portal issues one key per account but licenses each OpenAPI separately, so
+   * the key alone does not make a feature work.
+   */
+  listsPortalServices?: boolean;
+  /**
    * Runs one small live request to prove the saved key works. Reads the key
    * from the plugin module it was injected into, so the secret is not passed
    * back through the UI to test it.
@@ -53,9 +60,51 @@ const MANAGED_CREDENTIALS: ReadonlyArray<{
     titleKey: "settings.env.dataGoKrKeyTitle",
     descriptionKey: "settings.env.dataGoKrKeyDescription",
     signupUrl: "https://www.data.go.kr/iim/api/selectAPIAcountView.do",
+    listsPortalServices: true,
     verify: verifyKmaApiKey,
   },
 ];
+
+/**
+ * The APIs a data.go.kr key still has to be approved for, one link each.
+ *
+ * Without this the key field was the whole story, and it is not: the portal
+ * licenses each OpenAPI separately and answers a 403 for one it did not
+ * approve, which reads as a rejected key. Naming the services — and saying that
+ * an approval takes about an hour to take effect — turns a dead feature into
+ * something the user can act on.
+ *
+ * @returns The list.
+ */
+function PortalServiceList() {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-1 rounded-md border bg-muted/40 p-2 text-xs">
+      <p className="font-medium">{t("settings.env.servicesTitle")}</p>
+      <p className="text-muted-foreground">{t("settings.env.servicesIntro")}</p>
+      <ul className="space-y-1 pt-1">
+        {DATA_GO_KR_SERVICES.map((service) => (
+          <li key={service.id}>
+            <a className="underline" href={service.url} target="_blank" rel="noreferrer noopener">
+              {/* defaultValue picks the plain-string overload: typing a computed
+                  key against the whole catalog union is too complex for the
+                  compiler to represent (TS2590). */}
+              {t(`settings.env.services.${service.id}`, {
+                defaultValue: service.id,
+              })}
+            </a>
+            <span className="text-muted-foreground">
+              {" — "}
+              {t(`settings.env.servicesUse.${service.id}`, {
+                defaultValue: "",
+              })}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 /** Per-credential result of the "test key" button. */
 type CredentialCheck =
@@ -100,19 +149,30 @@ export function ManagedCredentialsSection({ open }: ManagedCredentialsSectionPro
   }, []);
 
   const runCheck = useCallback((credential: (typeof MANAGED_CREDENTIALS)[number]) => {
-    setChecks((current) => ({ ...current, [credential.id]: { status: "checking" } }));
+    setChecks((current) => ({
+      ...current,
+      [credential.id]: { status: "checking" },
+    }));
     void credential.verify().then(
       (result) =>
         setChecks((current) => ({
           ...current,
           [credential.id]: result.ok
             ? { status: "ok" }
-            : { status: "failed", kind: result.kind ?? "unknown", readable: result.readable ?? true },
+            : {
+                status: "failed",
+                kind: result.kind ?? "unknown",
+                readable: result.readable ?? true,
+              },
         })),
       () =>
         setChecks((current) => ({
           ...current,
-          [credential.id]: { status: "failed", kind: "unknown", readable: false },
+          [credential.id]: {
+            status: "failed",
+            kind: "unknown",
+            readable: false,
+          },
         })),
     );
   }, []);
@@ -141,6 +201,7 @@ export function ManagedCredentialsSection({ open }: ManagedCredentialsSectionPro
                 }}
               />
             </p>
+            {credential.listsPortalServices ? <PortalServiceList /> : null}
             <div className="flex gap-2">
               <Input
                 aria-label={t(credential.titleKey)}
@@ -219,9 +280,7 @@ export function ManagedCredentialsSection({ open }: ManagedCredentialsSectionPro
         );
       })}
       {errorCode ? (
-        <p className="text-xs text-destructive">
-          {t(`settings.env.credentialError.${errorCode}`)}
-        </p>
+        <p className="text-xs text-destructive">{t(`settings.env.credentialError.${errorCode}`)}</p>
       ) : null}
     </>
   );

@@ -37,7 +37,23 @@
         "unknown": "The key could not be verified."
       },
       "dataGoKrKeyTitle": "data.go.kr service key",
-      "dataGoKrKeyDescription": "Weather, air quality, and the other Korean public-data services are published through data.go.kr and share one service key per account. <keyLink>Request a key</keyLink>, paste the decoded (not URL-encoded) form, then apply for each API you want on the portal — access is granted per service."
+      "dataGoKrKeyDescription": "Weather, air quality, and the other Korean public-data services are published through data.go.kr and share one service key per account. <keyLink>Request a key</keyLink>, paste the decoded (not URL-encoded) form, then apply for each API you want on the portal — access is granted per service.",
+      "servicesTitle": "Which APIs to apply for",
+      "servicesIntro": "One key covers your whole account, but each API needs its own 활용신청. An approval takes up to an hour to take effect, so a feature can still fail right after you apply.",
+      "services": {
+        "villageForecast": "기상청_단기예보 조회서비스",
+        "weatherWarning": "기상청_기상특보 조회서비스",
+        "typhoon": "기상청_태풍정보 조회서비스",
+        "airQualityStations": "한국환경공단_에어코리아_측정소정보",
+        "airQualityReadings": "한국환경공단_에어코리아_대기오염정보"
+      },
+      "servicesUse": {
+        "villageForecast": "Current conditions and the hourly forecast",
+        "weatherWarning": "Weather warnings",
+        "typhoon": "Typhoon tracks",
+        "airQualityStations": "Where the air-quality stations are",
+        "airQualityReadings": "What the air-quality stations are reading"
+      }
     },
     "ai": {
       "ollamaModelMissing": "\"{{model}}\" is not installed on this Ollama server. Pick one below, or pull it with: ollama pull {{model}}",

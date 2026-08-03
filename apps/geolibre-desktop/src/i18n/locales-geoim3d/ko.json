@@ -37,7 +37,23 @@
         "unknown": "키를 확인하지 못했습니다."
       },
       "dataGoKrKeyTitle": "공공데이터포털 서비스 키",
-      "dataGoKrKeyDescription": "기상, 대기질 등 국내 공공데이터 서비스는 공공데이터포털에서 제공하며 계정당 서비스 키 하나를 함께 씁니다. <keyLink>키 신청</keyLink> 후 일반(Decoding) 키를 입력하세요. 이용할 API는 포털에서 각각 활용신청해야 합니다 — 권한은 서비스별로 부여됩니다."
+      "dataGoKrKeyDescription": "기상, 대기질 등 국내 공공데이터 서비스는 공공데이터포털에서 제공하며 계정당 서비스 키 하나를 함께 씁니다. <keyLink>키 신청</keyLink> 후 일반(Decoding) 키를 입력하세요. 이용할 API는 포털에서 각각 활용신청해야 합니다 — 권한은 서비스별로 부여됩니다.",
+      "servicesTitle": "활용신청이 필요한 API",
+      "servicesIntro": "키는 계정당 하나지만, API마다 활용신청이 따로 필요합니다. 승인 후 반영까지 최대 1시간이 걸려서, 신청 직후에는 아직 안 될 수 있습니다.",
+      "services": {
+        "villageForecast": "기상청_단기예보 조회서비스",
+        "weatherWarning": "기상청_기상특보 조회서비스",
+        "typhoon": "기상청_태풍정보 조회서비스",
+        "airQualityStations": "한국환경공단_에어코리아_측정소정보",
+        "airQualityReadings": "한국환경공단_에어코리아_대기오염정보"
+      },
+      "servicesUse": {
+        "villageForecast": "날씨 실황과 시간별 예보",
+        "weatherWarning": "기상특보",
+        "typhoon": "태풍 경로",
+        "airQualityStations": "대기질 측정소 위치",
+        "airQualityReadings": "대기질 측정값"
+      }
     },
     "ai": {
       "ollamaModelMissing": "\"{{model}}\" 모델이 이 Ollama 서버에 없습니다. 아래에서 고르거나, 터미널에서 받으세요: ollama pull {{model}}",
