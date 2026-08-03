@@ -74,3 +74,10 @@ python/examples/my-map.geolibre.json
 # Rendered Homebrew cask, emitted to the working dir by scripts/render-*-cask.sh
 # for submission to a tap / homebrew-cask; not committed to this repo.
 /geolibre.rb
+
+# Korean public-data API reference bundles (기상청/VWorld 활용가이드 등). Official
+# spec documents downloaded for reference while implementing the plugins in
+# packages/plugins/src/plugins/*-api.ts. Kept out of the repo because they are
+# large binaries (docx/xlsx) that the agencies republish on their own portals.
+apps/기상청*/
+apps/*_오픈API활용가이드_*/
