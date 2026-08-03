@@ -548,6 +548,7 @@ export function TopToolbar({
       featureInfoEmpty: t("vworld.featureInfoEmpty"),
       featureInfoNoLayers: t("vworld.featureInfoNoLayers"),
       addFeatureLayer: t("vworld.addFeatureLayer"),
+      rawAttributes: t("vworld.rawAttributes"),
       // Returned whole: the WFS schema decides the field names, so a new
       // column is an i18n addition rather than another line here.
       attributes: t("vworld.attribute", { returnObjects: true }) as Record<string, string>,

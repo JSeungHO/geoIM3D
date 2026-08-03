@@ -25,8 +25,11 @@ import {
   VWORLD_BASE_MAPS,
   VWORLD_BOUNDS,
   VWORLD_THEMATIC_LAYERS,
+  VWORLD_PRIMARY_ATTRIBUTES,
   VWorldError,
+  formatAttribute,
   hasVWorldApiKey,
+  isSecondaryAttribute,
   onVWorldApiKeyChange,
   vworldGeocode,
   vworldReverseGeocode,
@@ -75,6 +78,7 @@ export interface VWorldLabels {
   featureInfoEmpty: string;
   featureInfoNoLayers: string;
   addFeatureLayer: string;
+  rawAttributes: string;
   /** Attribute labels, keyed by the WFS field name. */
   attributes: Record<string, string>;
   reverseGeocode: string;
@@ -132,6 +136,7 @@ export const DEFAULT_VWORLD_LABELS: VWorldLabels = {
   featureInfoEmpty: "Nothing here.",
   featureInfoNoLayers: "Add a thematic layer first \u2014 they are what this inspects.",
   addFeatureLayer: "Add as layer",
+  rawAttributes: "All source fields",
   attributes: {
     pnu: "Parcel id (PNU)",
     bld_nm: "Building name",
@@ -627,8 +632,11 @@ function addFeatureAsLayer(app: GeoLibreAppAPI, info: VWorldFeatureInfo): void {
   if (!info.geometry) return;
   const layer = VWORLD_THEMATIC_LAYERS.find((entry) => entry.id === info.layerId);
   const name = layer ? labelFor(layer.labelKey) : info.layerId;
+  // Prefer the building's own name over the service's feature id, which is an
+  // internal key that means nothing in the layer list.
+  const subject = formatAttribute(info.properties.bld_nm) || formatAttribute(info.properties.pnu);
   app.addGeoJsonLayer(
-    `${name} · ${info.featureId || ""}`.trim(),
+    subject ? `${name} · ${subject}` : name,
     {
       type: "FeatureCollection",
       features: [
@@ -643,15 +651,75 @@ function addFeatureAsLayer(app: GeoLibreAppAPI, info: VWorldFeatureInfo): void {
   );
 }
 
-/** Renders one attribute value, hiding the service's empty placeholders. */
-function attributeText(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  const text = String(value).trim();
-  // VWorld returns unset fields as null, "None", or a zero that means "not
-  // recorded" for the area/ratio columns; showing 0 m² as a fact is worse than
-  // showing nothing.
-  if (text === "" || text === "None" || text === "null") return "";
-  return text;
+/**
+ * Renders one inspected feature: the readable attributes first, the schema's
+ * internal identifiers folded away behind a disclosure.
+ *
+ * The building schema has 26 columns and most are opaque keys (`ufid`,
+ * `geoidn`, `sgg_oid`). Listing them all buries the handful a person reads —
+ * floors, areas, height, approval date — so they are separated rather than
+ * dropped: a hidden value is still worse than an untranslated one, just not on
+ * the first screen.
+ *
+ * @param app - The host API.
+ * @param info - The inspected feature.
+ * @returns The rendered block.
+ */
+function featureInfoBlock(app: GeoLibreAppAPI, info: VWorldFeatureInfo): HTMLElement {
+  const wrapper = element("div", "vworld-feature");
+  const layer = VWORLD_THEMATIC_LAYERS.find((entry) => entry.id === info.layerId);
+  wrapper.appendChild(
+    element(
+      "div",
+      "geolibre-plugin-panel__section-title",
+      layer ? labelFor(layer.labelKey) : info.layerId,
+    ),
+  );
+
+  const primary = element("dl", "geolibre-plugin-panel__address");
+  for (const spec of VWORLD_PRIMARY_ATTRIBUTES) {
+    if (!(spec.field in info.properties)) continue;
+    const text = formatAttribute(info.properties[spec.field], spec.format);
+    if (!text) continue;
+    primary.appendChild(
+      element(
+        "dt",
+        "geolibre-plugin-panel__address-term",
+        labels.attributes[spec.field] ?? spec.field,
+      ),
+    );
+    primary.appendChild(element("dd", "geolibre-plugin-panel__address-value", text));
+  }
+  wrapper.appendChild(primary);
+
+  const rest = Object.entries(info.properties).filter(
+    ([field, value]) => isSecondaryAttribute(field) && formatAttribute(value),
+  );
+  if (rest.length > 0) {
+    const details = element("details", "vworld-feature__raw");
+    details.appendChild(element("summary", "vworld-feature__raw-summary", labels.rawAttributes));
+    const list = element("dl", "geolibre-plugin-panel__address");
+    for (const [field, value] of rest) {
+      list.appendChild(element("dt", "geolibre-plugin-panel__address-term", field));
+      list.appendChild(
+        element("dd", "geolibre-plugin-panel__address-value", formatAttribute(value)),
+      );
+    }
+    details.appendChild(list);
+    wrapper.appendChild(details);
+  }
+
+  if (info.geometry) {
+    const addButton = element(
+      "button",
+      "geolibre-plugin-panel__button geolibre-plugin-panel__button--wide",
+      labels.addFeatureLayer,
+    );
+    addButton.type = "button";
+    addButton.addEventListener("click", () => addFeatureAsLayer(app, info));
+    wrapper.appendChild(addButton);
+  }
+  return wrapper;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -707,36 +775,7 @@ function renderPanel(container: HTMLElement): void {
     );
   }
   for (const info of state.featureInfo) {
-    const layer = VWORLD_THEMATIC_LAYERS.find((entry) => entry.id === info.layerId);
-    container.appendChild(
-      element(
-        "div",
-        "geolibre-plugin-panel__section-title",
-        layer ? labelFor(layer.labelKey) : info.layerId,
-      ),
-    );
-    const list = element("dl", "geolibre-plugin-panel__address");
-    for (const [field, raw] of Object.entries(info.properties)) {
-      const text = attributeText(raw);
-      if (!text) continue;
-      // Unlabelled fields are shown under their raw name rather than dropped:
-      // the schema carries more columns than are worth translating, and a
-      // hidden value is worse than an untranslated one.
-      const label = labels.attributes[field] ?? field;
-      list.appendChild(element("dt", "geolibre-plugin-panel__address-term", label));
-      list.appendChild(element("dd", "geolibre-plugin-panel__address-value", text));
-    }
-    container.appendChild(list);
-    if (info.geometry) {
-      const addButton = element(
-        "button",
-        "geolibre-plugin-panel__button",
-        labels.addFeatureLayer,
-      );
-      addButton.type = "button";
-      addButton.addEventListener("click", () => addFeatureAsLayer(app, info));
-      container.appendChild(addButton);
-    }
+    container.appendChild(featureInfoBlock(app, info));
   }
 
   // Integrated search.

@@ -11,6 +11,9 @@ import {
   vworldFeatureInfo,
   vworldBuildings,
   buildingHeight,
+  formatAttribute,
+  isSecondaryAttribute,
+  VWORLD_PRIMARY_ATTRIBUTES,
   ASSUMED_STOREY_HEIGHT_M,
   VWORLD_HEIGHT_PROPERTY,
   VWORLD_WFS_MAX_FEATURES,
@@ -366,5 +369,57 @@ describe("building extrusion height", () => {
     });
     const result = await vworldBuildings([126.97, 37.56, 126.98, 37.57]);
     assert.equal(result.geojson.features.length, 1);
+  });
+});
+
+describe("attribute formatting", () => {
+  it("blanks an unmeasured area or ratio rather than printing 0", () => {
+    // VWorld writes 0 for a figure it does not hold. "0 ㎡" states a fact the
+    // record does not contain, which is worse than showing nothing.
+    assert.equal(formatAttribute(0, "area"), "");
+    assert.equal(formatAttribute("0", "ratio"), "");
+    assert.equal(formatAttribute(0, "number"), "0");
+  });
+
+  it("keeps a genuine zero floor count", () => {
+    // A building with no basement really has 0 underground floors, so the
+    // blanking rule must not reach the counted columns.
+    assert.equal(formatAttribute("0", "number"), "0");
+  });
+
+  it("groups thousands so a floor area is readable at a glance", () => {
+    assert.equal(formatAttribute("138156.25", "area"), "138,156.25");
+    assert.equal(formatAttribute(49468.97, "area"), "49,468.97");
+  });
+
+  it("formats a compact date", () => {
+    assert.equal(formatAttribute("20051130", "date"), "2005-11-30");
+    // Anything not in the expected shape is passed through, not mangled.
+    assert.equal(formatAttribute("2005", "date"), "2005");
+  });
+
+  it("treats the service's empty markers as absent", () => {
+    for (const empty of [null, undefined, "", "None", "null"]) {
+      assert.equal(formatAttribute(empty), "", `${String(empty)} should render as empty`);
+    }
+  });
+
+  it("separates the readable attributes from the internal keys", () => {
+    // The schema's opaque identifiers are what push the useful values off the
+    // first screen.
+    for (const field of ["grnd_flr", "totalarea", "pnu", "useapr_day"]) {
+      assert.equal(isSecondaryAttribute(field), false, `${field} should lead`);
+    }
+    for (const field of ["ufid", "geoidn", "sgg_oid", "col_adm_se", "strct_cd"]) {
+      assert.equal(isSecondaryAttribute(field), true, `${field} should be folded away`);
+    }
+  });
+
+  it("lists the primary attributes in reading order", () => {
+    const fields = VWORLD_PRIMARY_ATTRIBUTES.map((spec) => spec.field);
+    // Name and size before the registry keys.
+    assert.ok(fields.indexOf("bld_nm") < fields.indexOf("pnu"));
+    assert.ok(fields.indexOf("grnd_flr") < fields.indexOf("bd_mgt_sn"));
+    assert.equal(new Set(fields).size, fields.length);
   });
 });

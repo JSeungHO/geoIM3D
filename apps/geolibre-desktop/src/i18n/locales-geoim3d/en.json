@@ -138,7 +138,8 @@
       "ri_nm": "Village"
     },
     "buildings3d": "3D buildings (current view)",
-    "buildingsTruncated": "Only the first 1,000 buildings in view were returned. Zoom in for a complete set."
+    "buildingsTruncated": "Only the first 1,000 buildings in view were returned. Zoom in for a complete set.",
+    "rawAttributes": "All source fields"
   },
   "kma": {
     "title": "Weather (KMA)",

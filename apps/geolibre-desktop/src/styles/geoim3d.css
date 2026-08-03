@@ -242,3 +242,38 @@
   min-width: 2.5rem;
   text-align: end;
 }
+
+/* ---------------------------------------------------------------------------
+ * VWorld feature inspection. The readable attributes lead; the schema's
+ * internal identifiers sit behind a disclosure so they stay reachable without
+ * burying the six values a person actually reads.
+ * ------------------------------------------------------------------------- */
+.vworld-feature {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  /* Separates consecutive features when a click matches several layers. */
+  padding-bottom: 0.5rem;
+}
+
+.vworld-feature__raw-summary {
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0.25rem 0;
+  user-select: none;
+}
+
+.vworld-feature__raw-summary:hover {
+  color: hsl(var(--foreground));
+}
+
+.vworld-feature__raw[open] .vworld-feature__raw-summary {
+  margin-bottom: 0.25rem;
+}
+
+/* A long identifier (건축물대장 관리번호, PNU) must wrap instead of forcing the
+   panel to scroll sideways. */
+.geolibre-plugin-panel__address-value {
+  overflow-wrap: anywhere;
+}

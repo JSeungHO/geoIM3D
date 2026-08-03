@@ -138,7 +138,8 @@
       "ri_nm": "리"
     },
     "buildings3d": "3D 건물 (현재 화면)",
-    "buildingsTruncated": "현재 화면의 건물 중 1,000개까지만 조회됐습니다. 더 확대하면 전부 표시됩니다."
+    "buildingsTruncated": "현재 화면의 건물 중 1,000개까지만 조회됐습니다. 더 확대하면 전부 표시됩니다.",
+    "rawAttributes": "원본 속성 전체"
   },
   "kma": {
     "title": "기상청 날씨",

@@ -703,6 +703,96 @@ export function buildingHeight(properties: Record<string, unknown>): number {
   return ASSUMED_STOREY_HEIGHT_M;
 }
 
+/**
+ * How one WFS attribute should be presented.
+ *
+ * The building schema carries 26 columns, most of them internal identifiers
+ * (`ufid`, `geoidn`, `sgg_oid`, `col_adm_se`). Listing them all buries the six
+ * a person actually reads — floors, areas, height, approval date — in a wall of
+ * opaque numbers, so the panel shows the useful ones first and folds the rest
+ * away.
+ */
+export type AttributeFormat = "text" | "number" | "area" | "ratio" | "date";
+
+export interface AttributeSpec {
+  field: string;
+  format: AttributeFormat;
+}
+
+/**
+ * The attributes worth showing, in reading order. Anything not listed is still
+ * available, just collapsed behind the raw-attribute disclosure.
+ */
+export const VWORLD_PRIMARY_ATTRIBUTES: readonly AttributeSpec[] = [
+  { field: "bld_nm", format: "text" },       // 건물명
+  { field: "dong_nm", format: "text" },      // 동명
+  { field: "grnd_flr", format: "number" },   // 지상층수
+  { field: "ugrnd_flr", format: "number" },  // 지하층수
+  { field: "height", format: "number" },     // 높이(m)
+  { field: "archarea", format: "area" },     // 건축면적
+  { field: "totalarea", format: "area" },    // 연면적
+  { field: "platarea", format: "area" },     // 대지면적
+  { field: "bc_rat", format: "ratio" },      // 건폐율
+  { field: "vl_rat", format: "ratio" },      // 용적률
+  { field: "useapr_day", format: "date" },   // 사용승인일
+  { field: "regist_day", format: "date" },   // 등록일
+  { field: "jibun", format: "text" },
+  { field: "addr", format: "text" },
+  { field: "sido_nm", format: "text" },
+  { field: "sgg_nm", format: "text" },
+  { field: "emd_nm", format: "text" },
+  { field: "ri_nm", format: "text" },
+  { field: "pnu", format: "text" },          // 필지고유번호
+  { field: "bd_mgt_sn", format: "text" },    // 건축물대장 관리번호
+];
+
+const PRIMARY_FIELDS = new Set(VWORLD_PRIMARY_ATTRIBUTES.map((spec) => spec.field));
+
+/**
+ * Whether a field belongs in the collapsed raw section.
+ *
+ * @param field - The WFS column name.
+ * @returns True when the field is not one of the primary attributes.
+ */
+export function isSecondaryAttribute(field: string): boolean {
+  return !PRIMARY_FIELDS.has(field);
+}
+
+/**
+ * Formats one attribute for display.
+ *
+ * Returns an empty string for values that mean "not recorded" — including a
+ * bare `0` in an area or ratio column, which VWorld uses for an unmeasured
+ * figure. Showing "0 ㎡" states a fact the record does not contain.
+ *
+ * @param value - The raw attribute value.
+ * @param format - How to present it.
+ * @returns The display string, or "" when there is nothing to show.
+ */
+export function formatAttribute(value: unknown, format: AttributeFormat = "text"): string {
+  if (value === null || value === undefined) return "";
+  const text = String(value).trim();
+  // VWorld writes an unset field as null or the literal string "None".
+  if (text === "" || text === "None" || text === "null") return "";
+
+  if (format === "date") {
+    // `YYYYMMDD`; anything else is passed through rather than mangled.
+    const match = /^(\d{4})(\d{2})(\d{2})$/.exec(text);
+    return match ? `${match[1]}-${match[2]}-${match[3]}` : text;
+  }
+
+  const numeric = Number.parseFloat(text);
+  if (format === "number" || format === "area" || format === "ratio") {
+    if (!Number.isFinite(numeric)) return text;
+    // An area or ratio of zero is "not measured", not a measurement. Floor
+    // counts legitimately reach zero (a building with no basement), so only the
+    // measured columns are blanked.
+    if (numeric === 0 && format !== "number") return "";
+    return numeric.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  }
+  return text;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Search                                                                       */
 /* -------------------------------------------------------------------------- */
