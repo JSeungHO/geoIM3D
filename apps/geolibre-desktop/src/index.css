@@ -3633,3 +3633,240 @@ html.dark .maplibregl-popup-anchor-right:has(.vector-control-popup) .maplibregl-
 .geolibre-legend-panel.maplibregl-ctrl textarea::placeholder {
   color: hsl(var(--muted-foreground)) !important;
 }
+
+/* ---------------------------------------------------------------------------
+* Plugin right-panel body (maplibre-vworld, maplibre-kma). The plugins package is
+ * framework-agnostic and renders plain DOM into the right-panel body, so it
+ * cannot use Tailwind classes or the shadcn primitives. Style it here against
+ * the same CSS variables the rest of the app uses, so it follows the theme.
+ * Logical properties throughout, since the UI mirrors for RTL locales.
+ * ------------------------------------------------------------------------- */
+.geolibre-plugin-panel {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.8125rem;
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+
+.geolibre-plugin-panel__section-title {
+  border-top: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin: 0;
+  padding-top: 0.75rem;
+}
+
+.geolibre-plugin-panel__section-title:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.geolibre-plugin-panel__row {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.geolibre-plugin-panel__row-label {
+  color: hsl(var(--foreground));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.geolibre-plugin-panel__form {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.geolibre-plugin-panel__input,
+.geolibre-plugin-panel__select {
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--input));
+  border-radius: calc(var(--radius) - 2px);
+  color: hsl(var(--foreground));
+  min-width: 0;
+  padding: 0.25rem 0.5rem;
+}
+
+.geolibre-plugin-panel__input {
+  flex: 1 1 auto;
+}
+
+.geolibre-plugin-panel__button {
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  flex: 0 0 auto;
+  padding: 0.25rem 0.625rem;
+  white-space: nowrap;
+}
+
+.geolibre-plugin-panel__button:hover:not(:disabled) {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.geolibre-plugin-panel__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.geolibre-plugin-panel__button--wide {
+  text-align: start;
+  white-space: normal;
+  width: 100%;
+}
+
+.geolibre-plugin-panel__button--active {
+  background: hsl(var(--accent));
+  border-color: hsl(var(--ring));
+  color: hsl(var(--accent-foreground));
+}
+
+.geolibre-plugin-panel__results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  list-style: none;
+  /* A long result list scrolls inside the panel rather than pushing the
+     geocoding sections out of reach. */
+  margin: 0;
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.geolibre-plugin-panel__result-button {
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--radius) - 2px);
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: 0.375rem 0.5rem;
+  text-align: start;
+  width: 100%;
+}
+
+.geolibre-plugin-panel__result-button:hover {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.geolibre-plugin-panel__result-subtitle {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+}
+
+.geolibre-plugin-panel__address {
+  display: grid;
+  gap: 0.125rem 0.5rem;
+  grid-template-columns: auto 1fr;
+  margin: 0;
+}
+
+.geolibre-plugin-panel__address-term {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+}
+
+.geolibre-plugin-panel__address-value {
+  color: hsl(var(--foreground));
+  margin: 0;
+}
+
+.geolibre-plugin-panel__notice,
+.geolibre-plugin-panel__status {
+  color: hsl(var(--muted-foreground));
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * KMA weather panel. The observation block leads with the temperature and sky
+ * state; the forecast is a time series, so it renders one row per hour under a
+ * day header rather than as the flat category list the service returns.
+ * ------------------------------------------------------------------------- */
+.kma-conditions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.kma-conditions__temp {
+  color: hsl(var(--foreground));
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.kma-conditions__headline {
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 0.25rem;
+}
+
+.kma-forecast {
+  display: flex;
+  flex-direction: column;
+  /* A day of hourly rows is taller than the panel; scroll it in place so the
+     sections below stay reachable. */
+  max-height: 20rem;
+  overflow-y: auto;
+}
+
+.kma-forecast__day {
+  background: hsl(var(--background));
+  border-bottom: 1px solid hsl(var(--border));
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.375rem 0 0.25rem;
+  /* Keeps the date visible while its own hours scroll past. */
+  position: sticky;
+  top: 0;
+}
+
+.kma-forecast__row {
+  align-items: baseline;
+  display: grid;
+  /* time | condition | temp | chance of precipitation */
+  grid-template-columns: 3.25rem 1fr auto auto;
+  gap: 0.5rem;
+  padding: 0.1875rem 0;
+}
+
+.kma-forecast__row:hover {
+  background: hsl(var(--accent));
+}
+
+.kma-forecast__time {
+  color: hsl(var(--muted-foreground));
+  font-variant-numeric: tabular-nums;
+}
+
+.kma-forecast__sky {
+  color: hsl(var(--foreground));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kma-forecast__temp {
+  color: hsl(var(--foreground));
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.kma-forecast__pop {
+  color: hsl(var(--muted-foreground));
+  font-variant-numeric: tabular-nums;
+  min-width: 2.5rem;
+  text-align: end;
+}

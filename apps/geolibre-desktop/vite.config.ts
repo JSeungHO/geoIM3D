@@ -243,6 +243,12 @@ const WMS_PROXY_PATH = "/__geolibre_wms_proxy";
 const WFS_PROXY_PATH = "/__geolibre_wfs_proxy";
 const GPX_PROXY_PATH = "/__geolibre_gpx_proxy";
 const RASTER_PROXY_PATH = "/__geolibre_raster_proxy";
+// VWorld serves its JSON and WMS endpoints without CORS headers, and data.go.kr
+// answers 403 to any request carrying an Origin header at all. Same-origin
+// proxying is the only way those features work in the dev server; the desktop
+// build goes through native HTTP instead and needs none of this. Mirrored by
+// KR_API_PROXY_PATH in src/lib/kr-api-transport.ts.
+const KR_API_PROXY_PATH = "/__geolibre_kr_api_proxy";
 const DUCKDB_WORKER_PATH_PART = "/@duckdb/duckdb-wasm/dist/";
 const DUCKDB_WORKER_SOURCE_MAP_RE =
   /\n?\/\/# sourceMappingURL=duckdb-browser-(?:eh|mvp)\.worker\.js\.map\s*$/;
@@ -363,6 +369,16 @@ function wmsProxyPlugin(): Plugin {
           await proxyWmsRequest(req, res);
         } catch (error) {
           const message = error instanceof Error ? error.message : "WMS proxy request failed";
+          res.statusCode = 502;
+          res.setHeader("content-type", "text/plain");
+          res.end(message);
+        }
+      });
+      server.middlewares.use(KR_API_PROXY_PATH, async (req, res) => {
+        try {
+          await proxyBinaryRequest(req, res, KR_API_PROXY_PATH);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Korean public-data proxy request failed";
           res.statusCode = 502;
           res.setHeader("content-type", "text/plain");
           res.end(message);

@@ -11,6 +11,7 @@ import {
   ROUTE_ANIMATION_PLUGIN_ID,
   SUN_PLUGIN_ID,
   WEB_SERVICE_PLUGIN_IDS,
+  pluginMenuGroupFor,
 } from "@geolibre/plugins";
 import {
   Button,
@@ -116,6 +117,10 @@ export function PluginsMenu({
   // The web service plugins render as one grouped submenu, placed where the
   // first of them appears in registration order (just above Historical Imagery).
   let webServicesRendered = false;
+  // Additional groups declared by the plugins package (see `plugin-menu-groups`).
+  // Rendered the same way as Web Services above, but driven by data so a new
+  // group or member needs no change in this component.
+  const renderedGroupIds = new Set<string>();
 
   return (
     <DropdownMenu>
@@ -160,6 +165,33 @@ export function PluginsMenu({
           // Hidden by the active UI profile (issue #500).
           if (hiddenPluginIds.has(p.id)) {
             return null;
+          }
+          // A declared group renders once, as a submenu, where its first
+          // visible member would have appeared.
+          const group = pluginMenuGroupFor(p.id);
+          if (group) {
+            if (renderedGroupIds.has(group.id)) return null;
+            renderedGroupIds.add(group.id);
+            const members = plugins.filter(
+              (plugin) =>
+                pluginMenuGroupFor(plugin.id)?.id === group.id && !hiddenPluginIds.has(plugin.id),
+            );
+            if (members.length === 0) return null;
+            return (
+              <DropdownMenuSub key={group.id}>
+                <DropdownMenuSubTrigger>
+                  {/* defaultValue picks the overload that takes a plain string
+                      key: typing it against the whole catalog union produces a
+                      type too complex to represent (TS2345/TS2590). It also
+                      degrades to the key itself if a locale lacks the string. */}
+                  {t(group.labelKey, { defaultValue: group.labelKey })}
+                  {members.some((member) => isActive(member.id)) ? " ✓" : ""}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {members.map(renderPluginMenuItem)}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            );
           }
           if (!WEB_SERVICE_PLUGIN_ID_SET.has(p.id)) {
             return renderPluginMenuItem(p);
