@@ -84,20 +84,18 @@ function PortalServiceList() {
       <p className="text-muted-foreground">{t("settings.env.servicesIntro")}</p>
       <ul className="space-y-1 pt-1">
         {DATA_GO_KR_SERVICES.map((service) => (
-          <li key={service.id}>
-            <a className="underline" href={service.url} target="_blank" rel="noreferrer noopener">
-              {/* defaultValue picks the plain-string overload: typing a computed
-                  key against the whole catalog union is too complex for the
-                  compiler to represent (TS2590). */}
-              {t(`settings.env.services.${service.id}`, {
-                defaultValue: service.id,
-              })}
-            </a>
+          <li key={service}>
+            {/* The name is selectable text, not a link: it is what the portal's
+                own search takes, and it outlives the portal's URL scheme.
+                defaultValue picks the plain-string overload — typing a computed
+                key against the whole catalog union is too complex for the
+                compiler to represent (TS2590). */}
+            <span className="font-medium">
+              {t(`settings.env.services.${service}`, { defaultValue: service })}
+            </span>
             <span className="text-muted-foreground">
               {" — "}
-              {t(`settings.env.servicesUse.${service.id}`, {
-                defaultValue: "",
-              })}
+              {t(`settings.env.servicesUse.${service}`, { defaultValue: "" })}
             </span>
           </li>
         ))}

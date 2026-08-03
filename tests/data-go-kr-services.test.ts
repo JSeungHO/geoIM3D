@@ -19,14 +19,14 @@ describe("data.go.kr service list", () => {
       const names = env.services as Record<string, string>;
       const uses = env.servicesUse as Record<string, string>;
       for (const service of DATA_GO_KR_SERVICES) {
-        assert.ok(names[service.id], `missing name for ${service.id}`);
-        assert.ok(uses[service.id], `missing description for ${service.id}`);
+        assert.ok(names[service], `missing name for ${service}`);
+        assert.ok(uses[service], `missing description for ${service}`);
       }
     }
   });
 
   it("carries no string for a service that was removed", () => {
-    const ids = new Set(DATA_GO_KR_SERVICES.map((service) => service.id));
+    const ids = new Set(DATA_GO_KR_SERVICES);
     const names = (
       en as unknown as {
         settings: { env: { services: Record<string, string> } };
@@ -37,14 +37,20 @@ describe("data.go.kr service list", () => {
     }
   });
 
-  it("links each service to the public-data portal", () => {
-    const seen = new Set<string>();
+  it("lists each service once", () => {
+    assert.equal(new Set(DATA_GO_KR_SERVICES).size, DATA_GO_KR_SERVICES.length);
+  });
+
+  it("names the service rather than linking to it", () => {
+    // The portal's URLs are not ours: a moved page does not fail loudly, it
+    // lands somewhere wrong. The names are what its search takes.
+    const names = (
+      en as unknown as {
+        settings: { env: { services: Record<string, string> } };
+      }
+    ).settings.env.services;
     for (const service of DATA_GO_KR_SERVICES) {
-      assert.ok(!seen.has(service.id), `duplicate id ${service.id}`);
-      seen.add(service.id);
-      // A dataset page or a search for it — never an invented id, which would
-      // send the user to confidently apply for the wrong service.
-      assert.match(service.url, /^https:\/\/www\.data\.go\.kr\//);
+      assert.doesNotMatch(names[service], /https?:\/\//);
     }
   });
 });
