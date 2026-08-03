@@ -110,6 +110,7 @@ import {
   type InstalledWebPlugin,
 } from "../lib/external-plugins";
 import { appendDiagnostic } from "../lib/diagnostics";
+import { subscribeMapClick } from "../lib/map-click-bridge";
 import { addVWorldBuildingLayer } from "../lib/vworld-buildings-layer";
 import { pickZarrDirectory, zarrDirectoryPickerSupported } from "../lib/zarr-directory-picker";
 import { openExternalLink } from "../lib/open-external";
@@ -1006,6 +1007,8 @@ export function createAppAPI(mapControllerRef?: RefObject<MapController | null>)
     fitBounds: (bounds: [number, number, number, number]) =>
       mapControllerRef?.current?.fitBounds(bounds),
     getMap: () => mapControllerRef?.current?.getMap() ?? null,
+    onMapClick: (handler: (position: { lng: number; lat: number }) => void) =>
+      subscribeMapClick(handler, () => mapControllerRef?.current?.getMap() ?? null),
     openExternalUrl: (url: string) => void openExternalLink(url),
     pickLocalDirectoryFiles,
     // Present only on desktop (filesystem access); the Vector panel keys off its

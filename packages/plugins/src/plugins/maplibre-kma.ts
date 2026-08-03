@@ -10,7 +10,6 @@
  * `kma-api.ts`; this file is the panel and the map interaction.
  */
 
-import type maplibregl from "maplibre-gl";
 import type { GeoLibreAppAPI, GeoLibrePlugin } from "../types";
 import { airKoreaGeoJson, airKoreaReadings, airKoreaStations } from "./airkorea-api";
 import {
@@ -335,22 +334,27 @@ function toggleTyphoonLayer(app: GeoLibreAppAPI): void {
   rerenderPanel();
 }
 
-let mapClickHandler: ((event: maplibregl.MapMouseEvent) => void) | null = null;
+let unsubscribePick: (() => void) | null = null;
 
+/**
+ * Turns click-to-query on or off.
+ *
+ * Subscribes through `onMapClick` rather than `getMap().on("click")`: the 2D map
+ * is hidden and takes no pointer events while the globe is showing, so a
+ * handler attached to it would silently stop working on the Cesium tab.
+ *
+ * @param app - The host API.
+ * @param active - Whether clicks should fetch the point forecast.
+ */
 function setPickActive(app: GeoLibreAppAPI, active: boolean): void {
-  const map = app.getMap?.();
   state.pickActive = active;
-  if (map && mapClickHandler) {
-    map.off("click", mapClickHandler);
-    mapClickHandler = null;
-    map.getCanvas().style.cursor = "";
-  }
-  if (active && map) {
-    mapClickHandler = (event) => {
-      void loadPoint(event.lngLat.lng, event.lngLat.lat);
-    };
-    map.on("click", mapClickHandler);
-    map.getCanvas().style.cursor = "crosshair";
+  unsubscribePick?.();
+  unsubscribePick = null;
+  // Only the MapLibre canvas is styled: Cesium draws its own cursor.
+  const map = app.getMap?.();
+  if (map) map.getCanvas().style.cursor = active ? "crosshair" : "";
+  if (active) {
+    unsubscribePick = app.onMapClick?.(({ lng, lat }) => void loadPoint(lng, lat)) ?? null;
   }
   rerenderPanel();
 }

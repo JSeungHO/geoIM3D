@@ -30,6 +30,16 @@ const CESIUM_BASE_URL = `${APP_BASE_URL}cesium`;
 const CESIUM_CSS_LINK_ID = "cesium-widgets-css";
 
 export interface CesiumCanvasProps {
+  /**
+   * Called with the viewer and the Cesium namespace it was built with once the
+   * globe is created, and with nulls when it is torn down. Lets a host reach the
+   * globe for things the 2D map exposes through `MapController` — picking a
+   * clicked coordinate, for one — without this component growing an API of its
+   * own, and without the host importing Cesium itself (it is dynamically loaded
+   * here precisely to stay out of the boot graph). Optional: panes that only
+   * render the globe pass nothing and are unaffected.
+   */
+  onViewerChange?: (viewer: Viewer | null, cesium: unknown) => void;
   /** Id of the `secondaryMapViews` entry this pane renders (label/telemetry). */
   viewId: string;
   /**
@@ -64,7 +74,11 @@ function prepareCesiumEnvironment(): void {
  * the viewer is created exactly once in a dependency-free effect, torn down on
  * unmount, and its camera is kept in step with the shared store camera.
  */
-export const CesiumCanvas = memo(function CesiumCanvas({ viewId, ionToken }: CesiumCanvasProps) {
+export const CesiumCanvas = memo(function CesiumCanvas({
+  viewId,
+  ionToken,
+  onViewerChange,
+}: CesiumCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
   const cesiumRef = useRef<typeof import("cesium") | null>(null);
@@ -88,6 +102,8 @@ export const CesiumCanvas = memo(function CesiumCanvas({ viewId, ionToken }: Ces
   // (a token change should not tear down and recreate the globe).
   const viewIdRef = useRef(viewId);
   viewIdRef.current = viewId;
+  const onViewerChangeRef = useRef(onViewerChange);
+  onViewerChangeRef.current = onViewerChange;
   const ionTokenRef = useRef(ionToken);
   ionTokenRef.current = ionToken;
 
@@ -188,6 +204,7 @@ export const CesiumCanvas = memo(function CesiumCanvas({ viewId, ionToken }: Ces
         }
         cesiumRef.current = Cesium;
         viewerRef.current = viewer;
+        onViewerChangeRef.current?.(viewer, Cesium);
         layerSyncRef.current = new CesiumLayerSync(Cesium, viewer);
 
         // Drop Cesium's default double-click "track entity" gesture: it flies to
@@ -290,6 +307,7 @@ export const CesiumCanvas = memo(function CesiumCanvas({ viewId, ionToken }: Ces
       const viewer = viewerRef.current;
       if (viewer && !viewer.isDestroyed()) viewer.destroy();
       viewerRef.current = null;
+      onViewerChangeRef.current?.(null, null);
       cesiumRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

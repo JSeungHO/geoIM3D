@@ -19,7 +19,6 @@
  *   VWorld's redistribution terms, so nothing here persists tiles.
  */
 
-import type maplibregl from "maplibre-gl";
 import type { GeoLibreAppAPI, GeoLibrePlugin } from "../types";
 import {
   VWORLD_ATTRIBUTION,
@@ -331,23 +330,18 @@ function flyTo(app: GeoLibreAppAPI, lng: number, lat: number): void {
   map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 15) });
 }
 
-let mapClickHandler: ((event: maplibregl.MapMouseEvent) => void) | null = null;
+let unsubscribeReverse: (() => void) | null = null;
 
 function setReverseActive(app: GeoLibreAppAPI, active: boolean): void {
-  const map = app.getMap?.();
   state.reverseActive = active;
-  if (map && mapClickHandler) {
-    map.off("click", mapClickHandler);
-    mapClickHandler = null;
-    map.getCanvas().style.cursor = "";
-  }
-  if (active && map) {
+  unsubscribeReverse?.();
+  unsubscribeReverse = null;
+  setMapCursor(app, false);
+  if (active) {
     if (state.inspectActive) setInspectActive(app, false);
-    mapClickHandler = (event) => {
-      void runReverseGeocode(event.lngLat.lng, event.lngLat.lat);
-    };
-    map.on("click", mapClickHandler);
-    map.getCanvas().style.cursor = "crosshair";
+    unsubscribeReverse =
+      app.onMapClick?.(({ lng, lat }) => void runReverseGeocode(lng, lat)) ?? null;
+    setMapCursor(app, true);
   }
   rerenderPanel();
 }
@@ -577,33 +571,46 @@ async function runFeatureInfo(lon: number, lat: number): Promise<void> {
   }
 }
 
-let inspectClickHandler: ((event: maplibregl.MapMouseEvent) => void) | null = null;
+let unsubscribeInspect: (() => void) | null = null;
 
 /**
  * Turns click-to-inspect on or off.
+ *
+ * Subscribes through `onMapClick` rather than `getMap().on("click")`: the 2D map
+ * is hidden and takes no pointer events while the globe is showing, so a
+ * handler attached to it would silently stop working on the Cesium tab.
  *
  * @param app - The host API.
  * @param active - Whether clicks should query the thematic layers.
  */
 function setInspectActive(app: GeoLibreAppAPI, active: boolean): void {
-  const map = app.getMap?.();
   state.inspectActive = active;
-  if (map && inspectClickHandler) {
-    map.off("click", inspectClickHandler);
-    inspectClickHandler = null;
-    map.getCanvas().style.cursor = "";
-  }
-  if (active && map) {
+  unsubscribeInspect?.();
+  unsubscribeInspect = null;
+  setMapCursor(app, false);
+  if (active) {
     // Mutually exclusive with reverse geocoding: both consume a map click, and
     // leaving both on would run two lookups per click.
     if (state.reverseActive) setReverseActive(app, false);
-    inspectClickHandler = (event) => {
-      void runFeatureInfo(event.lngLat.lng, event.lngLat.lat);
-    };
-    map.on("click", inspectClickHandler);
-    map.getCanvas().style.cursor = "crosshair";
+    unsubscribeInspect =
+      app.onMapClick?.(({ lng, lat }) => void runFeatureInfo(lng, lat)) ?? null;
+    setMapCursor(app, true);
   }
   rerenderPanel();
+}
+
+/**
+ * Shows the picking cursor on the 2D map.
+ *
+ * Only the MapLibre canvas is styled: Cesium draws its own cursor, and the
+ * globe's canvas is not the host's to restyle.
+ *
+ * @param app - The host API.
+ * @param picking - Whether a click tool is armed.
+ */
+function setMapCursor(app: GeoLibreAppAPI, picking: boolean): void {
+  const map = app.getMap?.();
+  if (map) map.getCanvas().style.cursor = picking ? "crosshair" : "";
 }
 
 /**

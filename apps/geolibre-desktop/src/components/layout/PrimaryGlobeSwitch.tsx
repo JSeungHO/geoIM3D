@@ -3,6 +3,7 @@ import { CesiumCanvas } from "@geolibre/map";
 import { cn } from "@geolibre/ui";
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { setPrimaryCesiumViewer } from "../../lib/map-click-bridge";
 import { openSettingsSection } from "./SettingsDialog";
 
 /**
@@ -99,7 +100,14 @@ export function PrimaryGlobeSwitch({ children }: PrimaryGlobeSwitchProps) {
         // Keyed on the token so a token corrected in Settings remounts the
         // viewer: Cesium applies `Ion.defaultAccessToken` once, at creation.
         <div className="absolute inset-0">
-          <CesiumCanvas key={token} viewId={PRIMARY_GLOBE_VIEW_ID} ionToken={token} />
+          <CesiumCanvas
+            key={token}
+            viewId={PRIMARY_GLOBE_VIEW_ID}
+            ionToken={token}
+            // Lets plugin "click the map" tools reach the globe; without it
+            // they attach to the hidden 2D map and never fire here.
+            onViewerChange={setPrimaryCesiumViewer}
+          />
         </div>
       ) : null}
 

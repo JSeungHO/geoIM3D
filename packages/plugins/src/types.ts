@@ -454,6 +454,16 @@ export interface GeoLibreAppAPI {
   fitBounds?: (bounds: [number, number, number, number]) => void;
   getMap?: () => MapLibreMap | null;
   /**
+   * Subscribe to map clicks in whichever renderer is showing, and return an
+   * unsubscribe function.
+   *
+   * Prefer this over `getMap()?.on("click", …)` for "click the map to…" tools.
+   * `getMap()` is the MapLibre map, which is hidden and takes no pointer events
+   * while the 3D globe is showing — a handler attached there silently stops
+   * working when the user switches renderer.
+   */
+  onMapClick?: (handler: (position: { lng: number; lat: number }) => void) => () => void;
+  /**
    * Open an http(s) URL in the system browser. Needed because the Tauri
    * desktop webview ignores `window.open`/`target="_blank"` and would open the
    * link inside the app instead; the host routes through the opener plugin
