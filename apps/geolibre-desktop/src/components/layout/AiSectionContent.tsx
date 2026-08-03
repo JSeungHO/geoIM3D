@@ -24,8 +24,9 @@ import {
   Trash2,
   TriangleAlert,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { fetchOllamaModels, isOllamaModelInstalled } from "../../lib/assistant/ollama-models";
 
 // ── Locally-defined types to avoid circular import with SettingsDialog ──
 
@@ -88,6 +89,38 @@ export function AiSectionContent({
   const [newProfileModel, setNewProfileModel] = useState(() => defaultModelFor("google"));
   /** Draft field values keyed by env var name for the new profile. */
   const [newProfileFieldValues, setNewProfileFieldValues] = useState<Record<string, string>>({});
+
+  // Same reasoning as the profile editor below: for a local Ollama server the
+  // installed models are knowable, so offer those rather than names the machine
+  // may not have. Empty until the server answers, then the list below prefers it.
+  const [newProfileOllamaModels, setNewProfileOllamaModels] = useState<string[]>([]);
+  const newProfileOllamaBaseUrl =
+    newProfileProvider === "ollama" ? (newProfileFieldValues.OLLAMA_BASE_URL ?? "") : "";
+  useEffect(() => {
+    if (newProfileProvider !== "ollama") {
+      setNewProfileOllamaModels([]);
+      return;
+    }
+    const controller = new AbortController();
+    void fetchOllamaModels(newProfileOllamaBaseUrl, controller.signal).then(
+      (names) => {
+        if (controller.signal.aborted) return;
+        setNewProfileOllamaModels(names);
+        // Preselect a model that exists, so a fresh profile is not created
+        // pointing at a suggestion the server has never heard of.
+        if (names.length > 0) setNewProfileModel((current) => (names.includes(current) ? current : names[0]));
+      },
+      () => {
+        // Unreachable; the suggestion list stands in.
+      },
+    );
+    return () => controller.abort();
+  }, [newProfileProvider, newProfileOllamaBaseUrl]);
+
+  const newProfileModels =
+    newProfileProvider === "ollama" && newProfileOllamaModels.length > 0
+      ? newProfileOllamaModels
+      : PROVIDER_MODELS[newProfileProvider];
 
   // Resolve which providers are configured from the effective env (from parent).
   // Re-derived here for internal status use.
@@ -240,16 +273,19 @@ export function AiSectionContent({
           </div>
 
           {/* Model selector (only for providers with preset models) */}
-          {PROVIDER_MODELS[newProfileProvider].length > 0 ? (
+          {newProfileModels.length > 0 ? (
             <div className="space-y-1.5">
               <Label className="text-xs">{t("assistant.model")}</Label>
               <Select value={newProfileModel} onChange={(e) => setNewProfileModel(e.target.value)}>
-                {PROVIDER_MODELS[newProfileProvider].map((id) => (
+                {newProfileModels.map((id) => (
                   <option key={id} value={id}>
                     {id}
                   </option>
                 ))}
               </Select>
+              {newProfileProvider === "ollama" && newProfileOllamaModels.length === 0 ? (
+                <p className="text-xs text-muted-foreground">{t("settings.ai.ollamaUnreachable")}</p>
+              ) : null}
             </div>
           ) : null}
 
@@ -447,8 +483,41 @@ function ProfileEditor({
 
   const providerFields = PROVIDER_FIELDS[profile.provider];
   const hasOsEnvNote = providerFields.some((field) => osFieldEnvName(field) !== null);
-  const models = PROVIDER_MODELS[profile.provider];
   const docsUrl = PROVIDER_DOCS_URL[profile.provider];
+
+  // Ollama runs on the user's own machine, so its real model list is knowable —
+  // ask the server instead of offering the hardcoded suggestions, which name
+  // models this machine may never have pulled. Re-read when the base URL
+  // changes, since that is what decides which server answers.
+  const ollamaBaseUrl =
+    profile.provider === "ollama" ? (profile.fieldValues?.OLLAMA_BASE_URL ?? "") : "";
+  const [installedOllamaModels, setInstalledOllamaModels] = useState<string[]>([]);
+  useEffect(() => {
+    if (profile.provider !== "ollama") {
+      setInstalledOllamaModels([]);
+      return;
+    }
+    const controller = new AbortController();
+    void fetchOllamaModels(ollamaBaseUrl, controller.signal).then(
+      (names) => {
+        if (!controller.signal.aborted) setInstalledOllamaModels(names);
+      },
+      () => {
+        // Aborted or unreachable; the suggestion list stands in.
+      },
+    );
+    return () => controller.abort();
+  }, [profile.provider, ollamaBaseUrl]);
+
+  // Prefer what is installed; fall back to the suggestions when the server did
+  // not answer, so the field is never empty just because Ollama is stopped.
+  const models =
+    profile.provider === "ollama" && installedOllamaModels.length > 0
+      ? installedOllamaModels
+      : PROVIDER_MODELS[profile.provider];
+  const modelMissing =
+    profile.provider === "ollama" &&
+    !isOllamaModelInstalled(profile.modelId, installedOllamaModels);
 
   return (
     <div className="space-y-4">
@@ -495,12 +564,25 @@ function ProfileEditor({
             value={profile.modelId || defaultModelFor(profile.provider)}
             onChange={(e) => updateModel(e.target.value)}
           >
+            {/* A saved model that is no longer installed still needs an option
+                to sit in, or the select would silently show a different one. */}
+            {modelMissing && profile.modelId ? (
+              <option value={profile.modelId}>{profile.modelId}</option>
+            ) : null}
             {models.map((id) => (
               <option key={id} value={id}>
                 {id}
               </option>
             ))}
           </Select>
+          {modelMissing ? (
+            <p className="text-xs text-amber-600 dark:text-amber-500">
+              {t("settings.ai.ollamaModelMissing", { model: profile.modelId })}
+            </p>
+          ) : null}
+          {profile.provider === "ollama" && installedOllamaModels.length === 0 ? (
+            <p className="text-xs text-muted-foreground">{t("settings.ai.ollamaUnreachable")}</p>
+          ) : null}
         </div>
       ) : null}
 

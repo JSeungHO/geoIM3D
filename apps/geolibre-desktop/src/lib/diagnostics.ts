@@ -252,7 +252,26 @@ function formatConsoleArgs(args: unknown[]): string {
   return args.map(formatUnknown).filter(Boolean).join(" ");
 }
 
-const REDACTED_URL_PARAMS = new Set(["access_token", "api_key", "apikey", "key", "token"]);
+const REDACTED_URL_PARAMS = new Set([
+  "access_token",
+  "api_key",
+  "apikey",
+  "key",
+  "token",
+  // data.go.kr (KMA and every other Korean public-data service) names it this.
+  "servicekey",
+]);
+
+/**
+ * URL paths that carry a credential as a path *segment* rather than a query
+ * parameter, so `searchParams` redaction cannot reach it. Each entry captures
+ * the prefix up to the secret; the segment after it is replaced.
+ *
+ * VWorld's WMTS endpoint is `/req/wmts/1.0.0/{key}/{layer}/…` — the key sits in
+ * the path, and a failed tile request would otherwise put it straight into the
+ * diagnostics panel and its "Copy JSON" export.
+ */
+const REDACTED_PATH_PREFIXES = [/^(\/req\/wmts\/[\d.]+\/)[^/]+/];
 
 function redactUrl(raw: string): string {
   try {
@@ -261,6 +280,9 @@ function redactUrl(raw: string): string {
       if (REDACTED_URL_PARAMS.has(param.toLowerCase())) {
         url.searchParams.set(param, "[REDACTED]");
       }
+    }
+    for (const pattern of REDACTED_PATH_PREFIXES) {
+      url.pathname = url.pathname.replace(pattern, "$1[REDACTED]");
     }
     return url.toString();
   } catch {
