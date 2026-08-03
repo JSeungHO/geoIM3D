@@ -7,6 +7,13 @@ import {
   hasVWorldApiKey,
   resolveVWorldProtocolUrl,
   setVWorldApiKey,
+  setVWorldDomain,
+  vworldFeatureInfo,
+  vworldBuildings,
+  buildingHeight,
+  ASSUMED_STOREY_HEIGHT_M,
+  VWORLD_HEIGHT_PROPERTY,
+  VWORLD_WFS_MAX_FEATURES,
   defaultSearchCategory,
   vworldErrorKind,
   vworldGeocode,
@@ -26,8 +33,10 @@ function stubFetch(payload: unknown, options: { ok?: boolean; status?: number } 
       ok: options.ok ?? true,
       status: options.status ?? 200,
       // The client reads text and parses it itself, so a transport only has to
-      // supply a string (see setVWorldTransport).
-      text: async () => JSON.stringify(payload),
+      // supply a string (see setVWorldTransport). A string payload is passed
+      // through raw so a test can feed a non-JSON body — VWorld's OGC endpoints
+      // report failure as an XML ServiceExceptionReport.
+      text: async () => (typeof payload === "string" ? payload : JSON.stringify(payload)),
     } as Response;
   }) as typeof fetch;
   return calls;
@@ -206,5 +215,156 @@ describe("search category", () => {
     const calls = stubFetch({ response: { status: "OK", result: { items: [] } } });
     await vworldSearch("서울", "DISTRICT", { category: "L2" });
     assert.equal(new URL(calls[0]).searchParams.get("category"), "L2");
+  });
+});
+
+describe("thematic feature lookup", () => {
+  it("sends the registered domain, which WFS refuses to work without", () => {
+    // The trap this pins: WFS answers INCORRECT_KEY ("인증키 정보가 올바르지
+    // 않습니다") when no registered domain is named — which reads as an unusable
+    // key rather than a missing parameter. The tile and search endpoints have no
+    // such requirement, so it is easy to lose.
+    setVWorldDomain("http://localhost:5173");
+    const calls = stubFetch({ type: "FeatureCollection", features: [] });
+    return vworldFeatureInfo(
+      [{ id: "building", typename: "lt_c_bldginfo" }],
+      126.978,
+      37.5665,
+    ).then(() => {
+      const url = new URL(calls[0]);
+      assert.equal(url.searchParams.get("domain"), "http://localhost:5173");
+      assert.equal(url.searchParams.get("REQUEST"), "GetFeature");
+      assert.equal(url.searchParams.get("TYPENAME"), "lt_c_bldginfo");
+    });
+  });
+
+  it("builds the bbox in WFS 1.1.0 lat/lon order", async () => {
+    // WFS 1.1.0 with an EPSG:4326 SRS takes lat before lon. Reversed, the query
+    // lands in the ocean off Somalia and quietly returns nothing.
+    setVWorldDomain("http://localhost:5173");
+    const calls = stubFetch({ type: "FeatureCollection", features: [] });
+    await vworldFeatureInfo([{ id: "building", typename: "lt_c_bldginfo" }], 126.978, 37.5665);
+    const bbox = new URL(calls[0]).searchParams.get("BBOX") ?? "";
+    const [south, west, north, east] = bbox.split(",").map(Number);
+    assert.ok(south > 37 && south < 38, `south ${south}`);
+    assert.ok(west > 126 && west < 127, `west ${west}`);
+    assert.ok(north > south && east > west);
+  });
+
+  it("returns each matched feature with its geometry and layer", async () => {
+    setVWorldDomain("http://localhost:5173");
+    stubFetch({
+      type: "FeatureCollection",
+      features: [
+        {
+          id: "lt_c_bldginfo.1",
+          geometry: { type: "MultiPolygon", coordinates: [] },
+          properties: { pnu: "1114010300100310000", grnd_flr: 13 },
+        },
+      ],
+    });
+    const found = await vworldFeatureInfo(
+      [{ id: "building", typename: "lt_c_bldginfo" }],
+      126.978,
+      37.5665,
+    );
+    assert.equal(found.length, 1);
+    assert.equal(found[0].layerId, "building");
+    assert.equal(found[0].featureId, "lt_c_bldginfo.1");
+    assert.equal(found[0].properties.grnd_flr, 13);
+    // The geometry is what makes "add as layer" possible at all.
+    assert.ok(found[0].geometry);
+  });
+
+  it("reads an XML service exception rather than reporting a parse failure", async () => {
+    // WFS reports failure as a ServiceExceptionReport, not the JSON status
+    // field the other endpoints use, so the code has to be dug out of the XML.
+    stubFetch(
+      '<?xml version="1.0"?><ServiceExceptionReport><ServiceException code="INCORRECT_KEY">' +
+        "인증키 정보가 올바르지 않습니다.</ServiceException></ServiceExceptionReport>",
+    );
+    await assert.rejects(
+      () => vworldFeatureInfo([{ id: "building", typename: "lt_c_bldginfo" }], 126.978, 37.5665),
+      (error: VWorldError) => error.kind === "invalid-key",
+    );
+  });
+
+  it("makes no request when no thematic layer is on the map", async () => {
+    const calls = stubFetch({ type: "FeatureCollection", features: [] });
+    assert.deepEqual(await vworldFeatureInfo([], 126.978, 37.5665), []);
+    assert.equal(calls.length, 0);
+  });
+
+  it("reports an empty result rather than failing", async () => {
+    // Clicking a road inside a cadastral layer is a legitimate miss.
+    setVWorldDomain("http://localhost:5173");
+    stubFetch({ type: "FeatureCollection", features: [] });
+    assert.deepEqual(
+      await vworldFeatureInfo([{ id: "building", typename: "lt_c_bldginfo" }], 126.978, 37.5665),
+      [],
+    );
+  });
+});
+
+describe("building extrusion height", () => {
+  it("prefers a measured height over the storey estimate", () => {
+    assert.equal(buildingHeight({ height: "42.5", grnd_flr: 13 }), 42.5);
+  });
+
+  it("estimates from storeys when no height is recorded", () => {
+    // Most VWorld records carry storeys but no measured height, so the estimate
+    // is the normal path rather than a fallback.
+    assert.equal(buildingHeight({ height: 0, grnd_flr: 13 }), 13 * ASSUMED_STOREY_HEIGHT_M);
+    assert.equal(buildingHeight({ grnd_flr: "3" }), 3 * ASSUMED_STOREY_HEIGHT_M);
+  });
+
+  it("gives a building with neither a visible height", () => {
+    // A zero would flatten it into the ground plane, reading as missing data
+    // rather than an unrecorded height.
+    assert.equal(buildingHeight({}), ASSUMED_STOREY_HEIGHT_M);
+    assert.equal(buildingHeight({ height: "0", grnd_flr: "0" }), ASSUMED_STOREY_HEIGHT_M);
+  });
+
+  it("writes the height onto every feature and reports truncation", async () => {
+    setVWorldDomain("http://localhost:5173");
+    const features = Array.from({ length: VWORLD_WFS_MAX_FEATURES }, (_, index) => ({
+      id: `lt_c_bldginfo.${index}`,
+      geometry: { type: "Polygon", coordinates: [] },
+      properties: { grnd_flr: 5 },
+    }));
+    stubFetch({ type: "FeatureCollection", features });
+
+    const result = await vworldBuildings([126.97, 37.56, 126.98, 37.57]);
+    assert.equal(result.geojson.features.length, VWORLD_WFS_MAX_FEATURES);
+    assert.equal(
+      result.geojson.features[0].properties[VWORLD_HEIGHT_PROPERTY],
+      5 * ASSUMED_STOREY_HEIGHT_M,
+    );
+    // A full page means the view was cut off, and a partial city that looks
+    // complete is worse than one the user knows is partial.
+    assert.equal(result.truncated, true);
+  });
+
+  it("does not claim truncation on a short page", async () => {
+    setVWorldDomain("http://localhost:5173");
+    stubFetch({
+      type: "FeatureCollection",
+      features: [{ geometry: { type: "Polygon", coordinates: [] }, properties: { grnd_flr: 2 } }],
+    });
+    const result = await vworldBuildings([126.97, 37.56, 126.98, 37.57]);
+    assert.equal(result.truncated, false);
+  });
+
+  it("drops features with no geometry rather than adding empty shapes", async () => {
+    setVWorldDomain("http://localhost:5173");
+    stubFetch({
+      type: "FeatureCollection",
+      features: [
+        { geometry: null, properties: { grnd_flr: 2 } },
+        { geometry: { type: "Polygon", coordinates: [] }, properties: { grnd_flr: 2 } },
+      ],
+    });
+    const result = await vworldBuildings([126.97, 37.56, 126.98, 37.57]);
+    assert.equal(result.geojson.features.length, 1);
   });
 });

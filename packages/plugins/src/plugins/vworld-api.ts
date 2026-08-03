@@ -211,6 +211,50 @@ export function buildVWorldUrl(path: string, params: Record<string, string>): st
  * @throws {VWorldError} When no key is set, the network fails or times out, or
  *   VWorld reports a non-OK status.
  */
+/**
+ * Fetches and parses a VWorld response without unwrapping it.
+ *
+ * The OGC endpoints (WFS) answer with plain GeoJSON, not the `{ response: … }`
+ * envelope the JSON APIs use, and report failure as an XML
+ * `ServiceExceptionReport` rather than a status field — so a parse failure
+ * here is a service exception, most often the missing `domain` parameter.
+ *
+ * @param path - Path under the VWorld origin.
+ * @param params - Query parameters, excluding `key`.
+ * @returns The parsed body.
+ * @throws {VWorldError} On transport failure or a service exception.
+ */
+async function requestRawJson(
+  path: string,
+  params: Record<string, string>,
+): Promise<Record<string, unknown>> {
+  if (!hasVWorldApiKey()) throw new VWorldError("no-key");
+
+  let text: string;
+  try {
+    const response = await transport(buildVWorldUrl(path, params), {
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!response.ok) throw new VWorldError(response.status >= 500 ? "server" : "network");
+    text = await response.text();
+  } catch (error) {
+    if (error instanceof VWorldError) throw error;
+    if (error instanceof DOMException && error.name === "TimeoutError") {
+      throw new VWorldError("timeout");
+    }
+    throw new VWorldError("network");
+  }
+
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    // An XML ServiceExceptionReport. Pull the code out so a missing `domain`
+    // (INCORRECT_KEY) is not reported as an unusable key.
+    const code = /<ServiceException[^>]*code="([^"]+)"/.exec(text)?.[1] ?? "";
+    throw new VWorldError(code ? vworldErrorKind(code) : "unknown");
+  }
+}
+
 async function requestJson(
   path: string,
   params: Record<string, string>,
@@ -423,6 +467,241 @@ export const VWORLD_THEMATIC_LAYERS: readonly VWorldThematicLayer[] = [
   { id: "zoning-agriculture", labelKey: "zoningAgriculture", typename: "lt_c_uq113", minzoom: 10 },
   { id: "zoning-greenbelt", labelKey: "zoningGreenbelt", typename: "lt_c_ud801", minzoom: 10 },
 ];
+
+/* -------------------------------------------------------------------------- */
+/* Thematic feature lookup (WFS)                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The domain the key is registered against, sent as VWorld's `domain`
+ * parameter.
+ *
+ * WFS — unlike the tile and search endpoints — refuses a request that carries
+ * no registered domain with `INCORRECT_KEY` ("인증키 정보가 올바르지 않습니다"),
+ * which reads as a bad key rather than a missing parameter. A browser can pass
+ * its own `Referer`, but this app's requests go through a native HTTP call or a
+ * proxy, so neither carries one and the parameter has to be explicit.
+ */
+let registeredDomain = "";
+
+/**
+ * Sets the domain the VWorld key was registered with.
+ *
+ * @param domain - The registered origin, e.g. `http://localhost:5173`.
+ */
+export function setVWorldDomain(domain: string): void {
+  registeredDomain = typeof domain === "string" ? domain.trim() : "";
+}
+
+/**
+ * Half-width of the bounding box used to turn a click into a WFS query, in
+ * degrees — roughly 11 m at Korean latitudes.
+ *
+ * Small enough that a click inside one building rarely catches its neighbour,
+ * large enough to tolerate the pointer being a few pixels off the polygon at
+ * typical inspection zooms.
+ */
+const CLICK_TOLERANCE_DEG = 0.0001;
+
+/** A thematic feature returned by a click lookup. */
+export interface VWorldFeatureInfo {
+  /** The thematic layer id from {@link VWORLD_THEMATIC_LAYERS}. */
+  layerId: string;
+  /** VWorld's own feature id, e.g. `lt_c_bldginfo.13734085`. */
+  featureId: string;
+  /** Raw attributes, unmapped. */
+  properties: Record<string, unknown>;
+  /** The feature's geometry, for adding it to the map as a layer. */
+  geometry: unknown;
+}
+
+/**
+ * Looks up the thematic features at a point.
+ *
+ * The thematic layers are added as WMS, which serves images and so answers no
+ * click. The same data is available as WFS, so a click becomes a small bbox
+ * query against the layers that are actually on the map.
+ *
+ * @param typenames - WFS typenames to query, from {@link VWORLD_THEMATIC_LAYERS}.
+ * @param lon - Longitude in {@link VWORLD_CRS}.
+ * @param lat - Latitude in {@link VWORLD_CRS}.
+ * @returns One entry per matched feature, in the order the typenames were given.
+ * @throws {VWorldError} When no key is set or every query failed.
+ */
+export async function vworldFeatureInfo(
+  typenames: ReadonlyArray<{ id: string; typename: string }>,
+  lon: number,
+  lat: number,
+): Promise<VWorldFeatureInfo[]> {
+  if (!hasVWorldApiKey()) throw new VWorldError("no-key");
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) throw new VWorldError("invalid-request");
+  if (typenames.length === 0) return [];
+
+  const west = lon - CLICK_TOLERANCE_DEG;
+  const south = lat - CLICK_TOLERANCE_DEG;
+  const east = lon + CLICK_TOLERANCE_DEG;
+  const north = lat + CLICK_TOLERANCE_DEG;
+
+  // One request per layer, settled together: a layer the key is not approved
+  // for must not hide the answer from the layers it is.
+  const responses = await Promise.allSettled(
+    typenames.map((entry) =>
+      requestRawJson("/req/wfs", {
+        SERVICE: "WFS",
+        REQUEST: "GetFeature",
+        VERSION: "1.1.0",
+        TYPENAME: entry.typename,
+        // WFS 1.1.0 with an EPSG:4326 SRS expects lat/lon order in BBOX.
+        BBOX: `${south},${west},${north},${east}`,
+        SRSNAME: VWORLD_CRS,
+        MAXFEATURES: "5",
+        OUTPUT: "application/json",
+        domain: registeredDomain,
+      }),
+    ),
+  );
+
+  const found: VWorldFeatureInfo[] = [];
+  let firstError: unknown = null;
+  for (const [index, response] of responses.entries()) {
+    if (response.status === "rejected") {
+      firstError ??= response.reason;
+      continue;
+    }
+    const features = (response.value as { features?: unknown }).features;
+    if (!Array.isArray(features)) continue;
+    for (const raw of features) {
+      const feature = raw as {
+        id?: unknown;
+        properties?: Record<string, unknown>;
+        geometry?: unknown;
+      };
+      found.push({
+        layerId: typenames[index].id,
+        featureId: typeof feature.id === "string" ? feature.id : "",
+        properties: feature.properties ?? {},
+        geometry: feature.geometry ?? null,
+      });
+    }
+  }
+
+  // Nothing found is not a failure — the user may simply have clicked a road.
+  // A failure with nothing found is, and its reason is worth reporting.
+  if (found.length === 0 && firstError instanceof VWorldError) throw firstError;
+  return found;
+}
+
+/**
+ * The most features one WFS request will return.
+ *
+ * VWorld caps a GetFeature response at 1000; asking for more silently returns
+ * that many, so the limit is stated here and the caller is told when a view was
+ * truncated rather than being shown a partial city as if it were complete.
+ */
+export const VWORLD_WFS_MAX_FEATURES = 1000;
+
+/** A building footprint with the height fields needed to extrude it. */
+export interface VWorldBuildings {
+  geojson: {
+    type: "FeatureCollection";
+    features: Array<{
+      type: "Feature";
+      geometry: unknown;
+      properties: Record<string, unknown>;
+    }>;
+  };
+  /** True when the response hit {@link VWORLD_WFS_MAX_FEATURES}. */
+  truncated: boolean;
+}
+
+/**
+ * Height in metres assumed per storey when a building reports floors but no
+ * measured height. A rough national average for mixed residential/commercial
+ * stock — enough to make a skyline read correctly, not a survey figure.
+ */
+export const ASSUMED_STOREY_HEIGHT_M = 3;
+
+/** The property extruded layers read, written by {@link vworldBuildings}. */
+export const VWORLD_HEIGHT_PROPERTY = "extrude_height_m";
+
+/**
+ * Fetches building footprints in a bounding box, ready to extrude.
+ *
+ * The thematic building layer is WMS — a flat image — so it can never be
+ * extruded. The same data as WFS gives real polygons plus `grnd_flr` (storeys),
+ * which is what turns them into a 3D city without any Cesium Ion asset.
+ *
+ * Each feature gains {@link VWORLD_HEIGHT_PROPERTY}: the measured `height` when
+ * the record has one, otherwise storeys times {@link ASSUMED_STOREY_HEIGHT_M}.
+ * Doing it here rather than in a style expression keeps the fallback in one
+ * place and leaves the value visible in the attribute table.
+ *
+ * @param bbox - `[west, south, east, north]` in {@link VWORLD_CRS}.
+ * @returns The footprints and whether the response was truncated.
+ * @throws {VWorldError} On any failure.
+ */
+export async function vworldBuildings(
+  bbox: [number, number, number, number],
+): Promise<VWorldBuildings> {
+  if (!hasVWorldApiKey()) throw new VWorldError("no-key");
+  const [west, south, east, north] = bbox;
+  if (![west, south, east, north].every((value) => Number.isFinite(value))) {
+    throw new VWorldError("invalid-request");
+  }
+
+  const body = await requestRawJson("/req/wfs", {
+    SERVICE: "WFS",
+    REQUEST: "GetFeature",
+    VERSION: "1.1.0",
+    TYPENAME: "lt_c_bldginfo",
+    // WFS 1.1.0 with an EPSG:4326 SRS expects lat/lon order.
+    BBOX: `${south},${west},${north},${east}`,
+    SRSNAME: VWORLD_CRS,
+    MAXFEATURES: String(VWORLD_WFS_MAX_FEATURES),
+    OUTPUT: "application/json",
+    domain: registeredDomain,
+  });
+
+  const raw = Array.isArray((body as { features?: unknown }).features)
+    ? ((body as { features: unknown[] }).features as Array<Record<string, unknown>>)
+    : [];
+
+  const features = raw
+    .filter((feature) => feature.geometry)
+    .map((feature) => {
+      const properties = (feature.properties ?? {}) as Record<string, unknown>;
+      return {
+        type: "Feature" as const,
+        geometry: feature.geometry,
+        properties: {
+          ...properties,
+          [VWORLD_HEIGHT_PROPERTY]: buildingHeight(properties),
+        },
+      };
+    });
+
+  if (features.length === 0) throw new VWorldError("not-found");
+  return {
+    geojson: { type: "FeatureCollection", features },
+    truncated: raw.length >= VWORLD_WFS_MAX_FEATURES,
+  };
+}
+
+/**
+ * Resolves a building's extrusion height in metres.
+ *
+ * @param properties - The WFS attributes.
+ * @returns The measured height, the storey estimate, or one storey as a floor.
+ */
+export function buildingHeight(properties: Record<string, unknown>): number {
+  const measured = Number.parseFloat(String(properties.height ?? ""));
+  if (Number.isFinite(measured) && measured > 0) return measured;
+  const storeys = Number.parseFloat(String(properties.grnd_flr ?? ""));
+  if (Number.isFinite(storeys) && storeys > 0) return storeys * ASSUMED_STOREY_HEIGHT_M;
+  // Records with neither still need to be visible, or a whole block silently
+  // flattens into the ground plane.
+  return ASSUMED_STOREY_HEIGHT_M;
+}
 
 /* -------------------------------------------------------------------------- */
 /* Search                                                                       */

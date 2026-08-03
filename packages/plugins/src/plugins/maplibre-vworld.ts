@@ -31,11 +31,15 @@ import {
   onVWorldApiKeyChange,
   vworldGeocode,
   vworldReverseGeocode,
+  VWORLD_HEIGHT_PROPERTY,
+  vworldBuildings,
+  vworldFeatureInfo,
   vworldSearch,
   vworldTileTemplate,
   type VWorldAddressType,
   type VWorldErrorKind,
   type VWorldSearchResult,
+  type VWorldFeatureInfo,
   type VWorldSearchType,
 } from "./vworld-api";
 
@@ -56,6 +60,8 @@ export interface VWorldLabels {
   openPanel: string;
   basemaps: string;
   thematicLayers: string;
+  buildings3d: string;
+  buildingsTruncated: string;
   search: string;
   searchPlaceholder: string;
   searchButton: string;
@@ -64,6 +70,14 @@ export interface VWorldLabels {
   geocodeButton: string;
   addressTypeRoad: string;
   addressTypeParcel: string;
+  featureInfo: string;
+  featureInfoHint: string;
+  featureInfoActive: string;
+  featureInfoEmpty: string;
+  featureInfoNoLayers: string;
+  addFeatureLayer: string;
+  /** Attribute labels, keyed by the WFS field name. */
+  attributes: Record<string, string>;
   reverseGeocode: string;
   reverseGeocodeHint: string;
   reverseGeocodeActive: string;
@@ -102,6 +116,9 @@ export const DEFAULT_VWORLD_LABELS: VWorldLabels = {
   openPanel: "Search and geocoding\u2026",
   basemaps: "Base maps",
   thematicLayers: "Thematic layers",
+  buildings3d: "3D buildings (current view)",
+  buildingsTruncated:
+    "Only the first 1,000 buildings in view were returned. Zoom in for a complete set.",
   search: "Search",
   searchPlaceholder: "Place, address, or district",
   searchButton: "Search",
@@ -110,6 +127,34 @@ export const DEFAULT_VWORLD_LABELS: VWorldLabels = {
   geocodeButton: "Locate",
   addressTypeRoad: "Road name",
   addressTypeParcel: "Parcel (jibun)",
+  featureInfo: "Feature info",
+  featureInfoHint: "Click a thematic layer to inspect it.",
+  featureInfoActive: "Click the map\u2026 (click here to stop)",
+  featureInfoEmpty: "Nothing here.",
+  featureInfoNoLayers: "Add a thematic layer first \u2014 they are what this inspects.",
+  addFeatureLayer: "Add as layer",
+  attributes: {
+    pnu: "Parcel id (PNU)",
+    bld_nm: "Building name",
+    dong_nm: "Block",
+    grnd_flr: "Floors above ground",
+    ugrnd_flr: "Floors below ground",
+    archarea: "Building area (m\u00b2)",
+    totalarea: "Gross floor area (m\u00b2)",
+    platarea: "Plot area (m\u00b2)",
+    height: "Height (m)",
+    bc_rat: "Building coverage (%)",
+    vl_rat: "Floor area ratio (%)",
+    useapr_day: "Approved for use",
+    regist_day: "Registered",
+    bd_mgt_sn: "Building register no.",
+    jibun: "Lot number",
+    addr: "Address",
+    sido_nm: "Province",
+    sgg_nm: "City/county",
+    emd_nm: "Town",
+    ri_nm: "Village",
+  },
   reverseGeocode: "Coordinates to address",
   reverseGeocodeHint: "Click the map to look up an address.",
   reverseGeocodeActive: "Click the map… (click here to stop)",
@@ -151,7 +196,11 @@ let labels: VWorldLabels = { ...DEFAULT_VWORLD_LABELS };
  * @param next - Partial overrides merged over the current strings.
  */
 export function setVWorldLabels(next: Partial<VWorldLabels>): void {
-  labels = { ...labels, ...next };
+  labels = {
+    ...labels,
+    ...next,
+    attributes: { ...labels.attributes, ...(next.attributes ?? {}) },
+  };
   rerenderPanel();
 }
 
@@ -189,6 +238,11 @@ interface PanelState {
   searchResults: VWorldSearchResult[];
   addressType: VWorldAddressType;
   reverseActive: boolean;
+  /** Thematic layer ids currently on the map, in the order they were added. */
+  thematicLayers: Set<string>;
+  inspectActive: boolean;
+  featureInfo: VWorldFeatureInfo[];
+  featureInfoEmpty: boolean;
   reverseResult: { road: string; parcel: string; zipcode: string } | null;
   status: string;
   busy: boolean;
@@ -201,6 +255,10 @@ const state: PanelState = {
   searchResults: [],
   addressType: "ROAD",
   reverseActive: false,
+  thematicLayers: new Set<string>(),
+  inspectActive: false,
+  featureInfo: [],
+  featureInfoEmpty: false,
   reverseResult: null,
   status: "",
   busy: false,
@@ -284,6 +342,7 @@ function setReverseActive(app: GeoLibreAppAPI, active: boolean): void {
     map.getCanvas().style.cursor = "";
   }
   if (active && map) {
+    if (state.inspectActive) setInspectActive(app, false);
     mapClickHandler = (event) => {
       void runReverseGeocode(event.lngLat.lng, event.lngLat.lat);
     };
@@ -341,6 +400,10 @@ function addThematicLayer(app: GeoLibreAppAPI, id: string): void {
     bounds: VWORLD_BOUNDS,
     minzoom: layer.minzoom,
   });
+  // Remembered so a map click knows which typenames to query: the WMS tiles
+  // themselves carry no features, so the click has to ask WFS instead.
+  state.thematicLayers.add(layer.id);
+  rerenderPanel();
 }
 
 /**
@@ -351,6 +414,71 @@ function addThematicLayer(app: GeoLibreAppAPI, id: string): void {
  */
 function labelFor(key: string): string {
   return (labels as unknown as Record<string, string>)[key] ?? key;
+}
+
+/**
+ * Adds a fetched building set as an extruded layer.
+ *
+ * Injected by the host because the plugin API has no way to set a layer's
+ * style, and extrusion is the whole point of this layer — added flat it is
+ * indistinguishable from the WMS overlay it replaces. Mirrors the existing
+ * host-injection points (`setTimelapseVideoSaver`, `setLocalRasterPicker`).
+ */
+export type VWorldBuildingLayerAdder = (input: {
+  name: string;
+  geojson: unknown;
+  /** Feature property holding the height in metres. */
+  heightProperty: string;
+}) => void;
+
+let buildingLayerAdder: VWorldBuildingLayerAdder | null = null;
+
+/**
+ * Registers how extruded building layers are added.
+ *
+ * @param adder - The host's implementation, or null to disable the entry.
+ */
+export function setVWorldBuildingLayerAdder(adder: VWorldBuildingLayerAdder | null): void {
+  buildingLayerAdder = adder;
+}
+
+/**
+ * Loads the buildings in the current view and adds them as a 3D layer.
+ *
+ * Scoped to the visible extent because WFS caps a response at 1000 features:
+ * a nationwide request would return an arbitrary thousand rather than an error.
+ *
+ * @param app - The host API.
+ */
+async function addBuildingsInView(app: GeoLibreAppAPI): Promise<void> {
+  const map = app.getMap?.();
+  if (!map || !buildingLayerAdder) return;
+  const bounds = map.getBounds();
+
+  state.busy = true;
+  setStatus("");
+  try {
+    const result = await vworldBuildings([
+      bounds.getWest(),
+      bounds.getSouth(),
+      bounds.getEast(),
+      bounds.getNorth(),
+    ]);
+    buildingLayerAdder({
+      name: labels.buildings3d,
+      geojson: result.geojson,
+      heightProperty: VWORLD_HEIGHT_PROPERTY,
+    });
+    // Saying so matters: a truncated view looks like a complete one, and the
+    // user would read the missing blocks as gaps in the source data.
+    if (result.truncated) setStatus(labels.buildingsTruncated);
+  } catch (error) {
+    setStatus(errorMessage(error));
+    app.openRightPanel?.(PANEL_ID);
+  } finally {
+    state.busy = false;
+    rerenderPanel();
+  }
 }
 
 let unregisterMenu: (() => void) | null = null;
@@ -394,6 +522,12 @@ function buildToolbarMenu(app: GeoLibreAppAPI): void {
             onSelect: () => addThematicLayer(app, layer.id),
           })),
         },
+        {
+          id: `${MENU_ID}-buildings-3d`,
+          label: labels.buildings3d,
+          disabled: !ready,
+          onSelect: () => void addBuildingsInView(app),
+        },
         { type: "separator" },
         {
           id: `${MENU_ID}-panel`,
@@ -402,6 +536,115 @@ function buildToolbarMenu(app: GeoLibreAppAPI): void {
         },
       ],
     }) ?? null;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Thematic feature inspection                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Looks up the thematic features under a clicked point.
+ *
+ * The thematic layers render as WMS images, which carry no features, so a click
+ * cannot hit anything on the map itself. The same data is served as WFS, so the
+ * click becomes a small bbox query against whichever thematic layers are on.
+ *
+ * @param lon - Longitude in EPSG:4326.
+ * @param lat - Latitude in EPSG:4326.
+ */
+async function runFeatureInfo(lon: number, lat: number): Promise<void> {
+  const typenames = VWORLD_THEMATIC_LAYERS.filter((layer) =>
+    state.thematicLayers.has(layer.id),
+  ).map((layer) => ({ id: layer.id, typename: layer.typename }));
+  if (typenames.length === 0) {
+    setStatus(labels.featureInfoNoLayers);
+    return;
+  }
+
+  state.busy = true;
+  state.featureInfo = [];
+  state.featureInfoEmpty = false;
+  setStatus("");
+  try {
+    const found = await vworldFeatureInfo(typenames, lon, lat);
+    state.featureInfo = found;
+    state.featureInfoEmpty = found.length === 0;
+  } catch (error) {
+    setStatus(errorMessage(error));
+  } finally {
+    state.busy = false;
+    rerenderPanel();
+  }
+}
+
+let inspectClickHandler: ((event: maplibregl.MapMouseEvent) => void) | null = null;
+
+/**
+ * Turns click-to-inspect on or off.
+ *
+ * @param app - The host API.
+ * @param active - Whether clicks should query the thematic layers.
+ */
+function setInspectActive(app: GeoLibreAppAPI, active: boolean): void {
+  const map = app.getMap?.();
+  state.inspectActive = active;
+  if (map && inspectClickHandler) {
+    map.off("click", inspectClickHandler);
+    inspectClickHandler = null;
+    map.getCanvas().style.cursor = "";
+  }
+  if (active && map) {
+    // Mutually exclusive with reverse geocoding: both consume a map click, and
+    // leaving both on would run two lookups per click.
+    if (state.reverseActive) setReverseActive(app, false);
+    inspectClickHandler = (event) => {
+      void runFeatureInfo(event.lngLat.lng, event.lngLat.lat);
+    };
+    map.on("click", inspectClickHandler);
+    map.getCanvas().style.cursor = "crosshair";
+  }
+  rerenderPanel();
+}
+
+/**
+ * Adds one inspected feature to the map as its own vector layer.
+ *
+ * The WMS overlay cannot be styled, measured, or exported; the WFS geometry
+ * behind it can, which is what makes a single clicked parcel or building useful
+ * beyond reading its numbers.
+ *
+ * @param app - The host API.
+ * @param info - The feature to add.
+ */
+function addFeatureAsLayer(app: GeoLibreAppAPI, info: VWorldFeatureInfo): void {
+  if (!info.geometry) return;
+  const layer = VWORLD_THEMATIC_LAYERS.find((entry) => entry.id === info.layerId);
+  const name = layer ? labelFor(layer.labelKey) : info.layerId;
+  app.addGeoJsonLayer(
+    `${name} · ${info.featureId || ""}`.trim(),
+    {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          geometry: info.geometry as never,
+          properties: info.properties as Record<string, unknown>,
+        },
+      ],
+    },
+    `vworld://wfs/${info.featureId}`,
+  );
+}
+
+/** Renders one attribute value, hiding the service's empty placeholders. */
+function attributeText(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  const text = String(value).trim();
+  // VWorld returns unset fields as null, "None", or a zero that means "not
+  // recorded" for the area/ratio columns; showing 0 m² as a fact is worse than
+  // showing nothing.
+  if (text === "" || text === "None" || text === "null") return "";
+  return text;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -437,6 +680,57 @@ function renderPanel(container: HTMLElement): void {
   // Base maps and the cadastral/building/zoning layers are added from the
   // VWorld toolbar menu, which the plugin registers itself. This panel is the
   // interactive tooling, which has no place in a menu.
+
+  // Thematic feature inspection.
+  container.appendChild(sectionTitle(labels.featureInfo));
+  const inspectButton = element(
+    "button",
+    `geolibre-plugin-panel__button geolibre-plugin-panel__button--wide${
+      state.inspectActive ? " geolibre-plugin-panel__button--active" : ""
+    }`,
+    state.inspectActive ? labels.featureInfoActive : labels.featureInfoHint,
+  );
+  inspectButton.type = "button";
+  inspectButton.addEventListener("click", () => setInspectActive(app, !state.inspectActive));
+  container.appendChild(inspectButton);
+
+  if (state.featureInfoEmpty) {
+    container.appendChild(
+      element("p", "geolibre-plugin-panel__status", labels.featureInfoEmpty),
+    );
+  }
+  for (const info of state.featureInfo) {
+    const layer = VWORLD_THEMATIC_LAYERS.find((entry) => entry.id === info.layerId);
+    container.appendChild(
+      element(
+        "div",
+        "geolibre-plugin-panel__section-title",
+        layer ? labelFor(layer.labelKey) : info.layerId,
+      ),
+    );
+    const list = element("dl", "geolibre-plugin-panel__address");
+    for (const [field, raw] of Object.entries(info.properties)) {
+      const text = attributeText(raw);
+      if (!text) continue;
+      // Unlabelled fields are shown under their raw name rather than dropped:
+      // the schema carries more columns than are worth translating, and a
+      // hidden value is worse than an untranslated one.
+      const label = labels.attributes[field] ?? field;
+      list.appendChild(element("dt", "geolibre-plugin-panel__address-term", label));
+      list.appendChild(element("dd", "geolibre-plugin-panel__address-value", text));
+    }
+    container.appendChild(list);
+    if (info.geometry) {
+      const addButton = element(
+        "button",
+        "geolibre-plugin-panel__button",
+        labels.addFeatureLayer,
+      );
+      addButton.type = "button";
+      addButton.addEventListener("click", () => addFeatureAsLayer(app, info));
+      container.appendChild(addButton);
+    }
+  }
 
   // Integrated search.
   container.appendChild(sectionTitle(labels.search));
@@ -592,6 +886,7 @@ export const maplibreVWorldPlugin: GeoLibrePlugin = {
 
   deactivate(app: GeoLibreAppAPI) {
     setReverseActive(app, false);
+    setInspectActive(app, false);
     unsubscribeKey?.();
     unsubscribeKey = null;
     unregisterMenu?.();
@@ -604,6 +899,8 @@ export const maplibreVWorldPlugin: GeoLibrePlugin = {
     state.app = null;
     state.searchResults = [];
     state.reverseResult = null;
+    state.featureInfo = [];
+    state.thematicLayers.clear();
     state.status = "";
   },
 };

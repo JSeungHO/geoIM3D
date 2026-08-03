@@ -3,6 +3,7 @@ import {
   setDataGoKrServiceKey,
   setKmaApiKey,
   setVWorldApiKey,
+  setVWorldDomain,
 } from "@geolibre/plugins";
 import { installKoreanApiTransports } from "../lib/kr-api-transport";
 import { useEffect } from "react";
@@ -175,6 +176,14 @@ export function useCredentials(): boolean {
 
   useEffect(() => {
     setVWorldApiKey(vworldApiKey);
+    // VWorld's WFS endpoint refuses a request that names no registered
+    // domain, with INCORRECT_KEY — which reads as a bad key rather than a
+    // missing parameter. A browser could pass its own Referer, but these
+    // requests go through native HTTP or a proxy and carry none, so the
+    // app's origin is sent explicitly. It matches what a user registers for
+    // a browser build; a desktop build needs a key issued without a domain
+    // restriction (VWorld's "기타" service type).
+    if (typeof window !== "undefined") setVWorldDomain(window.location.origin);
   }, [vworldApiKey]);
 
   useEffect(() => {

@@ -46,6 +46,7 @@ import {
   maplibreVWorldPlugin,
   setVWorldApiKey,
   setVWorldLabels,
+  setVWorldBuildingLayerAdder,
   maplibreKmaPlugin,
   setKmaLabels,
   maplibreH3Plugin,
@@ -109,6 +110,7 @@ import {
   type InstalledWebPlugin,
 } from "../lib/external-plugins";
 import { appendDiagnostic } from "../lib/diagnostics";
+import { addVWorldBuildingLayer } from "../lib/vworld-buildings-layer";
 import { pickZarrDirectory, zarrDirectoryPickerSupported } from "../lib/zarr-directory-picker";
 import { openExternalLink } from "../lib/open-external";
 import { fetchUrlBytes } from "../lib/native-http";
@@ -204,6 +206,11 @@ manager.registerAll([
   maplibreDeckGlVizPlugin,
   maplibreComponentsPlugin,
 ]);
+
+// The VWorld plugin can fetch building footprints but cannot style a layer
+// through the plugin API, and these are only useful extruded. Same injection
+// shape as the video saver below.
+setVWorldBuildingLayerAdder(addVWorldBuildingLayer);
 
 // The Timelapse plugin records the map to a video blob but cannot depend on
 // the app's Tauri I/O helpers, so the save step (native dialog under Tauri,
