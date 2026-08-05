@@ -26,7 +26,7 @@ import { UpdateInstructions } from "./UpdateInstructions";
 const LINKS = [
   {
     labelKey: "about.homePage",
-    href: "https://geolibre.app",
+    href: "https://www.ejbt.co.kr/",
   },
   {
     labelKey: "about.githubRepository",
@@ -185,7 +185,16 @@ export function AboutDialog({
         <div className="space-y-3 text-sm">
           <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
             <span className="text-muted-foreground">{t("about.version")}</span>
-            <span className="font-mono text-foreground">v{APP_VERSION}</span>
+            <span className="font-mono text-foreground">geoIM3D {APP_VERSION}</span>
+          </div>
+          <div className="space-y-2 border-t pt-3">
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {t("about.licenseSectionTitle")}
+            </div>
+            <div className="space-y-1 rounded-md border bg-muted/30 px-3 py-2">
+              <p className="text-foreground">{t("about.copyright")}</p>
+              <p className="text-muted-foreground">{t("about.licenseAttribution")}</p>
+            </div>
           </div>
           {/* The Microsoft Store build omits the entire in-app update flow
               so the app updates only through the Store (policy 10.2.5). */}

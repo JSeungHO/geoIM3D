@@ -1,4 +1,13 @@
 {
+  "about": {
+    "title": "About geoIM3D",
+    "description": "geoIM3D is JBT's immersive 3D spatial platform for architecture, civil engineering, real estate, environment, and safety.",
+    "licenseSectionTitle": "License",
+    "copyright": "Copyright © 2026 JBT. All Rights Reserved",
+    "licenseAttribution": "Based on GeoLibre · MIT License",
+    "homePage": "JBT website",
+    "githubRepository": "Original GeoLibre project"
+  },
   "settings": {
     "env": {
       "vworldKeyTitle": "VWorld API key",
@@ -237,7 +246,7 @@
   },
   "primaryGlobe": {
     "tablist": "Map renderer",
-    "maplibre": "OSM",
+    "maplibre": "MapLibre",
     "cesium": "Cesium",
     "cesiumWithoutToken": "Renders with OpenStreetMap imagery. Add a Cesium Ion token in Settings for satellite imagery and terrain relief."
   }

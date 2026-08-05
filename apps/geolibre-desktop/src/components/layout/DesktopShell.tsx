@@ -4,6 +4,7 @@ import type { MapController, MapDiagnosticEvent } from "@geolibre/map";
 import { MapCanvas, setExternalDeckLayerOrderHandler } from "@geolibre/map";
 import { useTranslation } from "react-i18next";
 import {
+  addLocalGaussianSplatFile,
   addRasterToMap,
   prepareRasterControl,
   applyRasterLayerOrder,
@@ -84,6 +85,17 @@ import {
 } from "../../lib/osm-pbf-loader";
 import { restoreLocalFileLayers } from "../../lib/restore-local-layers";
 import {
+  gaussianSplatPlacementAtMapCenter,
+  partitionGaussianSplatFiles,
+  partitionGaussianSplatPaths,
+  selectGaussianSplatRenderingWorkspace,
+} from "../../lib/gaussian-splat-drop";
+import {
+  inspectNativeGaussianSplatZip,
+  NativeGaussianSplatTooLargeError,
+  readNativeGaussianSplatFile,
+} from "../../lib/tauri-gaussian-splat-reader";
+import {
   createAppAPI,
   getPluginManager,
   useExternalPluginsReady,
@@ -119,7 +131,7 @@ import { MapContextMenu } from "./MapContextMenu";
 import { KnowledgeCardPanel, type KnowledgePlace } from "./KnowledgeCardPanel";
 import { KnowledgeCardConsentDialog } from "./KnowledgeCardConsentDialog";
 import { MapGrid } from "./MapGrid";
-import { PrimaryGlobeSwitch } from "./PrimaryGlobeSwitch";
+import { PrimaryGlobeSwitch, selectPrimaryView } from "./PrimaryGlobeSwitch";
 import { RemoteCursorsOverlay } from "./RemoteCursorsOverlay";
 import { useCommandBridge } from "../../hooks/useCommandBridge";
 import { useEmbedApi } from "../../hooks/useEmbedApi";
@@ -1463,17 +1475,70 @@ export function DesktopShell({
               }
             }
 
+            // Native Tauri drops carry absolute paths. Partition PLY/SOG and
+            // verified SOG ZIPs before the generic DuckDB/GDAL path.
+            const {
+              splatFiles,
+              otherPaths: nonSplatPaths,
+              splatFailures,
+            } = await partitionGaussianSplatPaths(
+              otherPaths,
+              readNativeGaussianSplatFile,
+              inspectNativeGaussianSplatZip,
+            );
+            if (splatFailures.length > 0) {
+              setDropError(
+                splatFailures
+                  .map(({ path, error }) => {
+                    const name = path.split(/[/\\]/).pop() || "Gaussian Splat";
+                    const reason =
+                      error instanceof NativeGaussianSplatTooLargeError
+                        ? t("toolbar.fileDrop.splatTooLarge", {
+                            name,
+                            maxGb: error.maxBytes / 1024 ** 3,
+                          })
+                        : t("toolbar.fileDrop.nativeSplatReadFailed");
+                    return t("toolbar.fileDrop.failedSplat", { name, reason });
+                  })
+                  .join("\n"),
+              );
+            }
+
+            const splatPlacement = gaussianSplatPlacementAtMapCenter(useAppStore.getState().mapView.center);
+            selectGaussianSplatRenderingWorkspace(
+              splatFiles.length,
+              (workspace) => selectPrimaryView(workspace === "maplibre" ? "maplibre" : "cesium"),
+            );
+            for (const file of splatFiles) {
+              setDropMessage(t("toolbar.fileDrop.loadingSplat", { name: file.name }));
+              try {
+                await addLocalGaussianSplatFile(
+                  createAppAPI(mapControllerRef),
+                  file,
+                  splatPlacement,
+                );
+                setDropMessage(t("toolbar.fileDrop.addedLayer", { name: file.name }));
+              } catch (error) {
+                setDropError(
+                  t("toolbar.fileDrop.failedSplat", {
+                    name: file.name,
+                    reason: error instanceof Error ? error.message : String(error),
+                  }),
+                );
+              }
+            }
+
             // Geotagged photos become their own point layer; TIFF stays on the
             // raster path. Handle them before the vector/raster pipeline so a
             // dropped .jpg isn't routed to the DuckDB vector loader.
-            const photoResult = await loadDroppedPhotoPaths(otherPaths);
+            const photoResult = await loadDroppedPhotoPaths(nonSplatPaths);
             const photoCount = addDroppedPhotos(photoResult);
             // Surface a clear message when every dropped photo lacked GPS, so
             // the drop doesn't complete silently.
             if (photoResult && photoCount === 0 && photoResult.total > 0) {
               setDropError(t("addData.photos.errorNoGps", { count: photoResult.total }));
             }
-            const restPaths = otherPaths.filter((path) => !isPhotoDropFileName(path));
+            const restPaths = nonSplatPaths.filter((path) => !isPhotoDropFileName(path));
 
             if (restPaths.length > 0) {
               const rasterCount = await addDroppedRasters(await loadDroppedRasterPaths(restPaths));
@@ -1487,7 +1552,7 @@ export function DesktopShell({
               if (
                 importedLayers.length > 0 ||
                 rasterCount > 0 ||
-                (pbfPaths.length === 0 && photoResult === null)
+                (pbfPaths.length === 0 && photoResult === null && splatFiles.length === 0)
               ) {
                 finishDrop(importedLayers, rasterCount);
               }
@@ -1515,7 +1580,7 @@ export function DesktopShell({
       disposed = true;
       unlisten?.();
     };
-  }, [clearDropMessageLater, finishDrop, addDroppedRasters, addDroppedPhotos, addGeoJsonLayer]);
+  }, [clearDropMessageLater, finishDrop, addDroppedRasters, addDroppedPhotos, addGeoJsonLayer, t]);
 
   const handleDragEnter = useCallback((event: DragEvent<HTMLDivElement>) => {
     if (!hasDroppedFiles(event)) return;
@@ -1600,18 +1665,45 @@ export function DesktopShell({
           );
         }
 
+        const { splatFiles, otherFiles: nonSplatFiles } = await partitionGaussianSplatFiles(
+          otherFiles,
+        );
+        const splatPlacement = gaussianSplatPlacementAtMapCenter(useAppStore.getState().mapView.center);
+        selectGaussianSplatRenderingWorkspace(
+          splatFiles.length,
+          (workspace) => selectPrimaryView(workspace === "maplibre" ? "maplibre" : "cesium"),
+        );
+        for (const file of splatFiles) {
+          setDropMessage(t("toolbar.fileDrop.loadingSplat", { name: file.name }));
+          try {
+            await addLocalGaussianSplatFile(
+              createAppAPI(mapControllerRef),
+              file,
+              splatPlacement,
+            );
+            setDropMessage(t("toolbar.fileDrop.addedLayer", { name: file.name }));
+          } catch (error) {
+            setDropError(
+              t("toolbar.fileDrop.failedSplat", {
+                name: file.name,
+                reason: error instanceof Error ? error.message : String(error),
+              }),
+            );
+          }
+        }
+
         // Geotagged photos (JPEG/PNG/WebP/HEIC) become a single point layer of
         // their own; TIFF is left to the raster path. Handle them before the
         // vector/raster pipeline so a .jpg isn't sent to the DuckDB vector
         // loader (which would fail).
-        const photoResult = await loadDroppedPhotoFiles(otherFiles);
+        const photoResult = await loadDroppedPhotoFiles(nonSplatFiles);
         const photoCount = addDroppedPhotos(photoResult);
         // Surface a clear message when every dropped photo lacked GPS, so the
         // drop doesn't complete silently.
         if (photoResult && photoCount === 0 && photoResult.total > 0) {
           setDropError(t("addData.photos.errorNoGps", { count: photoResult.total }));
         }
-        const restFiles = otherFiles.filter((file) => !isPhotoDropFileName(file.name));
+        const restFiles = nonSplatFiles.filter((file) => !isPhotoDropFileName(file.name));
 
         if (restFiles.length > 0) {
           const rasterCount = await addDroppedRasters(loadDroppedRasterFiles(restFiles));
@@ -1629,7 +1721,7 @@ export function DesktopShell({
           if (
             importedLayers.length > 0 ||
             rasterCount > 0 ||
-            (pbfFiles.length === 0 && photoResult === null)
+            (pbfFiles.length === 0 && photoResult === null && splatFiles.length === 0)
           ) {
             finishDrop(importedLayers, rasterCount);
           }
@@ -1641,7 +1733,7 @@ export function DesktopShell({
         clearDropMessageLater();
       }
     },
-    [clearDropMessageLater, finishDrop, addDroppedRasters, addDroppedPhotos, addGeoJsonLayer],
+    [clearDropMessageLater, finishDrop, addDroppedRasters, addDroppedPhotos, addGeoJsonLayer, t],
   );
 
   const startLayerPanelResize = useCallback(

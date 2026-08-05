@@ -749,6 +749,22 @@ let stacSearchStoreUnsubscribe: (() => void) | null = null;
 let zarrStoreUnsubscribe: (() => void) | null = null;
 let lidarStoreUnsubscribe: (() => void) | null = null;
 let splattingStoreUnsubscribe: (() => void) | null = null;
+interface PendingLocalSplat {
+  name: string;
+  objectUrl: string;
+}
+const pendingLocalSplats = new Map<string, PendingLocalSplat>();
+const localSplatObjectUrls = new Map<string, string>();
+const localSplatFileNames = new Map<string, string>();
+const cancelledLocalSplatUrls = new Set<string>();
+let splattingControlGeneration = 0;
+export const MAX_LOCAL_GAUSSIAN_SPLAT_BYTES = 2 * 1024 * 1024 * 1024;
+
+function cancelLocalSplatUrl(objectUrl: string): void {
+  cancelledLocalSplatUrls.add(objectUrl);
+  const timeout = setTimeout(() => cancelledLocalSplatUrls.delete(objectUrl), 60_000);
+  (timeout as unknown as { unref?: () => void }).unref?.();
+}
 
 // Re-streaming saved LiDAR layers on project open. The store only holds a
 // `lidar-url` layer's metadata; the point cloud itself is loaded by the LiDAR
@@ -2698,6 +2714,84 @@ export function openSplattingLayerPanel(app: GeoLibreAppAPI): void {
   void openStandaloneSplattingControl(app);
 }
 
+export function validateLocalGaussianSplatFile(file: Pick<File, "name" | "size">): void {
+  if (!/\.(?:ply|sog|zip)$/i.test(file.name.trim())) {
+    throw new Error("Only Gaussian Splat .ply, .sog, or validated SOG .zip files can be added here.");
+  }
+  if (file.size === 0) throw new Error(`${file.name} is empty.`);
+  if (file.size > MAX_LOCAL_GAUSSIAN_SPLAT_BYTES) {
+    throw new Error(
+      `${file.name} exceeds the ${MAX_LOCAL_GAUSSIAN_SPLAT_BYTES / 1024 ** 3} GB import limit.`,
+    );
+  }
+}
+
+/**
+ * Load a user-selected Gaussian Splat without exposing or persisting its local
+ * path. The Blob URL remains alive until the rendered layer is removed.
+ */
+export async function addLocalGaussianSplatFile(
+  app: GeoLibreAppAPI,
+  file: File,
+  placement?: { longitude: number; latitude: number },
+): Promise<string> {
+  validateLocalGaussianSplatFile(file);
+  if (!(await openStandaloneSplattingControl(app)) || !splattingControl) {
+    throw new Error("The Gaussian Splat viewer is not available.");
+  }
+
+  const control = splattingControl;
+  const controlGeneration = splattingControlGeneration;
+  const objectUrl = URL.createObjectURL(file);
+  pendingLocalSplats.set(objectUrl, { name: file.name, objectUrl });
+
+  try {
+    const layerId = await control.loadSplat(objectUrl, placement);
+    if (
+      controlGeneration !== splattingControlGeneration ||
+      control !== splattingControl ||
+      !splattingControlMounted
+    ) {
+      pendingLocalSplats.delete(objectUrl);
+      cancelLocalSplatUrl(objectUrl);
+      URL.revokeObjectURL(objectUrl);
+      throw new Error("Gaussian Splatting control was reset while the file was loading.");
+    }
+
+    pendingLocalSplats.delete(objectUrl);
+    localSplatObjectUrls.set(layerId, objectUrl);
+    localSplatFileNames.set(layerId, file.name);
+    const layer = createSplattingStoreLayer(layerId, objectUrl, "splat", file.name);
+    const store = useAppStore.getState();
+    if (store.layers.some((item) => item.id === layerId)) {
+      store.updateLayer(layerId, {
+        excludeFromHistory: true,
+        metadata: layer.metadata,
+        source: layer.source,
+      });
+    } else {
+      store.addLayer(layer);
+    }
+    return layerId;
+  } catch (error) {
+    pendingLocalSplats.delete(objectUrl);
+    cancelLocalSplatUrl(objectUrl);
+    for (const [layerId, layerObjectUrl] of localSplatObjectUrls) {
+      if (layerObjectUrl !== objectUrl) continue;
+      localSplatObjectUrls.delete(layerId);
+      localSplatFileNames.delete(layerId);
+      const store = useAppStore.getState();
+      if (store.layers.some((item) => item.id === layerId)) {
+        store.removeLayer(layerId);
+      } else {
+        splattingLayerAdapter?.removeLayer(layerId);
+      }
+    }
+    URL.revokeObjectURL(objectUrl);
+    throw error;
+  }
+}
+
 function getComponentsOptions(app: GeoLibreAppAPI): ControlGridOptions {
   return {
     ...COMPONENTS_OPTIONS,
@@ -3697,8 +3791,8 @@ function createSplattingControl(
   const control = new GaussianSplatControlClass(SPLATTING_OPTIONS);
   splattingLayerAdapter = new GaussianSplatLayerAdapterClass(control);
   control.on("collapse", () => hideSplattingControl(control));
-  control.on("splatload", createSplattingLoadHandler("splat"));
-  control.on("modelload", createSplattingLoadHandler("model"));
+  control.on("splatload", createSplattingLoadHandler("splat", control));
+  control.on("modelload", createSplattingLoadHandler("model", control));
   control.on("splatremove", createSplattingRemoveHandler());
   control.on("modelremove", createSplattingRemoveHandler());
   splattingStoreUnsubscribe ??= useAppStore.subscribe((state, previous) => {
@@ -4384,6 +4478,7 @@ function teardownLidarControl(app: GeoLibreAppAPI): void {
 }
 
 function teardownSplattingControl(app: GeoLibreAppAPI): void {
+  splattingControlGeneration += 1;
   splattingStoreUnsubscribe?.();
   splattingStoreUnsubscribe = null;
   splattingLayerAdapter?.destroy();
@@ -4393,6 +4488,22 @@ function teardownSplattingControl(app: GeoLibreAppAPI): void {
   }
   splattingControl = null;
   splattingControlMounted = false;
+  const localLayerIds = [...localSplatObjectUrls.keys()];
+  for (const objectUrl of localSplatObjectUrls.values()) {
+    cancelLocalSplatUrl(objectUrl);
+    URL.revokeObjectURL(objectUrl);
+  }
+  localSplatObjectUrls.clear();
+  localSplatFileNames.clear();
+  const store = useAppStore.getState();
+  for (const layerId of localLayerIds) {
+    if (store.layers.some((layer) => layer.id === layerId)) store.removeLayer(layerId);
+  }
+  for (const pending of pendingLocalSplats.values()) {
+    cancelLocalSplatUrl(pending.objectUrl);
+    URL.revokeObjectURL(pending.objectUrl);
+  }
+  pendingLocalSplats.clear();
 }
 
 function createLidarLoadHandler(): LidarControlEventHandler {
@@ -4457,15 +4568,36 @@ function createLidarLoadHandler(): LidarControlEventHandler {
 
 function createSplattingLoadHandler(
   assetType: "model" | "splat",
+  control: GaussianSplatControl,
 ): Parameters<GaussianSplatControl["on"]>[1] {
   return (event) => {
     const id = assetType === "splat" ? event.splatId : event.modelId;
     if (!id || !event.url) return;
 
+    if (cancelledLocalSplatUrls.delete(event.url)) {
+      if (assetType === "splat") control.removeSplat(id);
+      else control.removeModel(id);
+      return;
+    }
+
     const store = useAppStore.getState();
-    const layer = createSplattingStoreLayer(id, event.url, assetType);
+    const pendingLocalSplat = pendingLocalSplats.get(event.url);
+    if (pendingLocalSplat) {
+      localSplatObjectUrls.set(id, pendingLocalSplat.objectUrl);
+      localSplatFileNames.set(id, pendingLocalSplat.name);
+      pendingLocalSplats.delete(pendingLocalSplat.objectUrl);
+    }
+    const localFileName = pendingLocalSplat?.name ?? localSplatFileNames.get(id);
+    const localObjectUrl = localSplatObjectUrls.get(id);
+    const layer = createSplattingStoreLayer(
+      id,
+      localObjectUrl ?? event.url,
+      assetType,
+      localFileName,
+    );
     if (store.layers.some((item) => item.id === layer.id)) {
       store.updateLayer(layer.id, {
+        excludeFromHistory: layer.excludeFromHistory,
         metadata: layer.metadata,
         opacity: layer.opacity,
         source: layer.source,
@@ -4477,10 +4609,33 @@ function createSplattingLoadHandler(
   };
 }
 
+/** @internal Test seam for the teardown/removal late-event boundary. */
+export function __handleCancelledSplatLoadForTests(
+  objectUrl: string,
+  id: string,
+  control: Pick<GaussianSplatControl, "removeSplat">,
+): void {
+  cancelLocalSplatUrl(objectUrl);
+  createSplattingLoadHandler("splat", control as GaussianSplatControl)({
+    type: "splatload",
+    splatId: id,
+    url: objectUrl,
+    state: {} as ReturnType<GaussianSplatControl["getState"]>,
+  });
+}
+
 function createSplattingRemoveHandler(): Parameters<GaussianSplatControl["on"]>[1] {
   return (event) => {
     const id = event.splatId ?? event.modelId;
     if (!id) return;
+
+    const objectUrl = localSplatObjectUrls.get(id);
+    if (objectUrl) {
+      cancelLocalSplatUrl(objectUrl);
+      URL.revokeObjectURL(objectUrl);
+      localSplatObjectUrls.delete(id);
+    }
+    localSplatFileNames.delete(id);
 
     const store = useAppStore.getState();
     const layer = store.layers.find((item) => item.id === id);
@@ -5388,10 +5543,13 @@ function createSplattingStoreLayer(
   id: string,
   url: string,
   assetType: "model" | "splat",
+  localFileName?: string,
 ): GeoLibreLayer {
   return {
     id,
-    name: layerNameFromUrl(url, id),
+    name: localFileName
+      ? localFileName.replace(/\.[^.]+$/, "") || id
+      : layerNameFromUrl(url, id),
     type: "gaussian-splat",
     source: {
       assetType,
@@ -5401,6 +5559,7 @@ function createSplattingStoreLayer(
     },
     visible: true,
     opacity: splattingLayerAdapter?.getLayerState(id)?.opacity ?? 1,
+    ...(localFileName ? { excludeFromHistory: true } : {}),
     style: { ...DEFAULT_LAYER_STYLE },
     metadata: {
       assetType,
@@ -5408,9 +5567,10 @@ function createSplattingStoreLayer(
       externalNativeLayer: true,
       identifiable: false,
       sourceId: id,
-      sourceKind: "splatting-url",
+      sourceKind: localFileName ? "splatting-local-file" : "splatting-url",
+      ...(localFileName ? { localFileName } : {}),
     },
-    sourcePath: url,
+    ...(localFileName ? {} : { sourcePath: url }),
   };
 }
 
@@ -5471,10 +5631,11 @@ function isLidarControlLayer(layer: GeoLibreLayer): boolean {
   );
 }
 
-function isSplattingControlLayer(layer: GeoLibreLayer): boolean {
+export function isSplattingControlLayer(layer: GeoLibreLayer): boolean {
   return (
     layer.type === "gaussian-splat" &&
-    layer.metadata.sourceKind === "splatting-url" &&
+    (layer.metadata.sourceKind === "splatting-url" ||
+      layer.metadata.sourceKind === "splatting-local-file") &&
     layer.metadata.externalNativeLayer === true
   );
 }

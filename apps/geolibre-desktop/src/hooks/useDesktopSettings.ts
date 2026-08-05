@@ -169,7 +169,7 @@ export const DEFAULT_UI_PROFILE_SETTINGS: UiProfileSettings = {
 };
 
 export const DEFAULT_UPDATE_SETTINGS: UpdateSettings = {
-  checkOnStartup: true,
+  checkOnStartup: false,
   notificationLevel: "all",
 };
 

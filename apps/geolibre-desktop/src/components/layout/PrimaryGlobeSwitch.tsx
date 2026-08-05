@@ -7,7 +7,7 @@ import { setPrimaryCesiumViewer } from "../../lib/map-click-bridge";
 import { openSettingsSection } from "./SettingsDialog";
 
 /**
- * Tabs that switch the primary map between the 2D/OSM view and the Cesium globe.
+ * Tabs that switch the primary map between the MapLibre view and the Cesium globe.
  *
  * Upstream already switches *secondary* panes between the two renderers
  * (`viewKind` on a `SecondaryMapView`, toggled from `MapGrid`), but the primary
@@ -21,7 +21,7 @@ import { openSettingsSection } from "./SettingsDialog";
  *
  * Camera state is shared for free. `mapLayout.syncView` defaults to true, and
  * `CesiumCanvas` seeds from and writes back to the global `mapView` in that
- * mode, so panning the globe and switching back to OSM lands in the same place.
+ * mode, so panning the globe and switching back to MapLibre lands in the same place.
  */
 
 /**
@@ -36,6 +36,13 @@ import { openSettingsSection } from "./SettingsDialog";
 const PRIMARY_GLOBE_VIEW_ID = "geolibre-primary-globe";
 
 type PrimaryView = "maplibre" | "cesium";
+const PRIMARY_VIEW_EVENT = "geolibre:primary-view-change";
+
+/** Select the primary renderer from file-drop and other shell integrations. */
+export function selectPrimaryView(view: PrimaryView): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<PrimaryView>(PRIMARY_VIEW_EVENT, { detail: view }));
+}
 
 /**
  * The current Cesium Ion token, re-resolved when the runtime environment
@@ -73,6 +80,15 @@ export function PrimaryGlobeSwitch({ children }: PrimaryGlobeSwitchProps) {
   const { t } = useTranslation();
   const token = useCesiumIonToken();
   const [view, setView] = useState<PrimaryView>("maplibre");
+
+  useEffect(() => {
+    const selectView = (event: Event) => {
+      const nextView = (event as CustomEvent<PrimaryView>).detail;
+      if (nextView === "maplibre" || nextView === "cesium") setView(nextView);
+    };
+    window.addEventListener(PRIMARY_VIEW_EVENT, selectView);
+    return () => window.removeEventListener(PRIMARY_VIEW_EVENT, selectView);
+  }, []);
 
   // The globe does not need a token. `CesiumCanvas` falls back to keyless
   // OpenStreetMap imagery without one, so the tab is always available; a token

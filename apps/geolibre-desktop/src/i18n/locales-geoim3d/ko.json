@@ -1,4 +1,13 @@
 {
+  "about": {
+    "title": "geoIM3D 정보",
+    "description": "geoIM3D는 건축·토목·부동산·환경·안전 분야를 위한 JBT의 실감형 3D 공간 플랫폼입니다.",
+    "licenseSectionTitle": "라이선스",
+    "copyright": "Copyright © 2026 JBT. All Rights Reserved",
+    "licenseAttribution": "GeoLibre 기반 · MIT 라이선스",
+    "homePage": "JBT 홈페이지",
+    "githubRepository": "원본 GeoLibre 프로젝트"
+  },
   "settings": {
     "env": {
       "vworldKeyTitle": "VWorld API 키",
@@ -237,7 +246,7 @@
   },
   "primaryGlobe": {
     "tablist": "지도 렌더러",
-    "maplibre": "OSM",
+    "maplibre": "MapLibre",
     "cesium": "Cesium",
     "cesiumWithoutToken": "OpenStreetMap 영상으로 표시됩니다. 설정에서 Cesium Ion 토큰을 넣으면 위성영상과 지형 기복이 추가됩니다."
   }

@@ -33,7 +33,8 @@ function leaves(node: Record<string, unknown>, prefix = ""): Record<string, unkn
  * exists to catch, and a rule loose enough to cover these would cover those too.
  */
 const INTENTIONALLY_IDENTICAL = new Set([
-  "primaryGlobe.maplibre", // "OSM"
+  "about.copyright", // Legal product attribution is intentionally identical.
+  "primaryGlobe.maplibre", // "MapLibre"
   "primaryGlobe.cesium", // "Cesium"
 ]);
 

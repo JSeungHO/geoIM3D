@@ -1,6 +1,8 @@
 import {
   BLANK_BASEMAP,
   DEFAULT_BASEMAP,
+  DEFAULT_MAP_CENTER,
+  DEFAULT_MAP_ZOOM,
   DEFAULT_PROJECT_PREFERENCES,
   getPlanetaryBasemapByStyleUrl,
   PLANETARY_BASEMAP_SENTINEL_PREFIX,
@@ -437,8 +439,8 @@ export class MapController {
     this.map = new maplibregl.Map({
       container,
       style: deferMapboxStyle ? createBlankMapStyle() : resolveMapStyle(this.basemapStyleUrl),
-      center: view?.center ?? [-100, 40],
-      zoom: view?.zoom ?? 2,
+      center: view?.center ?? DEFAULT_MAP_CENTER,
+      zoom: view?.zoom ?? DEFAULT_MAP_ZOOM,
       bearing: view?.bearing ?? 0,
       pitch: view?.pitch ?? 0,
       minZoom,
@@ -446,6 +448,7 @@ export class MapController {
       maxPitch,
       maxBounds: mapBoundsForPreferences(mapPreferences) ?? undefined,
       renderWorldCopies: mapPreferences.renderWorldCopies,
+      reduceMotion: true,
       attributionControl: false,
       maplibreLogo: false,
       // preserveDrawingBuffer must stay true: the Print Layout composer and any
@@ -1047,8 +1050,8 @@ export class MapController {
   readView(): MapViewState {
     if (!this.map) {
       return {
-        center: [-100, 40],
-        zoom: 2,
+        center: [...DEFAULT_MAP_CENTER],
+        zoom: DEFAULT_MAP_ZOOM,
         bearing: 0,
         pitch: 0,
       };

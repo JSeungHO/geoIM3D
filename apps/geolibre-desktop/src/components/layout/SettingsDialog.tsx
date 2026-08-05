@@ -87,9 +87,9 @@ import { useLanguage } from "../../hooks/useLanguage";
 import { BROWSER_PANEL_ID } from "../../hooks/useRegisterBrowserPanel";
 import { useRightPanelState } from "../../hooks/useRightPanels";
 import type { ThemeMode } from "../../hooks/useThemeMode";
-import { isTauri } from "../../lib/is-tauri";
+
 import { THEME_SCHEMES, normalizeHexColor, type ThemeScheme } from "../../lib/theme-schemes";
-import { IS_STORE_BUILD, type UpdateNotificationLevel } from "../../lib/updates";
+import type { UpdateNotificationLevel } from "../../lib/updates";
 import {
   DATA_SOURCE_CATALOG,
   DATA_SOURCE_SECTION_LABEL_KEYS,
@@ -424,12 +424,9 @@ export function SettingsDialog({
   // (its initial value is "map"), so render the first visible section instead to
   // never expose gated content to a restricted profile.
   const isSectionVisible = (id: SettingsSection) => {
-    // Automated update checks run in the desktop build only, so the section is
-    // hidden on the web where its controls would be inert.
-    if (id === "updates" && !isTauri()) return false;
-    // The Microsoft Store build has no in-app update flow to configure (policy
-    // 10.2.5), so its settings section is dropped entirely.
-    if (id === "updates" && IS_STORE_BUILD) return false;
+    // geoIM3D never checks for updates at startup. Manual checks remain available
+    // from Help > About, so the now-inert startup-update settings stay hidden.
+    if (id === "updates") return false;
     const gate = SECTION_GATE[id];
     return gate ? showSettingsItem(gate) : true;
   };

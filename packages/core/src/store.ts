@@ -740,6 +740,15 @@ function pruneHistoryBySize(): void {
   }
 }
 
+function isSessionOnlyLayer(layer: GeoLibreLayer | undefined): boolean {
+  return Boolean(
+    layer &&
+      (layer.excludeFromHistory === true ||
+        layer.metadata.excludeFromHistory === true ||
+        layer.metadata.sourceKind === "splatting-local-file"),
+  );
+}
+
 export const useAppStore = create<AppState>()(
   temporal(
     (set, get) => ({
@@ -1309,7 +1318,7 @@ export const useAppStore = create<AppState>()(
           return {
             layers,
             selectedLayerId: layer.id,
-            isDirty: true,
+            isDirty: isSessionOnlyLayer(layer) ? s.isDirty : true,
           };
         }),
 
@@ -1337,7 +1346,9 @@ export const useAppStore = create<AppState>()(
           selectedFeatureId: s.selectedLayerId === id ? null : s.selectedFeatureId,
           selectedFeatureIds: s.selectedLayerId === id ? [] : s.selectedFeatureIds,
           identifyLayerId: s.identifyLayerId === id ? null : s.identifyLayerId,
-          isDirty: true,
+          isDirty: isSessionOnlyLayer(s.layers.find((layer) => layer.id === id))
+            ? s.isDirty
+            : true,
         })),
 
       updateLayer: (id, patch) =>
@@ -1364,7 +1375,15 @@ export const useAppStore = create<AppState>()(
             }
             layers = cascadeLayerJoinRefresh(layers, id);
           }
-          return { layers, isDirty: true };
+          const previousLayer = s.layers.find((layer) => layer.id === id);
+          const nextLayer = layers.find((layer) => layer.id === id);
+          return {
+            layers,
+            isDirty:
+              isSessionOnlyLayer(previousLayer) && isSessionOnlyLayer(nextLayer)
+                ? s.isDirty
+                : true,
+          };
         }),
 
       setLayerJoins: (id, joins) =>
@@ -1401,7 +1420,9 @@ export const useAppStore = create<AppState>()(
           layers: s.layers.map((l) =>
             l.id === id ? { ...l, style: { ...l.style, ...style } } : l,
           ),
-          isDirty: true,
+          isDirty: isSessionOnlyLayer(s.layers.find((layer) => layer.id === id))
+            ? s.isDirty
+            : true,
         })),
 
       copyLayerStyle: (id) => {
@@ -1439,7 +1460,10 @@ export const useAppStore = create<AppState>()(
           const next = [...s.layers];
           const [item] = next.splice(idx, 1);
           next.splice(target, 0, item);
-          return { layers: next, isDirty: true };
+          return {
+            layers: next,
+            isDirty: isSessionOnlyLayer(item) ? s.isDirty : true,
+          };
         }),
 
       moveLayer: (id, targetIndex) =>
@@ -1453,7 +1477,10 @@ export const useAppStore = create<AppState>()(
           if (next.every((item, index) => item.id === s.layers[index]?.id)) {
             return s;
           }
-          return { layers: next, isDirty: true };
+          return {
+            layers: next,
+            isDirty: isSessionOnlyLayer(layer) ? s.isDirty : true,
+          };
         }),
 
       addGeoJsonLayer: (name, geojson, sourcePath, beforeLayerId = null) => {
@@ -1661,7 +1688,10 @@ export const useAppStore = create<AppState>()(
             (l, i) => l.id === s.layers[i]?.id && l.groupId === s.layers[i]?.groupId,
           );
           if (unchanged) return s;
-          return { layers: normalized, isDirty: true };
+          return {
+            layers: normalized,
+            isDirty: isSessionOnlyLayer(current) ? s.isDirty : true,
+          };
         }),
 
       reorderLayerGroup: (id, direction) =>
@@ -1682,7 +1712,10 @@ export const useAppStore = create<AppState>()(
           if (target < 0 || target >= units.length) return s;
           const [unit] = units.splice(unitIndex, 1);
           units.splice(target, 0, unit);
-          return { layers: units.flatMap((u) => u.layers), isDirty: true };
+          return {
+            layers: units.flatMap((u) => u.layers),
+            isDirty: unit.layers.every(isSessionOnlyLayer) ? s.isDirty : true,
+          };
         }),
 
       newProject: (options = {}) => {
@@ -1783,7 +1816,7 @@ export const useAppStore = create<AppState>()(
       // ui flags, mapView/camera, pointerCoords, project metadata, isDirty, ...)
       // is excluded, so changing them never creates a history entry.
       partialize: (s) => ({
-        layers: s.layers,
+        layers: s.layers.filter((layer) => !isSessionOnlyLayer(layer)),
         layerGroups: s.layerGroups,
         basemapStyleUrl: s.basemapStyleUrl,
         basemapVisible: s.basemapVisible,

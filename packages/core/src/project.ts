@@ -51,6 +51,11 @@ import { getEllipsoid } from "./ellipsoids";
 /** Placeholder name a project carries before the user names it. */
 export const DEFAULT_PROJECT_NAME = "Untitled Project";
 
+/** Default camera center: Seoul City Hall, South Korea (`[longitude, latitude]`). */
+export const DEFAULT_MAP_CENTER: [number, number] = [126.978, 37.5665];
+/** City-scale startup zoom for the default Seoul view. */
+export const DEFAULT_MAP_ZOOM = 11;
+
 export interface CreateProjectOptions {
   basemapStyleUrl?: string;
   mapView?: MapViewState;
@@ -60,8 +65,8 @@ export interface CreateProjectOptions {
 
 export function createDefaultMapView(): MapViewState {
   return {
-    center: [-100, 40],
-    zoom: 2,
+    center: [...DEFAULT_MAP_CENTER],
+    zoom: DEFAULT_MAP_ZOOM,
     bearing: 0,
     pitch: 0,
   };
@@ -95,8 +100,63 @@ export function createEmptyProject(
   };
 }
 
+function isSessionOnlyLayer(layer: GeoLibreLayer): boolean {
+  return (
+    layer.excludeFromHistory === true ||
+    layer.metadata.sourceKind === "splatting-local-file"
+  );
+}
+
+function stripSessionLayerReferences(
+  value: unknown,
+  excludedLayerIds: ReadonlySet<string>,
+): unknown {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item) => typeof item !== "string" || !excludedLayerIds.has(item))
+      .map((item) => stripSessionLayerReferences(item, excludedLayerIds))
+      .filter((item) => item !== undefined);
+  }
+  if (!value || typeof value !== "object") return value;
+
+  const record = value as Record<string, unknown>;
+  if (typeof record.layerId === "string" && excludedLayerIds.has(record.layerId)) {
+    return undefined;
+  }
+
+  const stripped: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(record)) {
+    const referencesExcludedLayer =
+      excludedLayerIds.has(key) ||
+      [...excludedLayerIds].some((id) => key.startsWith(`${id}::`)) ||
+      (typeof entry === "string" && excludedLayerIds.has(entry));
+    if (referencesExcludedLayer) continue;
+
+    const next = stripSessionLayerReferences(entry, excludedLayerIds);
+    if (next !== undefined) stripped[key] = next;
+  }
+  return stripped;
+}
+
+function projectForSerialization(project: GeoLibreProject): GeoLibreProject {
+  const excludedLayerIds = new Set(
+    project.layers.filter(isSessionOnlyLayer).map((layer) => layer.id),
+  );
+  if (excludedLayerIds.size === 0) return project;
+
+  const layers = project.layers.filter((layer) => !excludedLayerIds.has(layer.id));
+  const selectedLayerId =
+    project.selectedLayerId && excludedLayerIds.has(project.selectedLayerId)
+      ? null
+      : project.selectedLayerId;
+  return stripSessionLayerReferences(
+    { ...project, layers, selectedLayerId },
+    excludedLayerIds,
+  ) as GeoLibreProject;
+}
+
 export function serializeProject(project: GeoLibreProject): string {
-  return JSON.stringify(project, null, 2);
+  return JSON.stringify(projectForSerialization(project), null, 2);
 }
 
 export function parseProject(json: string): GeoLibreProject {
@@ -1160,7 +1220,7 @@ export function projectFromStore(state: {
           state.layers.some((layer) => layer.id === state.selectedLayerId)
         ? state.selectedLayerId
         : undefined;
-  return {
+  return projectForSerialization({
     version: PROJECT_VERSION,
     name: state.projectName,
     mapView: state.mapView,
@@ -1190,7 +1250,7 @@ export function projectFromStore(state: {
       : {}),
     ...(styleLibrary.length > 0 ? { styleLibrary } : {}),
     metadata: state.metadata,
-  };
+  });
 }
 
 // An external native layer can drop its persisted `geojson` only if its
