@@ -277,3 +277,53 @@
 .geolibre-plugin-panel__address-value {
   overflow-wrap: anywhere;
 }
+
+/* 3D objects -----------------------------------------------------------------
+ *
+ * One loaded object: its name, the transform fields, and the actions. Each
+ * block is separated so a panel holding several stays readable.
+ * ------------------------------------------------------------------------- */
+.geoim3d-object {
+  border-top: 1px solid hsl(var(--border));
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding-top: 0.5rem;
+}
+
+.geoim3d-object__name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  /* A file name from a signed URL can be long; wrap rather than scroll. */
+  overflow-wrap: anywhere;
+}
+
+.geoim3d-object__field {
+  align-items: center;
+  display: grid;
+  /* Labels share one column so the boxes line up down the block. */
+  grid-template-columns: 5.5rem 1fr;
+  gap: 0.5rem;
+}
+
+.geoim3d-object__field-label {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+}
+
+.geoim3d-object__rotation {
+  display: grid;
+  /* X, Y and Z are equally important, so they get equal width. */
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.375rem;
+}
+
+.geoim3d-object__actions {
+  display: flex;
+  gap: 0.375rem;
+  padding-top: 0.25rem;
+}
+
+.geoim3d-object__actions > button {
+  flex: 1;
+}

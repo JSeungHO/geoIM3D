@@ -13,6 +13,7 @@
  * `t()`.
  */
 
+import { GEOIM3D_OBJECTS_PLUGIN_ID } from "./geoim3d-objects";
 import { KMA_PLUGIN_ID } from "./maplibre-kma";
 import { VWORLD_PLUGIN_ID } from "./maplibre-vworld";
 
@@ -29,9 +30,9 @@ export const PLUGIN_MENU_GROUPS: readonly PluginMenuGroup[] = [
   {
     id: "geoim3d",
     labelKey: "toolbar.item.geoim3dServices",
-    // Korean public-data integrations. Each registers its own toolbar menu when
+    // geoIM3D's own integrations. Each registers its own toolbar menu when
     // activated, so this submenu is only the on/off switch.
-    pluginIds: [VWORLD_PLUGIN_ID, KMA_PLUGIN_ID],
+    pluginIds: [VWORLD_PLUGIN_ID, KMA_PLUGIN_ID, GEOIM3D_OBJECTS_PLUGIN_ID],
   },
 ];
 

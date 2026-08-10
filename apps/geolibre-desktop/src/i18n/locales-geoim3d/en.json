@@ -66,7 +66,8 @@
     },
     "plugin": {
       "maplibre-gl-vworld": "VWorld",
-      "maplibre-gl-kma": "Weather (KMA)"
+      "maplibre-gl-kma": "Weather (KMA)",
+      "geoim3d-objects": "3D objects"
     }
   },
   "assistant": {
@@ -240,5 +241,32 @@
     "maplibre": "OSM",
     "cesium": "Cesium",
     "cesiumWithoutToken": "Renders with OpenStreetMap imagery. Add a Cesium Ion token in Settings for satellite imagery and terrain relief."
+  },
+  "objects": {
+    "title": "3D objects",
+    "menuLabel": "3D objects",
+    "openPanel": "Object upload…",
+    "openPanelFloating": "Object upload (detached)…",
+    "addFromUrl": "Add from URL",
+    "addFromFile": "Add from a file…",
+    "threeDTiles": "3D Tiles…",
+    "urlPlaceholder": "https:// or http:// address of a .splat, .ply, .sog or .glb",
+    "load": "Load",
+    "loading": "Loading…",
+    "browse": "Choose a file…",
+    "loaded": "Loaded objects",
+    "empty": "Nothing loaded yet.",
+    "longitude": "Longitude",
+    "latitude": "Latitude",
+    "altitude": "Altitude (m)",
+    "scale": "Scale",
+    "rotation": "Rotation (°)",
+    "apply": "Apply",
+    "remove": "Remove",
+    "errorUnsupported": "Not a format this plugin loads (.splat, .ply, .spz, .ksplat, .sog, .glb, .gltf).",
+    "errorHttpUnavailable": "Plain http:// addresses can only be read by the desktop app. Use https, or a local file.",
+    "errorPickerUnavailable": "Choosing a file is not available in this build.",
+    "errorLoadFailed": "The object could not be loaded.",
+    "errorRendererUnavailable": "The 3D object renderer could not be loaded."
   }
 }

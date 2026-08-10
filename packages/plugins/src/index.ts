@@ -532,6 +532,23 @@ export {
   DEFAULT_KMA_LABELS,
   type KmaLabels,
 } from "./plugins/maplibre-kma";
+export {
+  geoim3dObjectsPlugin,
+  GEOIM3D_OBJECTS_PLUGIN_ID,
+  setGeoim3dObjectLabels,
+  setObjectFetcher,
+  setLocalObjectPicker,
+  objectKind,
+  objectName,
+  needsNativeFetch,
+  defaultRotation,
+  OBJECT_EXTENSIONS,
+  type Geoim3dObjectLabels,
+  type ObjectFetcher,
+  type LocalObjectPicker,
+  type PickedObject,
+  type ObjectKind,
+} from "./plugins/geoim3d-objects";
 // setKmaApiKey is the host's write-only injection point for the KMA service
 // key; as with VWorld there is deliberately no getter.
 export {

@@ -232,6 +232,7 @@ pub fn run() {
             read_admin_profile,
             read_env_vars,
             allow_raster_asset,
+            allow_object_asset,
             read_local_file,
             read_project_file,
             read_shapefile_siblings,
@@ -421,6 +422,40 @@ fn allow_raster_asset(app: tauri::AppHandle, path: String) -> Result<(), String>
     app.asset_protocol_scope()
         .allow_file(&path)
         .map_err(|error| format!("Could not authorize local raster: {error}"))
+}
+
+/// Extensions the 3D object plugin loads, lowercased and without the dot. Kept
+/// beside `OBJECT_EXTENSIONS` in `geoim3d-objects.ts`; the two are checked
+/// independently, so a format added there must be added here or the file
+/// dialog will offer something the asset scope then refuses.
+const OBJECT_ASSET_EXTENSIONS: [&str; 7] =
+    ["splat", "ply", "spz", "ksplat", "sog", "glb", "gltf"];
+
+/// Add one user-selected 3D object file to the asset-protocol scope, so the
+/// renderer can stream it from disk instead of being handed the whole file
+/// through IPC. Mirrors `allow_raster_asset`, including both of its guards: the
+/// path must be absolute and ordinary, and the user must already have chosen it
+/// through a dialog or a drop (which is what grants the filesystem scope). A
+/// splat can be hundreds of megabytes, which is exactly why this streams.
+#[tauri::command]
+fn allow_object_asset(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    let lower = path.to_ascii_lowercase();
+    let has_object_extension = OBJECT_ASSET_EXTENSIONS
+        .iter()
+        .any(|extension| lower.ends_with(&format!(".{extension}")));
+    if !is_safe_absolute_path(&path) || !has_object_extension {
+        return Err(format!(
+            "Refusing to expose \"{path}\": not an absolute 3D object path"
+        ));
+    }
+    if !app.fs_scope().is_allowed(&path) {
+        return Err(format!(
+            "Refusing to expose \"{path}\": the file was not selected or dropped by the user"
+        ));
+    }
+    app.asset_protocol_scope()
+        .allow_file(&path)
+        .map_err(|error| format!("Could not authorize local 3D object: {error}"))
 }
 
 /// Shapefile sidecar extensions read alongside a `.shp` (lowercased, no dot).

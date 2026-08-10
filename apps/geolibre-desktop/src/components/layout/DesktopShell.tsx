@@ -30,6 +30,8 @@ import {
   setBookmarkLabels,
   setLocalRasterFileReader,
   setLocalRasterPicker,
+  setLocalObjectPicker,
+  setObjectFetcher,
   setNonTiledRasterHandler,
   setTerrainMeasureLabels,
   setViewStateLabels,
@@ -70,6 +72,7 @@ import {
   type DroppedRaster,
 } from "../../lib/tauri-io";
 import { buildKmlModelLayer } from "../../lib/kml-model-layer";
+import { fetchObjectAsBlobUrl, pickLocalObjects } from "../../lib/object-source";
 import { isPhotoDropFileName, type GeotaggedPhotoResult } from "../../lib/geotagged-photos";
 import type { LargeVectorDataset } from "../../lib/duckdb-vector-guard";
 import { PANEL_RESIZE_END_EVENT, PANEL_RESIZE_START_EVENT } from "../../lib/panel-resize";
@@ -955,6 +958,20 @@ export function DesktopShell({
     return () => {
       setLocalRasterFileReader(null);
       setLocalRasterPicker(null);
+    };
+  }, []);
+
+  // The 3D object plugin's two shells. The file picker registers everywhere —
+  // it falls back to a file input in the browser — but the native fetcher only
+  // on the desktop: it exists to read plain-http:// URLs the webview's CSP
+  // refuses, and a browser's mixed-content rule is not ours to lift. Left
+  // unregistered, the panel says so instead of failing at load time.
+  useEffect(() => {
+    setLocalObjectPicker(pickLocalObjects);
+    if (isTauri()) setObjectFetcher(fetchObjectAsBlobUrl);
+    return () => {
+      setLocalObjectPicker(null);
+      setObjectFetcher(null);
     };
   }, []);
 
@@ -2009,57 +2026,60 @@ export function DesktopShell({
                   and the Cesium globe. All of it lives in PrimaryGlobeSwitch —
                   this file only gains the wrapper. */}
               <PrimaryGlobeSwitch>
-              <MapCanvas
-                controllerRef={mapControllerRef}
-                onMapDiagnosticEvent={handleMapDiagnosticEvent}
-                onControllerReady={handleMapControllerReady}
-              />
-              <RemoteCursorsOverlay mapControllerRef={mapControllerRef} />
-              <MapContextMenu
-                mapControllerRef={mapControllerRef}
-                mapReadyGeneration={mapReadyGeneration}
-                onExplorePlace={handleExplorePlace}
-              />
-              <KnowledgeCardPanel
-                place={knowledgePlace}
-                lang={wikipediaLang(i18n.language)}
-                onClose={() => setKnowledgePlace(null)}
-                onFlyTo={handleKnowledgeFlyTo}
-              />
-              <BoundsRestrictionIndicator />
-              {/* Isolate the collaboration badge in its own boundary: it renders
+                <MapCanvas
+                  controllerRef={mapControllerRef}
+                  onMapDiagnosticEvent={handleMapDiagnosticEvent}
+                  onControllerReady={handleMapControllerReady}
+                />
+                <RemoteCursorsOverlay mapControllerRef={mapControllerRef} />
+                <MapContextMenu
+                  mapControllerRef={mapControllerRef}
+                  mapReadyGeneration={mapReadyGeneration}
+                  onExplorePlace={handleExplorePlace}
+                />
+                <KnowledgeCardPanel
+                  place={knowledgePlace}
+                  lang={wikipediaLang(i18n.language)}
+                  onClose={() => setKnowledgePlace(null)}
+                  onFlyTo={handleKnowledgeFlyTo}
+                />
+                <BoundsRestrictionIndicator />
+                {/* Isolate the collaboration badge in its own boundary: it renders
                   over the map, so a fault here must never take down the map
                   itself (it shares this subtree's error boundary otherwise). */}
-              <SilentErrorBoundary label="Collaboration status">
-                <CollaborationStatusBadge api={collaboration} mapControllerRef={mapControllerRef} />
-              </SilentErrorBoundary>
-              <MapModeBanner mapControllerRef={mapControllerRef} />
-              <PixelTimeSeriesControl mapControllerRef={mapControllerRef} />
-              <MapLegendPanel
-                mapControllerRef={mapControllerRef}
-                mapReadyGeneration={mapReadyGeneration}
-              />
-              <RasterSubsetPanel
-                layer={rasterSubsetLayer}
-                onClose={() => setRasterSubsetLayer(null)}
-                mapControllerRef={mapControllerRef}
-              />
-              <BasemapExtractPanel
-                open={basemapExtractOpen}
-                onClose={() => setBasemapExtractOpen(false)}
-                mapControllerRef={mapControllerRef}
-              />
-              <Suspense fallback={null}>
-                <StyleManagerPanel />
-              </Suspense>
-              <Suspense fallback={null}>
-                <ObjectDetectionDialog mapControllerRef={mapControllerRef} />
-              </Suspense>
-              <Suspense fallback={null}>
-                <SegmentEverythingPanel mapControllerRef={mapControllerRef} />
-              </Suspense>
-              <TerrainSettingsDialog mapControllerRef={mapControllerRef} />
-              <StoryMapComposeBar mapControllerRef={mapControllerRef} />
+                <SilentErrorBoundary label="Collaboration status">
+                  <CollaborationStatusBadge
+                    api={collaboration}
+                    mapControllerRef={mapControllerRef}
+                  />
+                </SilentErrorBoundary>
+                <MapModeBanner mapControllerRef={mapControllerRef} />
+                <PixelTimeSeriesControl mapControllerRef={mapControllerRef} />
+                <MapLegendPanel
+                  mapControllerRef={mapControllerRef}
+                  mapReadyGeneration={mapReadyGeneration}
+                />
+                <RasterSubsetPanel
+                  layer={rasterSubsetLayer}
+                  onClose={() => setRasterSubsetLayer(null)}
+                  mapControllerRef={mapControllerRef}
+                />
+                <BasemapExtractPanel
+                  open={basemapExtractOpen}
+                  onClose={() => setBasemapExtractOpen(false)}
+                  mapControllerRef={mapControllerRef}
+                />
+                <Suspense fallback={null}>
+                  <StyleManagerPanel />
+                </Suspense>
+                <Suspense fallback={null}>
+                  <ObjectDetectionDialog mapControllerRef={mapControllerRef} />
+                </Suspense>
+                <Suspense fallback={null}>
+                  <SegmentEverythingPanel mapControllerRef={mapControllerRef} />
+                </Suspense>
+                <TerrainSettingsDialog mapControllerRef={mapControllerRef} />
+                <StoryMapComposeBar mapControllerRef={mapControllerRef} />
               </PrimaryGlobeSwitch>
             </MapGrid>
           </SectionErrorBoundary>

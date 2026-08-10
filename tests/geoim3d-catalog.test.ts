@@ -35,6 +35,7 @@ function leaves(node: Record<string, unknown>, prefix = ""): Record<string, unkn
 const INTENTIONALLY_IDENTICAL = new Set([
   "primaryGlobe.maplibre", // "OSM"
   "primaryGlobe.cesium", // "Cesium"
+  "objects.threeDTiles", // "3D Tiles…" — the format's name, as VWorld's is
 ]);
 
 const UPSTREAM = "../apps/geolibre-desktop/src/i18n/locales";
