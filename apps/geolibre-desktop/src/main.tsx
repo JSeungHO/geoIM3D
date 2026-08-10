@@ -1,6 +1,16 @@
 import "./lib/symbol-dispose-polyfill";
 import React from "react";
 import ReactDOM from "react-dom/client";
+/* App typeface — see the --font-sans/--font-mono note in index.css.
+   These must be imported from JS, not via `@import` in index.css: Tailwind v4
+   resolves CSS @imports itself and inlines them before Vite sees them, so the
+   relative `url(./files/*.woff2)` in fontsource's CSS is never rewritten into
+   an asset reference and no font file is emitted into dist/. The result builds
+   clean and 404s at runtime, silently falling back to system fonts. Importing
+   from JS routes the CSS through Vite's asset pipeline instead. */
+import "@fontsource-variable/ibm-plex-sans/wght.css";
+import "@fontsource/ibm-plex-mono/400.css";
+import "@fontsource/ibm-plex-mono/700.css";
 import "@geoman-io/maplibre-geoman-free/dist/maplibre-geoman.css";
 import "@maplibre/maplibre-gl-directions/dist/style.css";
 import "maplibre-gl-3d-tiles/style.css";
@@ -75,6 +85,14 @@ if (isTauri()) {
       // On failure the share client stays on the browser fetch (the CORS-blocked
       // path this fixes); surface it rather than swallow the rejection.
       console.error("[GeoLibre] Failed to install native share fetch", error);
+    });
+  // GeoLens sends X-Api-Key, which preflights in a WebView. Keep the built-in
+  // datasets.geolibre.app connection working even when its CORS origin
+  // allowlist does not include the packaged desktop origin.
+  void import("./lib/geolens-fetch")
+    .then(({ installNativeGeoLensFetch }) => installNativeGeoLensFetch())
+    .catch((error: unknown) => {
+      console.error("[GeoLibre] Failed to install native GeoLens fetch", error);
     });
 }
 // Recover from chunks orphaned by a web redeploy (stale lazy import → 404). A

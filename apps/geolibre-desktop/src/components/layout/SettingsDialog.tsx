@@ -43,6 +43,7 @@ import {
   Check,
   Crosshair,
   DownloadCloud,
+  FolderOpen,
   ExternalLink,
   Eye,
   EyeOff,
@@ -52,6 +53,7 @@ import {
   Locate,
   MapPinned,
   LayoutPanelTop,
+  MessageSquare,
   Moon,
   Palette,
   PanelLeft,
@@ -81,15 +83,20 @@ import {
   type ExperienceLevel,
   type UiProfileSettings,
   type UpdateSettings,
+  type StartupSettings,
 } from "../../hooks/useDesktopSettings";
 import { ManagedCredentialsSection } from "../settings/ManagedCredentialsSection";
 import { useLanguage } from "../../hooks/useLanguage";
 import { BROWSER_PANEL_ID } from "../../hooks/useRegisterBrowserPanel";
+import { COMMENTS_PANEL_ID } from "../../hooks/useRegisterCommentsPanel";
 import { useRightPanelState } from "../../hooks/useRightPanels";
 import type { ThemeMode } from "../../hooks/useThemeMode";
 import { isTauri } from "../../lib/is-tauri";
 import { THEME_SCHEMES, normalizeHexColor, type ThemeScheme } from "../../lib/theme-schemes";
+import { IS_MAS_BUILD } from "../../lib/build-flags";
+import { resolveShareHost, shareHostLabel } from "../../lib/share-geolibre";
 import { IS_STORE_BUILD, type UpdateNotificationLevel } from "../../lib/updates";
+import { openProjectFile } from "../../lib/tauri-io";
 import {
   DATA_SOURCE_CATALOG,
   DATA_SOURCE_SECTION_LABEL_KEYS,
@@ -127,7 +134,8 @@ export type SettingsSection =
   | "geocoding"
   | "ai"
   | "environment"
-  | "updates";
+  | "updates"
+  | "startup";
 
 /** A field a deep-link can ask Settings to focus once the section renders. */
 export type SettingsFocusTarget = "shareToken" | "accentColor";
@@ -202,6 +210,7 @@ const SECTION_ITEMS: Array<{
     labelKey: "settings.section.updates",
     icon: DownloadCloud,
   },
+  { id: "startup", labelKey: "settings.section.startup", icon: FolderOpen },
 ];
 
 // The menu-item id that gates each Settings section, mirroring the dropdown.
@@ -236,6 +245,7 @@ interface DraftDesktopSettings {
   defaultAiProfileId: string | null;
   uiProfile: UiProfileSettings;
   updates: UpdateSettings;
+  startup: StartupSettings;
 }
 
 function createDraftId(): string {
@@ -276,6 +286,7 @@ function cloneDesktopSettings(settings: DesktopSettings): DraftDesktopSettings {
       hiddenMenuItems: [...settings.uiProfile.hiddenMenuItems],
     },
     updates: { ...settings.updates },
+    startup: { ...settings.startup },
   };
 }
 
@@ -376,6 +387,25 @@ export function SettingsDialog({
   onToggleThemeMode,
 }: SettingsDialogProps) {
   const { t } = useTranslation();
+  // The share host's settings page, where the API token below is created.
+  // Derived from the resolved host so a self-hosted deployment links to its own
+  // page; null when the deployment configured no share host, in which case the
+  // description renders without a link rather than pointing at a stranger's site.
+  const shareHostState = resolveShareHost();
+  const shareBaseUrl = shareHostState.baseUrl;
+  const shareHost = shareHostLabel();
+  const shareSettingsUrl = shareBaseUrl ? `${shareBaseUrl}/settings` : null;
+  // No usable host (sharing turned off, or a configured address that was
+  // rejected) means the token field is dead: it would authenticate against a
+  // server this deployment never talks to. Say so instead of rendering guidance
+  // that names the public hosted service — the whole point of the opt-out. The
+  // two unusable states get different copy: "not configured" would send an
+  // operator who typo'd the variable looking for one they never set.
+  const shareTokenUsable = shareBaseUrl != null;
+  const shareTokenUnavailableMessage =
+    shareHostState.status === "invalid"
+      ? t("settings.env.tokenHostInvalid")
+      : t("settings.env.tokenUnavailable");
   const { language, options: languageOptions, setLanguage } = useLanguage();
   const preferences = useAppStore((s) => s.preferences);
   const setPreferences = useAppStore((s) => s.setPreferences);
@@ -390,7 +420,9 @@ export function SettingsDialog({
   // The Browser is a dockable right panel (open/close via the registry), not a
   // persisted layout preference, so its Layout toggle acts on the live registry
   // state directly rather than through the draft settings.
-  const browserPanelOpen = useRightPanelState().activeId === BROWSER_PANEL_ID;
+  const rightPanelState = useRightPanelState();
+  const browserPanelOpen = rightPanelState.visibleIds.includes(BROWSER_PANEL_ID);
+  const commentsPanelOpen = rightPanelState.visibleIds.includes(COMMENTS_PANEL_ID);
   // Show it collapsed on the shared Layers rail, matching its default state, so
   // re-enabling from Settings doesn't jump to an expanded panel that buries the
   // Layers panel.
@@ -400,6 +432,16 @@ export function SettingsDialog({
       collapseRightPanel(BROWSER_PANEL_ID);
     } else {
       closeRightPanel(BROWSER_PANEL_ID);
+    }
+  };
+  // Collapsed for the same reason as Browser above, and to match the state
+  // Comments registers itself in on mount.
+  const toggleCommentsPanel = (show: boolean) => {
+    if (show) {
+      openRightPanel(COMMENTS_PANEL_ID);
+      collapseRightPanel(COMMENTS_PANEL_ID);
+    } else {
+      closeRightPanel(COMMENTS_PANEL_ID);
     }
   };
   // A field a deep-link asked us to focus once its section renders; cleared
@@ -430,6 +472,7 @@ export function SettingsDialog({
     // The Microsoft Store build has no in-app update flow to configure (policy
     // 10.2.5), so its settings section is dropped entirely.
     if (id === "updates" && IS_STORE_BUILD) return false;
+    if (id === "startup" && !isTauri()) return false;
     const gate = SECTION_GATE[id];
     return gate ? showSettingsItem(gate) : true;
   };
@@ -944,6 +987,29 @@ export function SettingsDialog({
     updateDraftUpdateSettings(DEFAULT_UPDATE_SETTINGS);
   };
 
+  const updateDraftStartupSettings = (patch: Partial<StartupSettings>) => {
+    setDraftDesktopSettings((current) => ({
+      ...current,
+      startup: { ...current.startup, ...patch },
+    }));
+    setError(null);
+  };
+
+  const chooseStartupProject = async () => {
+    try {
+      const result = await openProjectFile();
+      if (!result) return;
+      updateDraftStartupSettings({
+        mode: "specific",
+        projectPath: result.path,
+        projectName: result.project.name,
+      });
+    } catch (error) {
+      console.error("Could not select a startup project.", error);
+      setError(t("settings.startup.selectError"));
+    }
+  };
+
   // Live updates from the Settings dropdown's Interface submenu (not the draft,
   // which only the dialog commits on Save). Reads the latest state so rapid
   // toggles do not clobber each other.
@@ -1137,6 +1203,7 @@ export function SettingsDialog({
       defaultAiProfileId: draftDesktopSettings.defaultAiProfileId,
       uiProfile: committedUiProfile,
       updates: draftDesktopSettings.updates,
+      startup: draftDesktopSettings.startup,
     });
     setOpen(false);
   };
@@ -1263,6 +1330,13 @@ export function SettingsDialog({
                 onSelect={(event: Event) => event.preventDefault()}
               >
                 {t("settings.layout.showBrowserPanel")}
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={commentsPanelOpen}
+                onCheckedChange={(checked: boolean) => toggleCommentsPanel(checked === true)}
+                onSelect={(event: Event) => event.preventDefault()}
+              >
+                {t("settings.layout.showCommentsPanel")}
               </DropdownMenuCheckboxItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -1433,7 +1507,11 @@ export function SettingsDialog({
               {t("settings.menu.updates")}
             </DropdownMenuItem>
           )}
-          {showSettingsItem("settings.managePlugins") && (
+          {/* The Mac App Store build has no plugin marketplace (external
+              plugin installs are not allowed there), so its entry point is
+              dropped; composed with the profile gate like the Store build's
+              updates check. */}
+          {!IS_MAS_BUILD && showSettingsItem("settings.managePlugins") && (
             <DropdownMenuItem onSelect={() => onOpenManagePlugins()}>
               <Puzzle className="me-2 h-3.5 w-3.5" />
               {t("settings.menu.managePlugins")}
@@ -1456,11 +1534,11 @@ export function SettingsDialog({
             <DialogTitle>{t("settings.title")}</DialogTitle>
             <DialogDescription>{t("settings.description")}</DialogDescription>
           </DialogHeader>
-          <div className="grid min-h-0 grid-cols-1 md:grid-cols-[12rem_1fr]">
-            <nav className="flex gap-1 border-b p-3 md:flex-col md:border-b-0 md:border-e">
+          <div className="grid min-h-0 min-w-0 grid-cols-1 md:grid-cols-[12rem_1fr]">
+            <nav className="flex min-w-0 gap-1 overflow-x-auto border-b p-3 md:flex-col md:overflow-x-visible md:border-b-0 md:border-e">
               {SECTION_ITEMS.filter((item) => isSectionVisible(item.id)).map(renderSectionButton)}
             </nav>
-            <div className="min-h-0 overflow-y-auto p-6">
+            <div className="min-h-0 min-w-0 overflow-y-auto p-6">
               {effectiveSection === "map" ? (
                 <div className="space-y-5">
                   <div className="flex items-center justify-between gap-3">
@@ -1733,6 +1811,16 @@ export function SettingsDialog({
                       />
                       <FolderTree className="h-4 w-4 text-muted-foreground" />
                       <span>{t("settings.layout.showBrowserPanel")}</span>
+                    </label>
+                    <label className="flex items-center gap-3 rounded-md border p-3 text-sm">
+                      <input
+                        className="h-4 w-4"
+                        type="checkbox"
+                        checked={commentsPanelOpen}
+                        onChange={(event) => toggleCommentsPanel(event.target.checked)}
+                      />
+                      <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                      <span>{t("settings.layout.showCommentsPanel")}</span>
                     </label>
                   </div>
                   {showsAdvancedNotices(desktopSettings.uiProfile) ? (
@@ -2240,33 +2328,44 @@ export function SettingsDialog({
                 <div className="space-y-5">
                   <div className="space-y-2">
                     <h3 className="text-sm font-semibold">{t("settings.env.tokenTitle")}</h3>
-                    <p className="text-xs text-muted-foreground">
-                      <Trans
-                        i18nKey="settings.env.tokenDescription"
-                        components={{
-                          tokenLink: (
-                            <a
-                              className="underline"
-                              href="https://share.geolibre.app/settings"
-                              target="_blank"
-                              rel="noreferrer noopener"
-                            />
-                          ),
-                        }}
-                      />
-                    </p>
-                    <Input
-                      ref={shareTokenInputRef}
-                      aria-label={t("settings.env.tokenTitle")}
-                      type="password"
-                      autoComplete="new-password"
-                      placeholder={t("settings.env.tokenPlaceholder")}
-                      value={draftDesktopSettings.shareToken}
-                      onChange={(event) => updateShareToken(event.target.value)}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      {t("settings.env.tokenStorageNote")}
-                    </p>
+                    {shareTokenUsable ? (
+                      <>
+                        <p className="text-xs text-muted-foreground">
+                          <Trans
+                            i18nKey="settings.env.tokenDescription"
+                            values={{ shareHost }}
+                            components={{
+                              // Non-null here: this branch requires shareBaseUrl,
+                              // which is what shareSettingsUrl is derived from.
+                              tokenLink: (
+                                <a
+                                  className="underline"
+                                  href={shareSettingsUrl ?? undefined}
+                                  target="_blank"
+                                  rel="noreferrer noopener"
+                                />
+                              ),
+                            }}
+                          />
+                        </p>
+                        <Input
+                          ref={shareTokenInputRef}
+                          aria-label={t("settings.env.tokenTitle")}
+                          type="password"
+                          autoComplete="new-password"
+                          placeholder={t("settings.env.tokenPlaceholder")}
+                          value={draftDesktopSettings.shareToken}
+                          onChange={(event) => updateShareToken(event.target.value)}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          {t("settings.env.tokenStorageNote", { shareHost })}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        {shareTokenUnavailableMessage}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2 border-t pt-5">
                     <h3 className="text-sm font-semibold">{t("settings.env.cesiumTokenTitle")}</h3>
@@ -2408,6 +2507,64 @@ export function SettingsDialog({
                       })}
                     </div>
                   )}
+                </div>
+              ) : null}
+              {effectiveSection === "startup" ? (
+                <div className="space-y-5">
+                  <div>
+                    <h3 className="text-sm font-semibold">{t("settings.startup.title")}</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {t("settings.startup.description")}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    {(["default", "last"] as const).map((mode) => (
+                      <label
+                        key={mode}
+                        className="flex items-start gap-3 rounded-md border p-3 text-sm"
+                      >
+                        <input
+                          className="mt-0.5 h-4 w-4"
+                          type="radio"
+                          name="startup-project-mode"
+                          checked={draftDesktopSettings.startup.mode === mode}
+                          onChange={() => updateDraftStartupSettings({ mode })}
+                        />
+                        <span className="space-y-1">
+                          <span className="block">{t(`settings.startup.mode.${mode}`)}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {t(`settings.startup.modeHint.${mode}`)}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                    <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
+                      <input
+                        className="mt-0.5 h-4 w-4"
+                        type="radio"
+                        name="startup-project-mode"
+                        checked={draftDesktopSettings.startup.mode === "specific"}
+                        disabled={!draftDesktopSettings.startup.projectPath}
+                        onChange={() => updateDraftStartupSettings({ mode: "specific" })}
+                      />
+                      <span className="min-w-0 flex-1 space-y-1">
+                        <span className="block">{t("settings.startup.mode.specific")}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {draftDesktopSettings.startup.projectName ??
+                            t("settings.startup.noProjectSelected")}
+                        </span>
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void chooseStartupProject()}
+                      >
+                        <FolderOpen className="h-3.5 w-3.5" />
+                        {t("settings.startup.chooseProject")}
+                      </Button>
+                    </label>
+                  </div>
                 </div>
               ) : null}
               {effectiveSection === "updates" ? (

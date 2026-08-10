@@ -1,12 +1,13 @@
 {
   "name": "@geolibre/map",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./derived-geometry": "./src/derived-geometry.ts"
   },
   "dependencies": {
     "@geolibre/core": "*",
@@ -30,8 +31,8 @@
   },
   "devDependencies": {
     "@types/geojson": "^7946.0.16",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "typescript": "^7.0.2"
   },
   "peerDependencies": {

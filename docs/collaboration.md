@@ -115,9 +115,14 @@ via `ws.serializeAttachment()` (survives hibernation). Durable storage holds the
 in-memory / per-socket attachment. Server-side enforcement: a `snapshot` from a
 guest who cannot edit (session `view-only`, or a host-set per-participant
 view-only override) is dropped with an `error: forbidden`; `set-mode` and
-`set-participant-mode` require the host token. Oversized snapshots (> ~1 MiB, the
-Cloudflare frame cap) are rejected with `error: too-large`. An empty session is
-reclaimed after a TTL via a storage alarm.
+`set-participant-mode` require the host token. Oversized snapshots (> 10 MB by
+default) are rejected with `error: too-large`; the cap sits under Cloudflare's
+32 MiB ceiling on a received WebSocket message. Hosted snapshots are stored in
+chunks across rows of a SQLite table, because a Durable Object caps both a
+key/value entry and a single SQLite string at 2 MB — well under what portable
+GeoJSON from local files and external plugins needs. An empty session is
+reclaimed after a TTL via a storage alarm, which drops the chunks with the rest
+of the database.
 
 ## Frontend
 
@@ -202,6 +207,18 @@ unset, the hook is inert and all collaboration UI is hidden, so production build
 ship the feature dark. The Tauri CSP `connect-src` must list the wss host (the
 existing `https:` directive does **not** authorize `wss:`).
 
+In the Docker image the same setting is available at **container runtime** as
+`-e GEOLIBRE_COLLAB_URL=…`: the entrypoint validates it, writes it into
+`geolibre-runtime-config.js`, and `resolveCollabBaseUrl()` prefers that over the
+build-time variable — so a prebuilt image can be pointed at a self-hosted relay
+without a rebuild. A value that is not `wss://` (or `ws://` on loopback) fails the
+container boot rather than silently leaving collaboration dark. The entrypoint also
+substitutes the relay's origin into the nginx CSP's `connect-src`
+(`__GEOLIBRE_COLLAB_CONNECT_SRC__` in `docker/nginx.conf`), since that directive
+has no bare `wss:` — so unlike the desktop build below, the web/Docker path needs
+no manual CSP edit. See
+[Run with Docker](getting-started.md#self-hosted-sharing-and-collaboration-servers).
+
 > **Self-hosting note:** the desktop CSP pins `wss://collab.geolibre.app` (plus
 > `ws://localhost`/`127.0.0.1` for dev). Pointing the desktop build at a
 > different relay means updating `connect-src` in
@@ -211,7 +228,28 @@ existing `https:` directive does **not** authorize `wss:`).
 
 ## Deploying the relay (`collab.geolibre.app`)
 
-The relay deploys to Cloudflare Workers the same way as `workers/viewer`:
+Two hosts implement the same protocol and import the same permission/validation
+core:
+
+- `workers/collab` is the Cloudflare Durable Object used by the hosted service.
+- `workers/collab-node` is the self-hostable Node/SQLite relay. It is included
+  as `geolibre-collab` in the root `docker-compose.yml`; its persistent database
+  is mounted at `/data/collab.sqlite`. Configure `COLLAB_MAX_SNAPSHOT_BYTES`
+  (default 10,000,000) and `COLLAB_IDLE_TTL_MS` (default two hours) when needed.
+
+Both relay implementations accept `COLLAB_MAX_SNAPSHOT_BYTES` as a positive
+integer number of bytes. For the Cloudflare relay, set it as a Worker variable,
+for example:
+
+```toml
+[vars]
+COLLAB_MAX_SNAPSHOT_BYTES = "10000000"
+```
+
+The configured value must remain below the deployment platform's WebSocket
+message-size limit.
+
+The hosted relay deploys to Cloudflare Workers the same way as `workers/viewer`:
 
 - **CI:** `.github/workflows/deploy-collab.yml` deploys on any push to `main`
   that touches `workers/collab/**` (or via manual `workflow_dispatch`). It reuses
@@ -246,11 +284,13 @@ environment. Until that env var is set, the feature stays dark.
 
 Automated:
 
-- `npm run test:worker` typechecks `workers/collab`.
+- `npm run test:worker` typechecks both relays and runs the Node relay's socket
+  integration suite.
 - `npm run test:frontend` runs `tests/collab-protocol.test.ts` (protocol
   round-trip including the `set-participant-mode` / `chat` frames,
   `resolveCollabBaseUrl` validation, echo-suppression logic, and the
-  `participantCanEdit` effective-permission helper).
+  `participantCanEdit` effective-permission helper), plus the shared relay
+  conformance suite.
 
 ### Testing the full feature locally
 
@@ -258,11 +298,18 @@ Collaboration is dark until `VITE_GEOLIBRE_COLLAB_URL` points at a running
 relay, so local testing has two parts: run the relay, then run the app against
 it.
 
-1. **Start the relay** (the Durable Object) in one terminal:
+1. **Start a relay** in one terminal. For the Cloudflare implementation:
 
    ```bash
    cd workers/collab && npx wrangler dev --port 8787 --local
    # → Ready on http://localhost:8787
+   ```
+
+   Or run the self-hostable Node implementation:
+
+   ```bash
+   npm run build -w geolibre-collab-node
+   npm start -w geolibre-collab-node
    ```
 
 2. **Start the app pointing at that relay** in another terminal:

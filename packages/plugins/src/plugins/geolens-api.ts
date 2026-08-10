@@ -90,12 +90,11 @@ export interface GeoLensVectorTiles {
  * dataset renders anonymously; a private one renders when the browser carries a
  * GeoLens session cookie or embed token for the same origin.
  *
- * Known limitation: an API-key-only private raster cannot render, because
- * MapLibre issues the tile image requests and does not attach the `X-Api-Key`
- * header, and GeoLens does not (yet) return a URL-signed raster template the
- * way it does for vector tiles. Rendering those would need a signed raster URL
- * from GeoLens or an authenticated tile proxy — a server-side change beyond
- * this client. Public and session/embed-authorized rasters are unaffected.
+ * An API-key-only private raster also renders: MapLibre issues the tile image
+ * requests itself, so the key cannot ride along the way it does on this
+ * module's fetch calls, and `maplibre-geolens.ts` instead attaches `X-Api-Key`
+ * through MapLibre's `transformRequest` hook, scoped to exactly that raster's
+ * tile-URL prefix (see `registerRasterApiKey` there).
  */
 export interface GeoLensRasterTiles {
   /** Absolute `{z}/{x}/{y}.png` XYZ template. */
@@ -127,9 +126,52 @@ export type GeoLensFetch = (
   },
 ) => Promise<GeoLensHttpResponse>;
 
-/** The default transport: the platform `fetch`. */
-export const defaultGeoLensFetch: GeoLensFetch = (url, init) =>
+/** The platform `fetch`, narrowed to the subset of `Response` this client uses. */
+const platformGeoLensFetch: GeoLensFetch = (url, init) =>
   fetch(url, init) as unknown as Promise<GeoLensHttpResponse>;
+
+/**
+ * The active default transport.
+ *
+ * Browser builds keep the platform `fetch`. The desktop host may replace this
+ * with Tauri's native HTTP transport for the built-in GeoLens service, whose
+ * origin allowlist cannot reliably cover every WebView origin.
+ */
+let geoLensFetch: GeoLensFetch = platformGeoLensFetch;
+
+/** The default transport used by the plugin, resolved lazily for host overrides. */
+export const defaultGeoLensFetch: GeoLensFetch = (url, init) => geoLensFetch(url, init);
+
+/** Override the plugin's default transport (used by the desktop host and tests). */
+export function setGeoLensFetch(fetchImpl: GeoLensFetch): void {
+  geoLensFetch = fetchImpl;
+}
+
+/** Restore the platform-fetch transport (used to isolate tests). */
+export function resetGeoLensFetch(): void {
+  geoLensFetch = platformGeoLensFetch;
+}
+
+/**
+ * Route the given hosts through a special transport and leave every other
+ * GeoLens deployment on the fallback transport.
+ */
+export function createGeoLensHostFetch(
+  nativeHosts: Iterable<string>,
+  nativeFetch: GeoLensFetch,
+  fallbackFetch: GeoLensFetch = platformGeoLensFetch,
+): GeoLensFetch {
+  const hosts = new Set(nativeHosts);
+  return (url, init) => {
+    let host: string | null = null;
+    try {
+      host = new URL(url).host;
+    } catch {
+      // The client validates HTTP(S) URLs before calling its transport.
+    }
+    return (host && hosts.has(host) ? nativeFetch : fallbackFetch)(url, init);
+  };
+}
 
 /** Only http(s) URLs may ever reach the map or a token mint. */
 const HTTP_URL_RE = /^https?:\/\//i;

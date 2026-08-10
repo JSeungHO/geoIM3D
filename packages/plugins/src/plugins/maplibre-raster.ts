@@ -1,4 +1,4 @@
-import { styleValue, useAppStore } from "@geolibre/core";
+import { effectiveLayerRenderState, styleValue, useAppStore } from "@geolibre/core";
 import type { Layer } from "@deck.gl/core";
 import type {
   RasterControl,
@@ -17,6 +17,7 @@ import {
 import {
   isRasterControlStoreLayer,
   rememberLocalRasterPath,
+  rememberControlRasterRenderState,
   rendersNativeMapLibreLayer,
   resetRasterStoreSyncSuspension,
   runWithRasterStoreSyncSuspended,
@@ -31,6 +32,7 @@ import {
   disposeRasterClassification,
 } from "./raster-symbology-texture";
 import { disposeAllPaletteLegends, disposePaletteLegend } from "./raster-palette";
+import { isNonTiledRasterError } from "./non-tiled-raster-error";
 
 const rasterControlPosition: GeoLibreMapControlPosition = "top-left";
 const RASTER_PANEL_CLASS = "geolibre-raster-panel";
@@ -264,15 +266,6 @@ export function setLocalRasterPicker(picker: LocalRasterPicker | null): void {
   localRasterPicker = picker;
 }
 
-/** Whether a raster load error is the upstream "striped, not tiled" failure.
- * maplibre-gl-raster (re-verified against v0.12.0) rejects non-tiled GeoTIFFs with a message
- * containing "not tiled"; this is the only signal it exposes, so the match is
- * coupled to that wording. Re-verify it (and broaden if needed) when bumping the
- * dependency -- a reworded message degrades to the plain error, not a crash. */
-function isNonTiledRasterError(error: Error | null | undefined): boolean {
-  return error != null && /not tiled/i.test(error.message);
-}
-
 /**
  * Opens the maplibre-gl-raster panel, mounting the control on first use.
  * Replaces the former Add Raster Layer dialog: the panel loads COGs and
@@ -333,6 +326,8 @@ export async function addRasterToMap(
     state?: Partial<RasterLayerState>;
     /** Existing map style layer beneath which the raster is inserted. */
     beforeId?: string;
+    /** Whether to fit the map to the raster after loading. Defaults to true. */
+    zoomTo?: boolean;
   } = {},
 ): Promise<string> {
   const control = await ensureRasterControl(app);
@@ -350,7 +345,7 @@ export async function addRasterToMap(
   }
   const id = await control.addRaster(source, {
     name: options.name,
-    zoomTo: true,
+    zoomTo: options.zoomTo ?? true,
     // Safe to pass before the band count is known: the renderer applies a
     // colormap only in single-band mode and ignores it otherwise.
     ...(options.state || options.defaults?.colormap
@@ -571,6 +566,11 @@ export function restoreRasterLayers(app: GeoLibreAppAPI): void {
         if (!storeLayerIds.has(info.id)) control.removeRaster(info.id);
       }
 
+      // Built once here rather than handed to effectiveLayerRenderState as an
+      // array, which would rebuild it for every grouped raster in the loop.
+      const restoredGroups = new Map(
+        useAppStore.getState().layerGroups.map((group) => [group.id, group] as const),
+      );
       for (const layer of useAppStore.getState().layers) {
         if (!isRasterControlStoreLayer(layer)) continue;
         if (control.getRaster(layer.id)) continue;
@@ -593,6 +593,14 @@ export function restoreRasterLayers(app: GeoLibreAppAPI): void {
           continue;
         }
 
+        // A parent group's visibility/opacity never touch the child layer's
+        // own fields, so replay the folded values — otherwise a project saved
+        // with a hidden group reopens with its rasters painted on the map.
+        // Recorded so the first control event after the restore reads them as
+        // this replay's echo rather than as a control-side edit.
+        const effective = effectiveLayerRenderState(layer, restoredGroups);
+        rememberControlRasterRenderState(layer.id, effective);
+
         pending.push(
           control
             .addRaster(source, {
@@ -600,8 +608,8 @@ export function restoreRasterLayers(app: GeoLibreAppAPI): void {
               name: layer.name,
               state: {
                 ...savedRasterState(layer),
-                opacity: layer.opacity,
-                visible: layer.visible,
+                opacity: effective.opacity,
+                visible: effective.visible,
                 // The zoom range lives on layer.style (the shared Style-panel
                 // control), not in metadata.rasterState, so it is replayed here
                 // to survive a project reload / map reinitialisation.

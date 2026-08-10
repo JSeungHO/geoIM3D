@@ -45,7 +45,9 @@ import {
   type FileDialogFilter,
 } from "../../lib/tauri-io";
 import type { LargeVectorDataset } from "../../lib/duckdb-vector-guard";
+import { IS_MAS_BUILD } from "../../lib/build-flags";
 import { startGeoLibreSidecar } from "../../lib/sidecar";
+import { isRasterTooLargeForWasm, messageFromThrown } from "../../lib/wasm-error";
 import { beginProcessingRun, type ProcessingRunTracker } from "../../lib/processing-history";
 import i18n from "../../i18n";
 
@@ -276,7 +278,9 @@ const WASM_ONLY_KINDS: ReadonlySet<ConversionToolKind> = new Set(["raster-to-pmt
 /** Whether a tool runs client-side rather than through the Python sidecar. */
 function conversionUsesBrowserRuntime(kind: ConversionToolKind, desktop: boolean): boolean {
   if (WASM_ONLY_KINDS.has(kind)) return true;
-  return !desktop && WEB_RUNTIME_KINDS.has(kind);
+  // The Mac App Store build has no sidecar, so it routes like the web build:
+  // every kind with a client-side engine runs in the browser runtime.
+  return (!desktop || IS_MAS_BUILD) && WEB_RUNTIME_KINDS.has(kind);
 }
 
 // Vector output extensions no JS writer covers but geolibre-wasm's
@@ -614,14 +618,17 @@ export function ConversionDialog() {
       setRuntimeMessage(i18n.t(browserRuntimeMessageKey(kind)));
       return;
     }
-    if (!desktop) {
+    if (!desktop || IS_MAS_BUILD) {
       // No kind reaches this today — every ConversionToolKind now has a
       // client-side engine (see WEB_RUNTIME_KINDS/WASM_ONLY_KINDS), Vector to
       // PMTiles being the last to get one. It stays as the guard for any future
-      // sidecar-only conversion, so a pure web build says so outright instead of
+      // sidecar-only conversion, so a pure web build (or the Mac App Store
+      // build, which has no sidecar either) says so outright instead of
       // trying to reach a sidecar it cannot start.
       setRuntimeAvailable(false);
-      setRuntimeMessage(i18n.t("toolbar.conversion.needsDesktop"));
+      setRuntimeMessage(
+        IS_MAS_BUILD ? i18n.t("masBuild.unavailable") : i18n.t("toolbar.conversion.needsDesktop"),
+      );
       return;
     }
     setRuntimeAvailable(null);
@@ -861,8 +868,9 @@ export function ConversionDialog() {
         ]),
       );
     } catch (err) {
-      const detail =
-        err instanceof Error ? err.message : i18n.t("toolbar.conversion.convertFailed");
+      // The wasm engines reject with a bare string, so read the message off any
+      // thrown shape; `instanceof Error` alone would drop it (GeoLibre#1743).
+      const detail = messageFromThrown(err, i18n.t("toolbar.conversion.convertFailed"));
       setJob(browserConversionJob(toolId, "failed", [detail], detail));
     }
   };
@@ -916,8 +924,9 @@ export function ConversionDialog() {
         ]),
       );
     } catch (err) {
-      const detail =
-        err instanceof Error ? err.message : i18n.t("toolbar.conversion.convertFailed");
+      // The wasm engines reject with a bare string, so read the message off any
+      // thrown shape; `instanceof Error` alone would drop it (GeoLibre#1743).
+      const detail = messageFromThrown(err, i18n.t("toolbar.conversion.convertFailed"));
       setJob(browserConversionJob(toolId, "failed", [detail], detail));
     }
   };
@@ -958,6 +967,10 @@ export function ConversionDialog() {
         i18n.t("toolbar.conversion.convertingWithWasm", { name: mainFile.name }),
       ]),
     );
+    // Kept outside the try so a failure can still report the shape. The reason
+    // the browser engine refuses a raster is almost always how big it is, and
+    // the size is the one thing the message needs to be actionable.
+    let shape = "";
     try {
       const { convertGeoTiffToCog, readGeoTiffInfo } = await import("@geolibre/processing");
       const bytes = new Uint8Array(await mainFile.arrayBuffer());
@@ -967,6 +980,11 @@ export function ConversionDialog() {
       if (!info.ok) {
         throw new Error(i18n.t("toolbar.conversion.notAGeoTiff"));
       }
+      shape = i18n.t("toolbar.conversion.rasterShape", {
+        width: info.width,
+        height: info.height,
+        bands: info.bands,
+      });
       const data = await convertGeoTiffToCog(bytes, {
         compression: compression as CogWasmCompression,
       });
@@ -983,11 +1001,7 @@ export function ConversionDialog() {
       });
       setJob(
         browserConversionJob(toolId, "succeeded", [
-          i18n.t("toolbar.conversion.rasterShape", {
-            width: info.width,
-            height: info.height,
-            bands: info.bands,
-          }),
+          shape,
           i18n.t("toolbar.conversion.wroteCog", { compression }),
           savedName
             ? i18n.t("toolbar.conversion.savedFile", { name: savedName })
@@ -995,9 +1009,16 @@ export function ConversionDialog() {
         ]),
       );
     } catch (err) {
-      const detail =
-        err instanceof Error ? err.message : i18n.t("toolbar.conversion.convertFailed");
-      setJob(browserConversionJob(toolId, "failed", [detail], detail));
+      // The wasm engines reject with a bare string, so read the message off any
+      // thrown shape; `instanceof Error` alone would drop it (GeoLibre#1743).
+      const detail = messageFromThrown(err, i18n.t("toolbar.conversion.convertFailed"));
+      // The engine explains the size limit in its own terms (it names internal
+      // APIs); say what to do about it instead.
+      const lines = [shape, detail].filter(Boolean);
+      if (isRasterTooLargeForWasm(detail)) {
+        lines.push(i18n.t("toolbar.conversion.rasterTooLargeForBrowser"));
+      }
+      setJob(browserConversionJob(toolId, "failed", lines, detail));
     }
   };
 
@@ -1073,8 +1094,9 @@ export function ConversionDialog() {
         ]),
       );
     } catch (err) {
-      const detail =
-        err instanceof Error ? err.message : i18n.t("toolbar.conversion.convertFailed");
+      // The wasm engines reject with a bare string, so read the message off any
+      // thrown shape; `instanceof Error` alone would drop it (GeoLibre#1743).
+      const detail = messageFromThrown(err, i18n.t("toolbar.conversion.convertFailed"));
       setJob(browserConversionJob(toolId, "failed", [detail], detail));
     }
   };
@@ -1149,8 +1171,9 @@ export function ConversionDialog() {
         ]),
       );
     } catch (err) {
-      const detail =
-        err instanceof Error ? err.message : i18n.t("toolbar.conversion.convertFailed");
+      // The wasm engines reject with a bare string, so read the message off any
+      // thrown shape; `instanceof Error` alone would drop it (GeoLibre#1743).
+      const detail = messageFromThrown(err, i18n.t("toolbar.conversion.convertFailed"));
       setJob(browserConversionJob(toolId, "failed", [detail], detail));
     }
   };
@@ -1268,8 +1291,9 @@ export function ConversionDialog() {
         ]),
       );
     } catch (err) {
-      const detail =
-        err instanceof Error ? err.message : i18n.t("toolbar.conversion.convertFailed");
+      // The wasm engines reject with a bare string, so read the message off any
+      // thrown shape; `instanceof Error` alone would drop it (GeoLibre#1743).
+      const detail = messageFromThrown(err, i18n.t("toolbar.conversion.convertFailed"));
       setJob(browserConversionJob(toolId, "failed", [detail], detail));
     }
   };
@@ -1487,7 +1511,9 @@ export function ConversionDialog() {
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                 {runtimeMessage}
               </p>
-              {desktop && (
+              {/* No Start server in the Mac App Store build: the sidecar
+                  cannot be spawned there. */}
+              {desktop && !IS_MAS_BUILD && (
                 <Button
                   type="button"
                   variant="outline"
