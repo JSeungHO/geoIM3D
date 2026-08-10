@@ -26,7 +26,8 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { fetchOllamaModels, isOllamaModelInstalled } from "../../lib/assistant/ollama-models";
+import { isOllamaModelInstalled } from "../../lib/assistant/ollama-models";
+import { useOllamaModels } from "../../lib/assistant/use-ollama-models";
 
 // ── Locally-defined types to avoid circular import with SettingsDialog ──
 
@@ -90,37 +91,21 @@ export function AiSectionContent({
   /** Draft field values keyed by env var name for the new profile. */
   const [newProfileFieldValues, setNewProfileFieldValues] = useState<Record<string, string>>({});
 
-  // Same reasoning as the profile editor below: for a local Ollama server the
-  // installed models are knowable, so offer those rather than names the machine
-  // may not have. Empty until the server answers, then the list below prefers it.
-  const [newProfileOllamaModels, setNewProfileOllamaModels] = useState<string[]>([]);
-  const newProfileOllamaBaseUrl =
-    newProfileProvider === "ollama" ? (newProfileFieldValues.OLLAMA_BASE_URL ?? "") : "";
+  // geoIM3D: offer the models a local Ollama actually has, not the hardcoded
+  // suggestions it may never have pulled. See use-ollama-models.
+  const { models: newProfileModels, installed: newProfileOllamaModels } = useOllamaModels(
+    newProfileProvider,
+    newProfileFieldValues.OLLAMA_BASE_URL ?? "",
+    PROVIDER_MODELS[newProfileProvider],
+  );
   useEffect(() => {
-    if (newProfileProvider !== "ollama") {
-      setNewProfileOllamaModels([]);
-      return;
-    }
-    const controller = new AbortController();
-    void fetchOllamaModels(newProfileOllamaBaseUrl, controller.signal).then(
-      (names) => {
-        if (controller.signal.aborted) return;
-        setNewProfileOllamaModels(names);
-        // Preselect a model that exists, so a fresh profile is not created
-        // pointing at a suggestion the server has never heard of.
-        if (names.length > 0) setNewProfileModel((current) => (names.includes(current) ? current : names[0]));
-      },
-      () => {
-        // Unreachable; the suggestion list stands in.
-      },
+    // Preselect one that exists, so a fresh profile is not created pointing at
+    // a suggestion the server has never heard of.
+    if (newProfileOllamaModels.length === 0) return;
+    setNewProfileModel((current) =>
+      newProfileOllamaModels.includes(current) ? current : newProfileOllamaModels[0],
     );
-    return () => controller.abort();
-  }, [newProfileProvider, newProfileOllamaBaseUrl]);
-
-  const newProfileModels =
-    newProfileProvider === "ollama" && newProfileOllamaModels.length > 0
-      ? newProfileOllamaModels
-      : PROVIDER_MODELS[newProfileProvider];
+  }, [newProfileOllamaModels]);
 
   // Resolve which providers are configured from the effective env (from parent).
   // Re-derived here for internal status use.
@@ -284,7 +269,9 @@ export function AiSectionContent({
                 ))}
               </Select>
               {newProfileProvider === "ollama" && newProfileOllamaModels.length === 0 ? (
-                <p className="text-xs text-muted-foreground">{t("settings.ai.ollamaUnreachable")}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t("settings.ai.ollamaUnreachable")}
+                </p>
               ) : null}
             </div>
           ) : null}
@@ -485,36 +472,14 @@ function ProfileEditor({
   const hasOsEnvNote = providerFields.some((field) => osFieldEnvName(field) !== null);
   const docsUrl = PROVIDER_DOCS_URL[profile.provider];
 
-  // Ollama runs on the user's own machine, so its real model list is knowable —
-  // ask the server instead of offering the hardcoded suggestions, which name
-  // models this machine may never have pulled. Re-read when the base URL
-  // changes, since that is what decides which server answers.
-  const ollamaBaseUrl =
-    profile.provider === "ollama" ? (profile.fieldValues?.OLLAMA_BASE_URL ?? "") : "";
-  const [installedOllamaModels, setInstalledOllamaModels] = useState<string[]>([]);
-  useEffect(() => {
-    if (profile.provider !== "ollama") {
-      setInstalledOllamaModels([]);
-      return;
-    }
-    const controller = new AbortController();
-    void fetchOllamaModels(ollamaBaseUrl, controller.signal).then(
-      (names) => {
-        if (!controller.signal.aborted) setInstalledOllamaModels(names);
-      },
-      () => {
-        // Aborted or unreachable; the suggestion list stands in.
-      },
-    );
-    return () => controller.abort();
-  }, [profile.provider, ollamaBaseUrl]);
-
-  // Prefer what is installed; fall back to the suggestions when the server did
-  // not answer, so the field is never empty just because Ollama is stopped.
-  const models =
-    profile.provider === "ollama" && installedOllamaModels.length > 0
-      ? installedOllamaModels
-      : PROVIDER_MODELS[profile.provider];
+  // geoIM3D: see use-ollama-models. Falls back to the suggestions when the
+  // server did not answer, so the field is never empty just because Ollama is
+  // stopped.
+  const { models, installed: installedOllamaModels } = useOllamaModels(
+    profile.provider,
+    profile.fieldValues?.OLLAMA_BASE_URL ?? "",
+    PROVIDER_MODELS[profile.provider],
+  );
   const modelMissing =
     profile.provider === "ollama" &&
     !isOllamaModelInstalled(profile.modelId, installedOllamaModels);

@@ -38,6 +38,10 @@ import "./index.css";
 // geoIM3D styles, in their own sheet so index.css stays byte-identical to
 // upstream. Imported after it so equal-specificity rules win.
 import "./styles/geoim3d.css";
+// Hands this fork's strings to the plugins that show them. Lives here rather
+// than in TopToolbar (where upstream does its own) so that large upstream
+// component carries none of ours. Started after i18nReady, below.
+import { startGeoim3dLabelSync } from "./i18n/geoim3d-plugin-labels";
 import "./lib/basemap-style";
 import "./lib/geoagent-style";
 import "./lib/lidar-style";
@@ -146,6 +150,7 @@ void Promise.all([
   i18nReady,
 ])
   .then(([{ default: App }, { AppErrorBoundary }]) => {
+    startGeoim3dLabelSync();
     ReactDOM.createRoot(document.getElementById("root")!).render(
       <React.StrictMode>
         <I18nextProvider i18n={i18n}>
