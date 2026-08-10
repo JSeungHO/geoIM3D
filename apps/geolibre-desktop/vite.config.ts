@@ -383,9 +383,10 @@ function wmsProxyPlugin(): Plugin {
       });
       server.middlewares.use(KR_API_PROXY_PATH, async (req, res) => {
         try {
-          await proxyBinaryRequest(req, res, KR_API_PROXY_PATH);
+          await proxyBinaryRequestGuarded(req, res, KR_API_PROXY_PATH);
         } catch (error) {
-          const message = error instanceof Error ? error.message : "Korean public-data proxy request failed";
+          const message =
+            error instanceof Error ? error.message : "Korean public-data proxy request failed";
           res.statusCode = 502;
           res.setHeader("content-type", "text/plain");
           res.end(message);
