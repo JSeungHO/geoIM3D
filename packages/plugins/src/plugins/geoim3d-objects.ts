@@ -134,8 +134,8 @@ export type LocalObjectPicker = () => Promise<PickedObject[]>;
 export interface PrimaryViewBridge {
   /** True when the 2D map is hidden behind a globe. */
   isGlobeActive: () => boolean;
-  /** Brings the 2D map back. Returns false when it could not. */
-  showMapLibre: () => boolean;
+  /** Notifies on every change, so the menu can follow the tab. */
+  subscribe: (listener: () => void) => () => void;
 }
 
 let objectFetcher: ObjectFetcher | null = null;
@@ -148,8 +148,19 @@ let primaryViewBridge: PrimaryViewBridge | null = null;
  * @param bridge - The bridge, or null to unregister.
  */
 export function setPrimaryViewBridge(bridge: PrimaryViewBridge | null): void {
+  unsubscribePrimaryView?.();
   primaryViewBridge = bridge;
+  // The menu is offered only where the objects can be seen, so it has to be
+  // rebuilt whenever the view changes.
+  unsubscribePrimaryView =
+    bridge?.subscribe(() => {
+      if (state.app) buildToolbarMenu(state.app);
+      rerenderPanel();
+    }) ?? null;
+  if (state.app) buildToolbarMenu(state.app);
 }
+
+let unsubscribePrimaryView: (() => void) | null = null;
 
 /**
  * Registers (or clears) the native fetcher used for plain-HTTP URLs.
@@ -421,12 +432,11 @@ async function loadObject(
 
     readable = prepared ?? (await resolveReadableUrl(source));
 
-    // The renderer draws into the 2D map, which a globe view hides. Switch back
-    // first, or the object loads perfectly and shows nothing — and the map
-    // centre read below would be the hidden map's, not the one being looked at.
-    if (primaryViewBridge?.isGlobeActive() && !primaryViewBridge.showMapLibre()) {
-      setStatus(labels.errorGlobeActive);
-    }
+    // The renderer draws into the 2D map, which a globe view hides, and the
+    // centre read below would be that hidden map's rather than the view on
+    // screen. The menu is withdrawn while the globe is up, but the panel can
+    // still be open from before the switch, so refuse here too.
+    if (primaryViewBridge?.isGlobeActive()) throw new Error("globe-active");
 
     // Start where the user is looking. Without this an object with no
     // coordinates of its own lands at (0, 0), in the Atlantic.
@@ -475,6 +485,7 @@ function loadErrorMessage(error: unknown): string {
   const reason = error instanceof Error ? error.message : "";
   if (reason === "http-unavailable") return labels.errorHttpUnavailable;
   if (reason === "renderer-unavailable") return labels.errorRendererUnavailable;
+  if (reason === "globe-active") return labels.errorGlobeActive;
   return labels.errorLoadFailed;
 }
 
@@ -746,6 +757,11 @@ let unregisterMenu: (() => void) | null = null;
 
 function buildToolbarMenu(app: GeoLibreAppAPI): void {
   unregisterMenu?.();
+  unregisterMenu = null;
+  // Nothing here can be seen while the globe is up — the renderer is a MapLibre
+  // control and that map is hidden — so the menu is withdrawn rather than left
+  // offering actions whose result is invisible.
+  if (primaryViewBridge?.isGlobeActive()) return;
   unregisterMenu =
     app.registerToolbarMenu?.({
       id: MENU_ID,
@@ -815,6 +831,8 @@ export const geoim3dObjectsPlugin: GeoLibrePlugin = {
   },
 
   deactivate(app: GeoLibreAppAPI) {
+    unsubscribePrimaryView?.();
+    unsubscribePrimaryView = null;
     unregisterMenu?.();
     unregisterMenu = null;
     app.closeRightPanel?.(PANEL_ID);

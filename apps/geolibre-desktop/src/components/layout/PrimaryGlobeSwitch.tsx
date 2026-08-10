@@ -47,7 +47,7 @@ type PrimaryView = "maplibre" | "cesium";
  * bring the 2D view back so what it just loaded is visible.
  */
 let activeView: PrimaryView = "maplibre";
-let applyView: ((view: PrimaryView) => void) | null = null;
+const viewListeners = new Set<() => void>();
 
 /**
  * Whether the Cesium globe is the primary view right now.
@@ -59,14 +59,14 @@ export function isPrimaryGlobeActive(): boolean {
 }
 
 /**
- * Switches the primary view back to the 2D map.
+ * Subscribes to primary-view changes.
  *
- * @returns True when the switch could be made (the shell is mounted).
+ * @param listener - Called after the view changes.
+ * @returns An unsubscribe function.
  */
-export function showPrimaryMapLibreView(): boolean {
-  if (!applyView) return false;
-  applyView("maplibre");
-  return true;
+export function subscribePrimaryView(listener: () => void): () => void {
+  viewListeners.add(listener);
+  return () => viewListeners.delete(listener);
 }
 
 /**
@@ -107,13 +107,12 @@ export function PrimaryGlobeSwitch({ children }: PrimaryGlobeSwitchProps) {
   const [view, setView] = useState<PrimaryView>("maplibre");
 
   // Publish the tab state for callers outside React (see the module notes).
+  // Notified from an effect rather than during render: a listener that rebuilds
+  // a toolbar menu must not run while this component is still rendering.
   activeView = view;
   useEffect(() => {
-    applyView = setView;
-    return () => {
-      applyView = null;
-    };
-  }, []);
+    for (const listener of [...viewListeners]) listener();
+  }, [view]);
 
   // The globe does not need a token. `CesiumCanvas` falls back to keyless
   // OpenStreetMap imagery without one, so the tab is always available; a token

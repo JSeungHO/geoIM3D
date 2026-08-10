@@ -88,7 +88,7 @@ import {
 } from "../../lib/tauri-io";
 import { buildKmlModelLayer } from "../../lib/kml-model-layer";
 import { fetchObjectAsBlobUrl, pickLocalObjects } from "../../lib/object-source";
-import { isPrimaryGlobeActive, showPrimaryMapLibreView } from "./PrimaryGlobeSwitch";
+import { isPrimaryGlobeActive, subscribePrimaryView } from "./PrimaryGlobeSwitch";
 import { isPhotoDropFileName, type GeotaggedPhotoResult } from "../../lib/geotagged-photos";
 import type { LargeVectorDataset } from "../../lib/duckdb-vector-guard";
 import { detectNonGeographicCoordinates } from "@geolibre/core";
@@ -1102,11 +1102,11 @@ export function DesktopShell({
     setLocalObjectPicker(pickLocalObjects);
     if (isTauri()) setObjectFetcher(fetchObjectAsBlobUrl);
     // The objects are drawn by a MapLibre control, so they are invisible while
-    // the globe tab is up. This lets the plugin bring the 2D map back rather
-    // than load something the user cannot see.
+    // the globe tab is up. This lets the plugin withdraw its menu there rather
+    // than offer actions whose result cannot be seen.
     setPrimaryViewBridge({
       isGlobeActive: isPrimaryGlobeActive,
-      showMapLibre: showPrimaryMapLibreView,
+      subscribe: subscribePrimaryView,
     });
     return () => {
       setLocalObjectPicker(null);
