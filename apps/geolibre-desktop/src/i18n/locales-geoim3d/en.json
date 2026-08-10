@@ -267,6 +267,7 @@
     "errorHttpUnavailable": "Plain http:// addresses can only be read by the desktop app. Use https, or a local file.",
     "errorPickerUnavailable": "Choosing a file is not available in this build.",
     "errorLoadFailed": "The object could not be loaded.",
-    "errorRendererUnavailable": "The 3D object renderer could not be loaded."
+    "errorRendererUnavailable": "The 3D object renderer could not be loaded.",
+    "errorGlobeActive": "3D objects are drawn on the 2D map. Switch the view above the map from Cesium to OSM to see them."
   }
 }

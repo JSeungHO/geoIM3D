@@ -623,6 +623,7 @@ export {
   setGeoim3dObjectLabels,
   setObjectFetcher,
   setLocalObjectPicker,
+  setPrimaryViewBridge,
   objectKind,
   objectName,
   needsNativeFetch,
@@ -632,6 +633,7 @@ export {
   type ObjectFetcher,
   type LocalObjectPicker,
   type PickedObject,
+  type PrimaryViewBridge,
   type ObjectKind,
 } from "./plugins/geoim3d-objects";
 // setKmaApiKey is the host's write-only injection point for the KMA service

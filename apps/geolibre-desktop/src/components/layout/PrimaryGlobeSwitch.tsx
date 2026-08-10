@@ -38,6 +38,38 @@ const PRIMARY_GLOBE_VIEW_ID = "geolibre-primary-globe";
 type PrimaryView = "maplibre" | "cesium";
 
 /**
+ * The live tab state, reachable without React.
+ *
+ * The 3D object plugin renders through `maplibre-gl-splat`, a MapLibre control,
+ * so its objects are drawn into the 2D map — which this component hides while
+ * the globe is showing. Loading one from the Cesium tab therefore looked like
+ * nothing happened at all. The plugin asks here instead of guessing, and can
+ * bring the 2D view back so what it just loaded is visible.
+ */
+let activeView: PrimaryView = "maplibre";
+let applyView: ((view: PrimaryView) => void) | null = null;
+
+/**
+ * Whether the Cesium globe is the primary view right now.
+ *
+ * @returns True when the 2D map is hidden behind the globe.
+ */
+export function isPrimaryGlobeActive(): boolean {
+  return activeView === "cesium";
+}
+
+/**
+ * Switches the primary view back to the 2D map.
+ *
+ * @returns True when the switch could be made (the shell is mounted).
+ */
+export function showPrimaryMapLibreView(): boolean {
+  if (!applyView) return false;
+  applyView("maplibre");
+  return true;
+}
+
+/**
  * The current Cesium Ion token, re-resolved when the runtime environment
  * changes.
  *
@@ -73,6 +105,15 @@ export function PrimaryGlobeSwitch({ children }: PrimaryGlobeSwitchProps) {
   const { t } = useTranslation();
   const token = useCesiumIonToken();
   const [view, setView] = useState<PrimaryView>("maplibre");
+
+  // Publish the tab state for callers outside React (see the module notes).
+  activeView = view;
+  useEffect(() => {
+    applyView = setView;
+    return () => {
+      applyView = null;
+    };
+  }, []);
 
   // The globe does not need a token. `CesiumCanvas` falls back to keyless
   // OpenStreetMap imagery without one, so the tab is always available; a token

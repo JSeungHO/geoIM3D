@@ -119,6 +119,7 @@ function pushLabels(t: Translate): void {
     errorPickerUnavailable: t("objects.errorPickerUnavailable"),
     errorLoadFailed: t("objects.errorLoadFailed"),
     errorRendererUnavailable: t("objects.errorRendererUnavailable"),
+    errorGlobeActive: t("objects.errorGlobeActive"),
   });
   setKmaLabels({
     title: t("kma.title"),

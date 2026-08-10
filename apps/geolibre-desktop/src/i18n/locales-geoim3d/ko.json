@@ -267,6 +267,7 @@
     "errorHttpUnavailable": "평문 http:// 주소는 데스크톱 앱에서만 읽을 수 있습니다. https를 쓰거나 로컬 파일을 선택하세요.",
     "errorPickerUnavailable": "이 환경에서는 파일 선택을 쓸 수 없습니다.",
     "errorLoadFailed": "객체를 불러오지 못했습니다.",
-    "errorRendererUnavailable": "3D 객체 렌더러를 불러오지 못했습니다."
+    "errorRendererUnavailable": "3D 객체 렌더러를 불러오지 못했습니다.",
+    "errorGlobeActive": "3D 객체는 2D 지도에 그려집니다. 지도 위의 탭을 Cesium에서 OSM으로 바꾸면 보입니다."
   }
 }

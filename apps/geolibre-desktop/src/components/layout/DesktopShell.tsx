@@ -35,6 +35,7 @@ import {
   setLocalRasterFileReader,
   setLocalRasterPicker,
   setLocalObjectPicker,
+  setPrimaryViewBridge,
   setObjectFetcher,
   setNonTiledRasterHandler,
   setKmlFileImportHandler,
@@ -87,6 +88,7 @@ import {
 } from "../../lib/tauri-io";
 import { buildKmlModelLayer } from "../../lib/kml-model-layer";
 import { fetchObjectAsBlobUrl, pickLocalObjects } from "../../lib/object-source";
+import { isPrimaryGlobeActive, showPrimaryMapLibreView } from "./PrimaryGlobeSwitch";
 import { isPhotoDropFileName, type GeotaggedPhotoResult } from "../../lib/geotagged-photos";
 import type { LargeVectorDataset } from "../../lib/duckdb-vector-guard";
 import { detectNonGeographicCoordinates } from "@geolibre/core";
@@ -1099,9 +1101,17 @@ export function DesktopShell({
   useEffect(() => {
     setLocalObjectPicker(pickLocalObjects);
     if (isTauri()) setObjectFetcher(fetchObjectAsBlobUrl);
+    // The objects are drawn by a MapLibre control, so they are invisible while
+    // the globe tab is up. This lets the plugin bring the 2D map back rather
+    // than load something the user cannot see.
+    setPrimaryViewBridge({
+      isGlobeActive: isPrimaryGlobeActive,
+      showMapLibre: showPrimaryMapLibreView,
+    });
     return () => {
       setLocalObjectPicker(null);
       setObjectFetcher(null);
+      setPrimaryViewBridge(null);
     };
   }, []);
 
@@ -2401,7 +2411,10 @@ export function DesktopShell({
                     over the map, so a fault here must never take down the map
                     itself (it shares this subtree's error boundary otherwise). */}
                 <SilentErrorBoundary label="Collaboration status">
-                  <CollaborationStatusBadge api={collaboration} mapControllerRef={mapControllerRef} />
+                  <CollaborationStatusBadge
+                    api={collaboration}
+                    mapControllerRef={mapControllerRef}
+                  />
                 </SilentErrorBoundary>
                 <MapModeBanner mapControllerRef={mapControllerRef} />
                 <QuickAnalysisBanner />

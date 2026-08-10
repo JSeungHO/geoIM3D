@@ -123,8 +123,33 @@ export interface PickedObject {
 /** Opens a file dialog and resolves what the user chose (empty when cancelled). */
 export type LocalObjectPicker = () => Promise<PickedObject[]>;
 
+/**
+ * How the host reports and changes which renderer the primary map is showing.
+ *
+ * Objects are drawn by `maplibre-gl-splat`, a MapLibre control, so they land in
+ * the 2D map. A host that can show a globe instead hides that map — and an
+ * object loaded from there is loaded correctly and completely invisible, which
+ * reads as "the file did not load".
+ */
+export interface PrimaryViewBridge {
+  /** True when the 2D map is hidden behind a globe. */
+  isGlobeActive: () => boolean;
+  /** Brings the 2D map back. Returns false when it could not. */
+  showMapLibre: () => boolean;
+}
+
 let objectFetcher: ObjectFetcher | null = null;
 let localObjectPicker: LocalObjectPicker | null = null;
+let primaryViewBridge: PrimaryViewBridge | null = null;
+
+/**
+ * Registers (or clears) the host's primary-view bridge.
+ *
+ * @param bridge - The bridge, or null to unregister.
+ */
+export function setPrimaryViewBridge(bridge: PrimaryViewBridge | null): void {
+  primaryViewBridge = bridge;
+}
 
 /**
  * Registers (or clears) the native fetcher used for plain-HTTP URLs.
@@ -196,6 +221,8 @@ export interface Geoim3dObjectLabels {
   errorPickerUnavailable: string;
   errorLoadFailed: string;
   errorRendererUnavailable: string;
+  /** Shown when the globe is up and the 2D map could not be brought back. */
+  errorGlobeActive: string;
 }
 
 let labels: Geoim3dObjectLabels = {
@@ -226,6 +253,8 @@ let labels: Geoim3dObjectLabels = {
   errorPickerUnavailable: "Choosing a file is not available in this build.",
   errorLoadFailed: "The object could not be loaded.",
   errorRendererUnavailable: "The 3D object renderer could not be loaded.",
+  errorGlobeActive:
+    "3D objects are drawn on the 2D map. Switch the view above the map from Cesium to OSM to see them.",
 };
 
 /**
@@ -391,6 +420,14 @@ async function loadObject(
     if (!control) throw new Error("renderer-unavailable");
 
     readable = prepared ?? (await resolveReadableUrl(source));
+
+    // The renderer draws into the 2D map, which a globe view hides. Switch back
+    // first, or the object loads perfectly and shows nothing — and the map
+    // centre read below would be the hidden map's, not the one being looked at.
+    if (primaryViewBridge?.isGlobeActive() && !primaryViewBridge.showMapLibre()) {
+      setStatus(labels.errorGlobeActive);
+    }
+
     // Start where the user is looking. Without this an object with no
     // coordinates of its own lands at (0, 0), in the Atlantic.
     const center = app.getMap?.()?.getCenter();
