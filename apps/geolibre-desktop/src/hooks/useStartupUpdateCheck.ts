@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { GEOIM3D_UPDATES_ENABLED } from "../components/about/Geoim3dAboutSection";
 import { isTauri } from "../lib/is-tauri";
 import {
   UPDATE_DISMISSED_VERSION_STORAGE_KEY,
@@ -82,6 +83,11 @@ export function useStartupUpdateCheck() {
   const [pending, setPending] = useState<PendingUpdate | null>(null);
 
   useEffect(() => {
+    // geoIM3D: the releases this would fetch are GeoLibre's, so the prompt
+    // would offer a download that is not this product. Off until geoIM3D has
+    // a release feed of its own (see GEOIM3D_UPDATES_ENABLED).
+    if (!GEOIM3D_UPDATES_ENABLED) return;
+
     // Automated startup checks are a desktop-only feature; the web build
     // refreshes to the latest version on reload and needs no prompt.
     if (!isTauri()) return;

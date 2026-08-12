@@ -20,7 +20,12 @@ import {
   UPDATE_URL,
   UpdateCheckError,
 } from "../../lib/updates";
-import { Geoim3dAboutSection, GEOIM3D_NAME, GEOIM3D_VERSION } from "../about/Geoim3dAboutSection";
+import {
+  Geoim3dAboutSection,
+  GEOIM3D_NAME,
+  GEOIM3D_UPDATES_ENABLED,
+  GEOIM3D_VERSION,
+} from "../about/Geoim3dAboutSection";
 import { ReleaseNotes } from "./ReleaseNotes";
 import { UpdateInstructions } from "./UpdateInstructions";
 
@@ -190,9 +195,10 @@ export function AboutDialog({
               {GEOIM3D_NAME} {GEOIM3D_VERSION}
             </span>
           </div>
+          <Geoim3dAboutSection />
           {/* The Microsoft Store build omits the entire in-app update flow
               so the app updates only through the Store (policy 10.2.5). */}
-          {!IS_STORE_BUILD && (
+          {!IS_STORE_BUILD && GEOIM3D_UPDATES_ENABLED && (
             <>
               <Button
                 className="w-full justify-between"
@@ -287,7 +293,6 @@ export function AboutDialog({
               ) : null}
             </>
           )}
-          <Geoim3dAboutSection />
           <div className="space-y-2 border-t pt-3">
             <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {t("about.generalSectionTitle")}

@@ -23,6 +23,20 @@ export const GEOIM3D_VERSION = "1.0.0";
 export const GEOIM3D_NAME = "geoIM3D";
 
 /**
+ * Whether the in-app update check is offered.
+ *
+ * Off: the check reads GeoLibre's GitHub releases, which say nothing about
+ * which geoIM3D a user is running and point at installers that are not this
+ * product. geoIM3D has no release feed of its own yet, so the honest thing is
+ * to offer nothing rather than a button that reports someone else's versions.
+ *
+ * To turn it back on, publish geoIM3D releases, point `LATEST_RELEASE_URL` and
+ * `UPDATE_URL` in `lib/updates.ts` at them, compare against
+ * {@link GEOIM3D_VERSION} rather than `APP_VERSION`, and set this to true.
+ */
+export const GEOIM3D_UPDATES_ENABLED = false;
+
+/**
  * Renders the copyright and the upstream attribution.
  *
  * @returns The licence section.

@@ -1678,6 +1678,8 @@ export function TopToolbar({
             icon: RefreshCw,
             run: () => {
               setAboutOpen(true);
+              // geoIM3D: no-op while the update check is hidden (see
+              // GEOIM3D_UPDATES_ENABLED); the dialog still opens.
               setCheckForUpdatesRequest((value) => value + 1);
             },
           },
