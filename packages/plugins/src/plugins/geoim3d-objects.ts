@@ -27,6 +27,7 @@
  * points at the existing 3D Tiles panel instead.
  */
 
+import { DEFAULT_LAYER_STYLE, useAppStore, type GeoLibreLayer } from "@geolibre/core";
 import type { GeoLibreAppAPI, GeoLibrePlugin } from "../types";
 import { openThreeDTilesLayerPanel } from "./maplibre-3d-tiles";
 
@@ -295,12 +296,21 @@ export interface ObjectTransform {
 }
 
 interface LoadedObject {
+  /**
+   * This object's id in the layer list. Stable for the object's whole life:
+   * the loader mints a new id on every reload, and letting that reach the store
+   * would make an Apply look like a delete and a re-add — the layer would jump
+   * to the bottom of the list each time a value changed.
+   */
+  layerId: string;
   /** The loader's own id, which changes on every reload. */
   loaderId: string;
   name: string;
   kind: ObjectKind;
   /** What the loader is actually reading: the original URL, or a blob of it. */
   readableUrl: string;
+  /** The URL or path the user gave, kept for the layer record and for reloads. */
+  source: string;
   /** True when `readableUrl` must be revoked once the object is gone. */
   revocable: boolean;
   transform: ObjectTransform;
@@ -311,6 +321,8 @@ interface PanelState {
   container: HTMLElement | null;
   /** The `maplibre-gl-splat` control, which does the actual rendering. */
   control: SplatControlLike | null;
+  /** Drives visibility/opacity from the layer list. Null until the first load. */
+  adapter: SplatAdapterLike | null;
   objects: LoadedObject[];
   urlDraft: string;
   busy: boolean;
@@ -321,6 +333,7 @@ const state: PanelState = {
   app: null,
   container: null,
   control: null,
+  adapter: null,
   objects: [],
   urlDraft: "",
   busy: false,
@@ -348,6 +361,97 @@ interface SplatControlLike {
   collapse(): void;
 }
 
+/** The adapter's visibility/opacity surface, keyed by the loader's own ids. */
+interface SplatAdapterLike {
+  setVisibility(layerId: string, visible: boolean): void;
+  setOpacity(layerId: string, opacity: number): void;
+  destroy(): void;
+}
+
+/**
+ * Builds the layer-list record for an object.
+ *
+ * `gaussian-splat` already exists as a layer type and is what the Components
+ * plugin records for the same renderer, so the layer panel, the legend and the
+ * swatches all know it. `sourceKind` is ours so the subscription below can tell
+ * this plugin's layers from that one's.
+ *
+ * @param object - The loaded object.
+ * @returns The record to put in the store.
+ */
+function createObjectStoreLayer(object: LoadedObject): GeoLibreLayer {
+  return {
+    id: object.layerId,
+    name: object.name,
+    type: "gaussian-splat",
+    source: {
+      assetType: object.kind,
+      sourceId: object.layerId,
+      type: "gaussian-splat",
+      // The original source, not the blob: a blob URL is dead on the next run,
+      // so recording it would only mislead anyone reading the project file.
+      url: object.source,
+    },
+    visible: true,
+    opacity: 1,
+    style: { ...DEFAULT_LAYER_STYLE },
+    metadata: {
+      assetType: object.kind,
+      customLayerType: "gaussian-splat",
+      externalNativeLayer: true,
+      identifiable: false,
+      sourceId: object.layerId,
+      sourceKind: GEOIM3D_OBJECT_SOURCE_KIND,
+    },
+    sourcePath: object.source,
+  };
+}
+
+/** Marks the layers this plugin owns, so the store watcher ignores everyone else's. */
+const GEOIM3D_OBJECT_SOURCE_KIND = "geoim3d-object";
+
+function isObjectLayer(layer: GeoLibreLayer): boolean {
+  return layer.metadata.sourceKind === GEOIM3D_OBJECT_SOURCE_KIND;
+}
+
+let unsubscribeStore: (() => void) | null = null;
+
+/** Counter behind the stable layer ids. Uniqueness within a session is enough. */
+let nextObjectSequence = 1;
+
+/**
+ * Follows the layer list: a layer deleted there removes the object, and the
+ * eye/opacity controls drive the renderer.
+ *
+ * Without this the object would be listed but inert — the panel's own Remove
+ * would work and the layer panel's would not, which is worse than not listing
+ * it at all.
+ */
+function watchLayerList(): void {
+  unsubscribeStore ??= useAppStore.subscribe((store, previous) => {
+    const currentById = new Map(store.layers.map((layer) => [layer.id, layer]));
+    for (const before of previous.layers) {
+      if (!isObjectLayer(before)) continue;
+      const object = state.objects.find((entry) => entry.layerId === before.id);
+      if (!object) continue;
+
+      const after = currentById.get(before.id);
+      if (!after) {
+        removeObject(object, { alreadyRemovedFromStore: true });
+        continue;
+      }
+      // Driven by the loader's own id, which the adapter keys on and which
+      // changes every time a transform is applied.
+      if (after.visible !== before.visible) {
+        state.adapter?.setVisibility(object.loaderId, after.visible);
+      }
+      if (after.opacity !== before.opacity) {
+        state.adapter?.setOpacity(object.loaderId, after.opacity);
+      }
+    }
+  });
+}
+
 function setStatus(message: string): void {
   state.status = message;
 }
@@ -373,13 +477,18 @@ function rerenderPanel(): void {
 async function ensureControl(app: GeoLibreAppAPI): Promise<SplatControlLike | null> {
   if (state.control) return state.control;
   try {
-    const module = (await import("maplibre-gl-splat")) as {
+    const module = (await import("maplibre-gl-splat")) as unknown as {
       GaussianSplatControl: new (options?: Record<string, unknown>) => SplatControlLike;
+      GaussianSplatLayerAdapter: new (control: SplatControlLike) => SplatAdapterLike;
     };
     const control = new module.GaussianSplatControl({ flyTo: true });
     app.addMapControl(control as never, "top-left");
     control.collapse();
     state.control = control;
+    // The control itself has no visibility/opacity; the adapter the library
+    // ships for the layer control does, and that is what the layer list needs.
+    state.adapter = new module.GaussianSplatLayerAdapter(control);
+    watchLayerList();
     return control;
   } catch (error) {
     console.warn("geoim3d-objects: the splat renderer failed to load", error);
@@ -455,14 +564,18 @@ async function loadObject(
       rotation: transform.rotation,
       scale: transform.scale,
     });
-    state.objects.push({
+    const object: LoadedObject = {
+      layerId: `${GEOIM3D_OBJECT_SOURCE_KIND}-${nextObjectSequence++}`,
       loaderId,
       name,
       kind,
+      source,
       readableUrl: readable.url,
       revocable: readable.revocable,
       transform,
-    });
+    };
+    state.objects.push(object);
+    useAppStore.getState().addLayer(createObjectStoreLayer(object));
     state.urlDraft = "";
   } catch (error) {
     // A blob made for a load that then failed would otherwise be held until
@@ -490,14 +603,20 @@ function loadErrorMessage(error: unknown): string {
 }
 
 /**
- * Removes an object from the map and the list.
+ * Removes an object from the map, the panel and the layer list.
+ *
+ * Removal can start on either side — the panel's button or the layer list's —
+ * so this is the one place that clears both, and the caller says which side it
+ * came from to avoid removing a store layer that is already gone.
  *
  * @param object - The object to remove.
+ * @param options - Set `alreadyRemovedFromStore` when the layer list started it.
  */
-function removeObject(object: LoadedObject): void {
+function removeObject(object: LoadedObject, options?: { alreadyRemovedFromStore?: boolean }): void {
   removeFromRenderer(object);
   if (object.revocable) URL.revokeObjectURL(object.readableUrl);
   state.objects = state.objects.filter((entry) => entry !== object);
+  if (!options?.alreadyRemovedFromStore) useAppStore.getState().removeLayer(object.layerId);
   rerenderPanel();
 }
 
@@ -538,6 +657,13 @@ async function applyTransform(object: LoadedObject, transform: ObjectTransform):
       scale: transform.scale,
     });
     object.transform = transform;
+    // A reload starts visible and opaque, so a hidden or faded layer would
+    // silently come back at full strength on every Apply.
+    const layer = useAppStore.getState().layers.find((entry) => entry.id === object.layerId);
+    if (layer) {
+      state.adapter?.setVisibility(object.loaderId, layer.visible);
+      state.adapter?.setOpacity(object.loaderId, layer.opacity);
+    }
   } catch (error) {
     setStatus(loadErrorMessage(error));
   } finally {
@@ -842,11 +968,17 @@ export const geoim3dObjectsPlugin: GeoLibrePlugin = {
 
     // Every object goes with the plugin, and every blob made for one is
     // released — they are the largest thing this plugin holds.
+    unsubscribeStore?.();
+    unsubscribeStore = null;
+    const store = useAppStore.getState();
     for (const object of state.objects) {
       removeFromRenderer(object);
       if (object.revocable) URL.revokeObjectURL(object.readableUrl);
+      store.removeLayer(object.layerId);
     }
     state.objects = [];
+    state.adapter?.destroy();
+    state.adapter = null;
     if (state.control) {
       app.removeMapControl(state.control as never);
       state.control = null;
