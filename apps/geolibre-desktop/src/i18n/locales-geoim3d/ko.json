@@ -269,5 +269,16 @@
     "errorLoadFailed": "객체를 불러오지 못했습니다.",
     "errorRendererUnavailable": "3D 객체 렌더러를 불러오지 못했습니다.",
     "errorGlobeActive": "3D 객체는 2D 지도에 그려져서 Cesium 화면에서는 쓸 수 없습니다. 지도 위의 탭을 GeoLibre로 바꾸세요."
+  },
+  "about": {
+    "title": "geoIM3D 정보",
+    "description": "geoIM3D는 건축·토목·부동산·환경·안전 분야를 위한 JBT의 실감형 3D 공간 플랫폼입니다."
+  },
+  "geoim3dAbout": {
+    "licenseTitle": "라이선스",
+    "copyright": "Copyright © 2026 JBT. All Rights Reserved",
+    "basis": "GeoLibre 기반 · MIT 라이선스",
+    "jbtHome": "JBT 홈페이지",
+    "upstreamProject": "원본 GeoLibre 프로젝트"
   }
 }

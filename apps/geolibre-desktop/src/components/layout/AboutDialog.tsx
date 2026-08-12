@@ -20,16 +20,17 @@ import {
   UPDATE_URL,
   UpdateCheckError,
 } from "../../lib/updates";
+import { Geoim3dAboutSection, GEOIM3D_NAME, GEOIM3D_VERSION } from "../about/Geoim3dAboutSection";
 import { ReleaseNotes } from "./ReleaseNotes";
 import { UpdateInstructions } from "./UpdateInstructions";
 
 const LINKS = [
   {
-    labelKey: "about.homePage",
-    href: "https://geolibre.app",
+    labelKey: "geoim3dAbout.jbtHome",
+    href: "https://www.ejbt.co.kr",
   },
   {
-    labelKey: "about.githubRepository",
+    labelKey: "geoim3dAbout.upstreamProject",
     href: "https://github.com/opengeos/GeoLibre",
   },
 ] as const;
@@ -185,7 +186,9 @@ export function AboutDialog({
         <div className="space-y-3 text-sm">
           <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
             <span className="text-muted-foreground">{t("about.version")}</span>
-            <span className="font-mono text-foreground">v{APP_VERSION}</span>
+            <span className="font-mono text-foreground">
+              {GEOIM3D_NAME} {GEOIM3D_VERSION}
+            </span>
           </div>
           {/* The Microsoft Store build omits the entire in-app update flow
               so the app updates only through the Store (policy 10.2.5). */}
@@ -284,6 +287,7 @@ export function AboutDialog({
               ) : null}
             </>
           )}
+          <Geoim3dAboutSection />
           <div className="space-y-2 border-t pt-3">
             <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {t("about.generalSectionTitle")}

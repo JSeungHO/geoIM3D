@@ -269,5 +269,16 @@
     "errorLoadFailed": "The object could not be loaded.",
     "errorRendererUnavailable": "The 3D object renderer could not be loaded.",
     "errorGlobeActive": "3D objects are drawn on the 2D map, so this is unavailable while the Cesium globe is showing. Switch the view above the map to GeoLibre."
+  },
+  "about": {
+    "title": "About geoIM3D",
+    "description": "geoIM3D is JBT's immersive 3D spatial platform for architecture, civil engineering, real estate, environment, and safety."
+  },
+  "geoim3dAbout": {
+    "licenseTitle": "Licence",
+    "copyright": "Copyright © 2026 JBT. All Rights Reserved",
+    "basis": "Based on GeoLibre · MIT Licence",
+    "jbtHome": "JBT homepage",
+    "upstreamProject": "GeoLibre upstream project"
   }
 }

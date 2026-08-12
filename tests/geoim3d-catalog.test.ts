@@ -36,6 +36,7 @@ const INTENTIONALLY_IDENTICAL = new Set([
   "primaryGlobe.maplibre", // "GeoLibre"
   "primaryGlobe.cesium", // "Cesium"
   "objects.threeDTiles", // "3D Tiles…" — the format's name, as VWorld's is
+  "geoim3dAbout.copyright", // a copyright notice is not translated
 ]);
 
 const UPSTREAM = "../apps/geolibre-desktop/src/i18n/locales";
