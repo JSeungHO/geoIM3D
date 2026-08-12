@@ -238,7 +238,7 @@
   },
   "primaryGlobe": {
     "tablist": "Map renderer",
-    "maplibre": "GeoLibre",
+    "maplibre": "MapLibre",
     "cesium": "Cesium",
     "cesiumWithoutToken": "Renders with OpenStreetMap imagery. Add a Cesium Ion token in Settings for satellite imagery and terrain relief."
   },
@@ -268,7 +268,7 @@
     "errorPickerUnavailable": "Choosing a file is not available in this build.",
     "errorLoadFailed": "The object could not be loaded.",
     "errorRendererUnavailable": "The 3D object renderer could not be loaded.",
-    "errorGlobeActive": "3D objects are drawn on the 2D map, so this is unavailable while the Cesium globe is showing. Switch the view above the map to GeoLibre."
+    "errorGlobeActive": "3D objects are drawn on the 2D map, so this is unavailable while the Cesium globe is showing. Switch the view above the map to MapLibre."
   },
   "about": {
     "title": "About geoIM3D",

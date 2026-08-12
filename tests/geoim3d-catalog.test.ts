@@ -33,7 +33,7 @@ function leaves(node: Record<string, unknown>, prefix = ""): Record<string, unkn
  * exists to catch, and a rule loose enough to cover these would cover those too.
  */
 const INTENTIONALLY_IDENTICAL = new Set([
-  "primaryGlobe.maplibre", // "GeoLibre"
+  "primaryGlobe.maplibre", // "MapLibre"
   "primaryGlobe.cesium", // "Cesium"
   "objects.threeDTiles", // "3D Tiles…" — the format's name, as VWorld's is
   "geoim3dAbout.copyright", // a copyright notice is not translated
