@@ -30,11 +30,28 @@
 import { DEFAULT_LAYER_STYLE, useAppStore, type GeoLibreLayer } from "@geolibre/core";
 import type { GeoLibreAppAPI, GeoLibrePlugin } from "../types";
 import { openThreeDTilesLayerPanel } from "./maplibre-3d-tiles";
+import {
+  acquireMercatorProjectionLock,
+  releaseMercatorProjectionLock,
+} from "./map-projection-utils";
 
 export const GEOIM3D_OBJECTS_PLUGIN_ID = "geoim3d-objects";
 const PANEL_ID = "geoim3d-objects-panel";
 const FLOATING_PANEL_ID = `${PANEL_ID}-floating`;
 const MENU_ID = "geoim3d-objects-menu";
+
+/**
+ * Key for the shared mercator lock.
+ *
+ * MapLibre's `globe` projection is adaptive: it draws as mercator zoomed in and
+ * transitions to a sphere as you pull back. The splat renderer computes its
+ * placement for mercator, so crossing that transition made an object that was
+ * on the map moments earlier disappear — "it hides when I zoom out". Every
+ * other 3D overlay here holds the same lock for the same reason; sharing it
+ * means removing our objects does not yank the projection out from under one
+ * of theirs.
+ */
+const PROJECTION_LOCK_KEY = "geoim3d-objects";
 
 /* -------------------------------------------------------------------------- */
 /* Formats                                                                      */
@@ -575,6 +592,7 @@ async function loadObject(
       transform,
     };
     state.objects.push(object);
+    acquireMercatorProjectionLock(PROJECTION_LOCK_KEY, app, app.getMap?.());
     useAppStore.getState().addLayer(createObjectStoreLayer(object));
     state.urlDraft = "";
   } catch (error) {
@@ -616,6 +634,9 @@ function removeObject(object: LoadedObject, options?: { alreadyRemovedFromStore?
   removeFromRenderer(object);
   if (object.revocable) URL.revokeObjectURL(object.readableUrl);
   state.objects = state.objects.filter((entry) => entry !== object);
+  if (state.objects.length === 0 && state.app) {
+    releaseMercatorProjectionLock(PROJECTION_LOCK_KEY, state.app);
+  }
   if (!options?.alreadyRemovedFromStore) useAppStore.getState().removeLayer(object.layerId);
   rerenderPanel();
 }
@@ -977,6 +998,7 @@ export const geoim3dObjectsPlugin: GeoLibrePlugin = {
       store.removeLayer(object.layerId);
     }
     state.objects = [];
+    releaseMercatorProjectionLock(PROJECTION_LOCK_KEY, app);
     state.adapter?.destroy();
     state.adapter = null;
     if (state.control) {
