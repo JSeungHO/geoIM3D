@@ -238,7 +238,7 @@
   },
   "primaryGlobe": {
     "tablist": "지도 렌더러",
-    "maplibre": "OSM",
+    "maplibre": "GeoLibre",
     "cesium": "Cesium",
     "cesiumWithoutToken": "OpenStreetMap 영상으로 표시됩니다. 설정에서 Cesium Ion 토큰을 넣으면 위성영상과 지형 기복이 추가됩니다."
   },
@@ -268,6 +268,6 @@
     "errorPickerUnavailable": "이 환경에서는 파일 선택을 쓸 수 없습니다.",
     "errorLoadFailed": "객체를 불러오지 못했습니다.",
     "errorRendererUnavailable": "3D 객체 렌더러를 불러오지 못했습니다.",
-    "errorGlobeActive": "3D 객체는 2D 지도에 그려져서 Cesium 화면에서는 쓸 수 없습니다. 지도 위의 탭을 OSM으로 바꾸세요."
+    "errorGlobeActive": "3D 객체는 2D 지도에 그려져서 Cesium 화면에서는 쓸 수 없습니다. 지도 위의 탭을 GeoLibre로 바꾸세요."
   }
 }
