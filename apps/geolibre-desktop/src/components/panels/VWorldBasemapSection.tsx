@@ -1,6 +1,7 @@
 import {
   hasVWorldApiKey,
   onVWorldApiKeyChange,
+  addVWorldOverlayLayer,
   registerVWorldBasemapStyle,
   VWORLD_BASE_MAPS,
   VWORLD_BASEMAP_STYLE_PREFIX,
@@ -29,8 +30,8 @@ import { CollapsibleSection } from "../CollapsibleSection";
 interface VWorldBasemapSectionProps {
   /** The map's current style URL, so an active VWorld basemap highlights. */
   activeStyleUrl?: string;
-  /** Applies the chosen style. */
-  onSelect: (styleUrl: string) => void;
+  /** Applies the chosen style, or closes without one when an overlay was added. */
+  onSelect: (styleUrl: string | null) => void;
 }
 
 /**
@@ -59,8 +60,9 @@ export function VWorldBasemapSection({ activeStyleUrl, onSelect }: VWorldBasemap
 
   // Each apply registers a fresh sentinel, so the active one cannot be matched
   // by equality — only by the id baked into its prefix.
-  const activeId = VWORLD_BASE_MAPS.find((basemap) =>
-    activeStyleUrl?.includes(`${VWORLD_BASEMAP_STYLE_PREFIX}${basemap.id}/`),
+  const activeId = VWORLD_BASE_MAPS.find(
+    (basemap) =>
+      !basemap.overlay && activeStyleUrl?.includes(`${VWORLD_BASEMAP_STYLE_PREFIX}${basemap.id}/`),
   )?.id;
 
   return (
@@ -79,6 +81,13 @@ export function VWorldBasemapSection({ activeStyleUrl, onSelect }: VWorldBasemap
                 : "border-input bg-background",
             )}
             onClick={() => {
+              // Hybrid is transparent annotation, not imagery: it goes on top
+              // of the map rather than replacing it, so the dialog closes
+              // without touching the basemap.
+              if (addVWorldOverlayLayer(basemap.id)) {
+                onSelect(null);
+                return;
+              }
               void registerVWorldBasemapStyle(basemap.id).then((styleUrl) => {
                 if (!styleUrl) return;
                 // VWorld covers Korea from zoom 6 down. Chosen from a world

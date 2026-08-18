@@ -613,3 +613,21 @@ describe("vworldCoverageView", () => {
     assert.equal(Math.min(...VWORLD_BASE_MAPS.map((map) => map.minzoom)), VWORLD_MIN_ZOOM);
   });
 });
+
+describe("VWorld base map kinds", () => {
+  it("marks only Hybrid as an overlay", () => {
+    // Hybrid is transparent annotation — labels, roads, boundaries — with no
+    // imagery of its own. Applied as a basemap it replaces the imagery it was
+    // drawn to annotate, leaving writing on an empty map, so the two are
+    // applied by different paths and this flag is what picks between them.
+    const overlays = VWORLD_BASE_MAPS.filter((map) => map.overlay).map((map) => map.id);
+    assert.deepEqual(overlays, ["Hybrid"]);
+  });
+
+  it("gives every base map a zoom range VWorld actually serves", () => {
+    for (const map of VWORLD_BASE_MAPS) {
+      assert.ok(map.minzoom >= VWORLD_MIN_ZOOM, `${map.id} claims a zoom below the coverage`);
+      assert.ok(map.maxzoom > map.minzoom, `${map.id} has an empty zoom range`);
+    }
+  });
+});

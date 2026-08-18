@@ -284,7 +284,8 @@ export function BasemapPickerDialog({ open, onOpenChange }: BasemapPickerDialogP
           <VWorldBasemapSection
             activeStyleUrl={basemapStyleUrl}
             onSelect={(styleUrl) => {
-              setBasemapStyleUrl(styleUrl);
+              // Null means an overlay was added instead: the basemap stays.
+              if (styleUrl) setBasemapStyleUrl(styleUrl);
               onOpenChange(false);
             }}
           />
