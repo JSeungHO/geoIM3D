@@ -676,7 +676,7 @@ async function ensureControl(app: GeoLibreAppAPI): Promise<SplatControlLike | nu
       GaussianSplatControl: new (options?: Record<string, unknown>) => SplatControlLike;
       GaussianSplatLayerAdapter: new (control: SplatControlLike) => SplatAdapterLike;
     };
-    const control = new module.GaussianSplatControl({ flyTo: true });
+    const control = new module.GaussianSplatControl();
     app.addMapControl(control as never, "top-left");
     control.collapse();
     state.control = control;
@@ -774,6 +774,18 @@ async function loadObject(
     };
     state.objects.push(object);
     acquireMercatorProjectionLock(PROJECTION_LOCK_KEY, app, app.getMap?.());
+    // Go to what was just loaded. The library's `flyTo` option only drives its
+    // own control panel, not `load()`, so an object placed from a preset landed
+    // wherever it was told and left the camera on the other side of the world —
+    // indistinguishable from a load that failed. Not done when a transform is
+    // applied: that reloads too, and yanking the camera on every edit would
+    // fight the user positioning it.
+    app.getMap?.()?.flyTo({
+      center: [transform.longitude, transform.latitude],
+      // The zoom the splat library uses for the same purpose; a site-scale
+      // scan fills the view at roughly this level.
+      zoom: 18,
+    });
     // The scene layer is created on the first render after a load, so raise it
     // once that has happened rather than in this tick.
     app.getMap?.()?.once("idle", raiseSplatScene);
