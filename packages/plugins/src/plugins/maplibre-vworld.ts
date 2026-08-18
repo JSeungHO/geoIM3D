@@ -414,7 +414,7 @@ export async function registerVWorldBasemapStyle(id: string): Promise<string | n
   // into the module graph, and this file is reached from `plugin-menu-groups`,
   // which the Node test runner loads — where a `.css` import is a hard error.
   const { registerOfflineBasemapStyle } = await import("@geolibre/map");
-  return registerOfflineBasemapStyle(`${VWORLD_BASEMAP_STYLE_PREFIX}${map.id}`, {
+  const sentinel = registerOfflineBasemapStyle(`${VWORLD_BASEMAP_STYLE_PREFIX}${map.id}`, {
     version: 8,
     // No glyphs or sprite: this style draws raster tiles and nothing else, so
     // declaring them would only add two fetches that can fail.
@@ -433,6 +433,29 @@ export async function registerVWorldBasemapStyle(id: string): Promise<string | n
     },
     layers: [{ id: "vworld", type: "raster", source: "vworld" }],
   });
+  appliedSentinels.set(sentinel, map.id);
+  return sentinel;
+}
+
+/**
+ * The sentinels this session has registered, and which base map each is.
+ *
+ * A sentinel only resolves for the session that made it: reopening the app with
+ * one saved in the project leaves the store holding a style URL that no longer
+ * exists, and the map quietly falls back to the default. Matching a base map by
+ * parsing that dead string made the picker highlight a satellite basemap that
+ * was not on screen. Only what this session actually applied counts.
+ */
+const appliedSentinels = new Map<string, string>();
+
+/**
+ * The base map a style URL refers to, if this session applied it.
+ *
+ * @param styleUrl - The map's current basemap style URL.
+ * @returns The base map id, or null when it is not a live VWorld basemap.
+ */
+export function vworldBasemapIdFor(styleUrl: string | undefined): string | null {
+  return (styleUrl && appliedSentinels.get(styleUrl)) || null;
 }
 
 /**

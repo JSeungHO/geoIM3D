@@ -28,6 +28,7 @@ import {
   vworldSearch,
   vworldTileTemplate,
 } from "../packages/plugins/src/plugins/vworld-api";
+import { vworldBasemapIdFor } from "../packages/plugins/src/plugins/maplibre-vworld";
 
 const TEST_KEY = "test-vworld-key";
 
@@ -629,5 +630,20 @@ describe("VWorld base map kinds", () => {
       assert.ok(map.minzoom >= VWORLD_MIN_ZOOM, `${map.id} claims a zoom below the coverage`);
       assert.ok(map.maxzoom > map.minzoom, `${map.id} has an empty zoom range`);
     }
+  });
+});
+
+describe("vworldBasemapIdFor", () => {
+  it("claims nothing for a sentinel this session did not register", () => {
+    // A sentinel only resolves for the session that made it. One left in a
+    // reopened project points at a style that no longer exists — the map falls
+    // back to the default, so the picker must not highlight it as active.
+    assert.equal(vworldBasemapIdFor("geolibre://offline-basemap/vworld-Satellite/7"), null);
+    assert.equal(vworldBasemapIdFor(undefined), null);
+    assert.equal(vworldBasemapIdFor(""), null);
+  });
+
+  it("claims nothing for an unrelated basemap", () => {
+    assert.equal(vworldBasemapIdFor("https://tiles.openfreemap.org/styles/positron"), null);
   });
 });

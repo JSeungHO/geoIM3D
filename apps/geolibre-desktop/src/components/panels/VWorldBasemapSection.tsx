@@ -1,10 +1,9 @@
 import {
   hasVWorldApiKey,
   onVWorldApiKeyChange,
-  addVWorldOverlayLayer,
   registerVWorldBasemapStyle,
   VWORLD_BASE_MAPS,
-  VWORLD_BASEMAP_STYLE_PREFIX,
+  vworldBasemapIdFor,
   vworldCoverageView,
 } from "@geolibre/plugins";
 import { useAppStore } from "@geolibre/core";
@@ -30,8 +29,8 @@ import { CollapsibleSection } from "../CollapsibleSection";
 interface VWorldBasemapSectionProps {
   /** The map's current style URL, so an active VWorld basemap highlights. */
   activeStyleUrl?: string;
-  /** Applies the chosen style, or closes without one when an overlay was added. */
-  onSelect: (styleUrl: string | null) => void;
+  /** Applies the chosen style. */
+  onSelect: (styleUrl: string) => void;
 }
 
 /**
@@ -58,17 +57,20 @@ export function VWorldBasemapSection({ activeStyleUrl, onSelect }: VWorldBasemap
   const setMapView = useAppStore((s) => s.setMapView);
   if (!configured) return null;
 
-  // Each apply registers a fresh sentinel, so the active one cannot be matched
-  // by equality — only by the id baked into its prefix.
-  const activeId = VWORLD_BASE_MAPS.find(
-    (basemap) =>
-      !basemap.overlay && activeStyleUrl?.includes(`${VWORLD_BASEMAP_STYLE_PREFIX}${basemap.id}/`),
-  )?.id;
+  // Hybrid is transparent annotation, not imagery. It belongs on top of a
+  // basemap rather than in a list of them, so the VWorld menu adds it and this
+  // dialog does not offer it at all.
+  const basemaps = VWORLD_BASE_MAPS.filter((basemap) => !basemap.overlay);
+
+  // Asked of the plugin rather than parsed out of the URL: a sentinel only
+  // resolves for the session that registered it, so a dead one left in the
+  // store would highlight a basemap that is not on the map.
+  const activeId = vworldBasemapIdFor(activeStyleUrl);
 
   return (
     <CollapsibleSection title={t("vworld.basemapSection")} defaultOpen={Boolean(activeId)}>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {VWORLD_BASE_MAPS.map((basemap) => (
+        {basemaps.map((basemap) => (
           <button
             key={basemap.id}
             type="button"
@@ -81,13 +83,6 @@ export function VWorldBasemapSection({ activeStyleUrl, onSelect }: VWorldBasemap
                 : "border-input bg-background",
             )}
             onClick={() => {
-              // Hybrid is transparent annotation, not imagery: it goes on top
-              // of the map rather than replacing it, so the dialog closes
-              // without touching the basemap.
-              if (addVWorldOverlayLayer(basemap.id)) {
-                onSelect(null);
-                return;
-              }
               void registerVWorldBasemapStyle(basemap.id).then((styleUrl) => {
                 if (!styleUrl) return;
                 // VWorld covers Korea from zoom 6 down. Chosen from a world

@@ -697,6 +697,7 @@ export {
   setVWorldLabels,
   registerVWorldBasemapStyle,
   addVWorldOverlayLayer,
+  vworldBasemapIdFor,
   VWORLD_BASEMAP_STYLE_PREFIX,
   setVWorldBuildingLayerAdder,
   type VWorldBuildingLayerAdder,
