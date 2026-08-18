@@ -12,12 +12,12 @@ import {
   partitionGaussianSplatPlyFiles,
   selectGaussianSplatRenderingWorkspace,
 } from "../apps/geolibre-desktop/src/lib/gaussian-splat-drop";
+// Moved with the loader that uses them: local files are opened by the geoIM3D
+// object plugin now, not by a second copy inside the Components plugin.
 import {
-  __handleCancelledSplatLoadForTests,
-  isSplattingControlLayer,
-  MAX_LOCAL_GAUSSIAN_SPLAT_BYTES,
-  validateLocalGaussianSplatFile,
-} from "../packages/plugins/src/plugins/maplibre-components";
+  MAX_LOCAL_OBJECT_BYTES,
+  validateLocalObjectFile,
+} from "../packages/plugins/src/plugins/geoim3d-objects";
 
 describe("local Gaussian Splat file drop", () => {
   it("converts the current map center into Gaussian Splat placement options", () => {
@@ -36,46 +36,23 @@ describe("local Gaussian Splat file drop", () => {
 
   it("enforces the same 2 GB ceiling for browser local splats", () => {
     assert.doesNotThrow(() =>
-      validateLocalGaussianSplatFile({
+      validateLocalObjectFile({
         name: "limit.ply",
-        size: MAX_LOCAL_GAUSSIAN_SPLAT_BYTES,
+        size: MAX_LOCAL_OBJECT_BYTES,
       }),
     );
     assert.throws(
       () =>
-        validateLocalGaussianSplatFile({
+        validateLocalObjectFile({
           name: "too-large.ply",
-          size: MAX_LOCAL_GAUSSIAN_SPLAT_BYTES + 1,
+          size: MAX_LOCAL_OBJECT_BYTES + 1,
         }),
-      /2 GB import limit/,
-    );
-  });
-
-  it("recognizes local splats as renderer-owned control layers", () => {
-    assert.equal(
-      isSplattingControlLayer({
-        id: "local-splat",
-        name: "local",
-        type: "gaussian-splat",
-        source: { type: "gaussian-splat" },
-        visible: true,
-        opacity: 1,
-        style: { ...DEFAULT_LAYER_STYLE },
-        metadata: {
-          sourceKind: "splatting-local-file",
-          externalNativeLayer: true,
-        },
-      }),
-      true,
+      /too large to open in the app/,
     );
   });
 
   it("partitions splat PLY files away from the generic vector/raster pipeline", () => {
-    const files = [
-      { name: "building.geojson" },
-      { name: "capture.PLY" },
-      { name: "terrain.tif" },
-    ];
+    const files = [{ name: "building.geojson" }, { name: "capture.PLY" }, { name: "terrain.tif" }];
 
     const result = partitionGaussianSplatPlyFiles(files);
 
@@ -123,11 +100,7 @@ describe("local Gaussian Splat file drop", () => {
   it("partitions Tauri native PLY/SOG paths before DuckDB vector import", async () => {
     const reads: string[] = [];
     const result = await partitionGaussianSplatPaths(
-      [
-        "C:\\data\\goduck.sog",
-        "C:\\data\\capture.PLY",
-        "C:\\data\\roads.geojson",
-      ],
+      ["C:\\data\\goduck.sog", "C:\\data\\capture.PLY", "C:\\data\\roads.geojson"],
       async (path, name) => {
         reads.push(path);
         return new File([new Uint8Array([1, 2, 3])], name);
@@ -160,7 +133,10 @@ describe("local Gaussian Splat file drop", () => {
 
     assert.deepEqual(inspections, ["C:\\data\\scene.zip", "C:\\data\\vectors.zip"]);
     assert.deepEqual(reads, ["C:\\data\\scene.zip"]);
-    assert.deepEqual(result.splatFiles.map((file) => file.name), ["scene.zip"]);
+    assert.deepEqual(
+      result.splatFiles.map((file) => file.name),
+      ["scene.zip"],
+    );
     assert.deepEqual(result.otherPaths, ["C:\\data\\vectors.zip"]);
   });
 
@@ -174,32 +150,19 @@ describe("local Gaussian Splat file drop", () => {
       async () => false,
     );
 
-    assert.deepEqual(result.splatFiles.map((file) => file.name), ["valid.sog"]);
+    assert.deepEqual(
+      result.splatFiles.map((file) => file.name),
+      ["valid.sog"],
+    );
     assert.deepEqual(result.otherPaths, ["C:\\data\\roads.geojson"]);
     assert.equal(result.splatFailures.length, 1);
     assert.equal(result.splatFailures[0]?.path, "C:\\data\\broken.ply");
   });
 
-  it("removes a cancelled late splat event from its originating control", () => {
-    const removed: string[] = [];
-    __handleCancelledSplatLoadForTests("blob:cancelled", "late-splat", {
-      removeSplat: (id) => removed.push(id),
-    });
-
-    assert.deepEqual(removed, ["late-splat"]);
-    assert.equal(
-      useAppStore.getState().layers.some((layer) => layer.id === "late-splat"),
-      false,
-    );
-  });
-
   it("grants the Tauri stream commands required by native Splat reads", () => {
     const capability = JSON.parse(
       readFileSync(
-        new URL(
-          "../apps/geolibre-desktop/src-tauri/capabilities/default.json",
-          import.meta.url,
-        ),
+        new URL("../apps/geolibre-desktop/src-tauri/capabilities/default.json", import.meta.url),
         "utf8",
       ),
     ) as { permissions: Array<string | Record<string, unknown>> };
@@ -213,10 +176,7 @@ describe("local Gaussian Splat file drop", () => {
 
   it("wires the Tauri native drop handler through splat partitioning before DuckDB", () => {
     const shell = readFileSync(
-      new URL(
-        "../apps/geolibre-desktop/src/components/layout/DesktopShell.tsx",
-        import.meta.url,
-      ),
+      new URL("../apps/geolibre-desktop/src/components/layout/DesktopShell.tsx", import.meta.url),
       "utf8",
     );
     const nativeStart = shell.indexOf(".onDragDropEvent(async (event)");
@@ -246,10 +206,7 @@ describe("local Gaussian Splat file drop", () => {
 
   it("passes the current shared map center to browser and native splat loads", () => {
     const shell = readFileSync(
-      new URL(
-        "../apps/geolibre-desktop/src/components/layout/DesktopShell.tsx",
-        import.meta.url,
-      ),
+      new URL("../apps/geolibre-desktop/src/components/layout/DesktopShell.tsx", import.meta.url),
       "utf8",
     );
 
@@ -258,18 +215,18 @@ describe("local Gaussian Splat file drop", () => {
       /gaussianSplatPlacementAtMapCenter\(\s*useAppStore\.getState\(\)\.mapView\.center\s*\)/,
     );
     assert.equal(
-      shell.match(/addLocalGaussianSplatFile\([^;]+splatPlacement\s*,?\s*\)/g)?.length,
+      shell.match(/addDroppedObject\([^;]+splatPlacement\s*,?\s*\)/g)?.length,
       2,
       "both native and browser drop paths must use the captured map-center placement",
     );
 
-    const integration = readFileSync(
-      new URL("../packages/plugins/src/plugins/maplibre-components.ts", import.meta.url),
+    // The loader lives with the object plugin now, not in a second copy inside
+    // the Components plugin.
+    const plugin = readFileSync(
+      new URL("../packages/plugins/src/plugins/geoim3d-objects.ts", import.meta.url),
       "utf8",
     );
-    assert.match(integration, /control\.loadSplat\(objectUrl, placement\)/);
-    assert.match(integration, /controlGeneration !== splattingControlGeneration/);
-    assert.match(integration, /splattingControlGeneration \+= 1/);
+    assert.match(plugin, /export async function addDroppedObject/);
   });
 
   it("does not persist session-only Blob-backed splat layers in a project", () => {

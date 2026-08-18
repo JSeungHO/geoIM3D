@@ -286,6 +286,8 @@
     "errorPresetNotSavable": "A file chosen in a browser cannot be saved as a sample — its address only lives as long as this page. Use the desktop app, or load the object from a URL.",
     "errorPresetUnavailable": "Reopening a saved local file is only available in the desktop app.",
     "errorPresetMissing": "The saved file could not be opened. It may have been moved or deleted.",
-    "hideBasemapBuildings": "Hide the basemap’s 3D buildings"
+    "hideBasemapBuildings": "Hide the basemap’s 3D buildings",
+    "errorEmptyFile": "That file is empty.",
+    "errorTooLarge": "That file is too large to open in the app. Reduce the splat count or export it as .sog, which is far smaller."
   }
 }

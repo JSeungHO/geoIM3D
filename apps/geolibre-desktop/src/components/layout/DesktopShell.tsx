@@ -5,7 +5,7 @@ import type { MapController, MapDiagnosticEvent } from "@geolibre/map";
 import { getLayerBounds, MapCanvas, setExternalDeckLayerOrderHandler } from "@geolibre/map";
 import { useTranslation } from "react-i18next";
 import {
-  addLocalGaussianSplatFile,
+  addDroppedObject,
   addRasterToMap,
   prepareRasterControl,
   applyRasterLayerOrder,
@@ -1786,11 +1786,7 @@ export function DesktopShell({
             for (const file of splatFiles) {
               setDropMessage(t("toolbar.fileDrop.loadingSplat", { name: file.name }));
               try {
-                await addLocalGaussianSplatFile(
-                  createAppAPI(mapControllerRef),
-                  file,
-                  splatPlacement,
-                );
+                await addDroppedObject(createAppAPI(mapControllerRef), file, splatPlacement);
                 setDropMessage(t("toolbar.fileDrop.addedLayer", { name: file.name }));
               } catch (error) {
                 setDropError(
@@ -1972,11 +1968,7 @@ export function DesktopShell({
         for (const file of splatFiles) {
           setDropMessage(t("toolbar.fileDrop.loadingSplat", { name: file.name }));
           try {
-            await addLocalGaussianSplatFile(
-              createAppAPI(mapControllerRef),
-              file,
-              splatPlacement,
-            );
+            await addDroppedObject(createAppAPI(mapControllerRef), file, splatPlacement);
             setDropMessage(t("toolbar.fileDrop.addedLayer", { name: file.name }));
           } catch (error) {
             setDropError(

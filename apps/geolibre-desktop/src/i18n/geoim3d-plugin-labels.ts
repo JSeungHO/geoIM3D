@@ -125,6 +125,8 @@ function pushLabels(t: Translate): void {
     errorLoadFailed: t("objects.errorLoadFailed"),
     errorRendererUnavailable: t("objects.errorRendererUnavailable"),
     errorGlobeActive: t("objects.errorGlobeActive"),
+    errorEmptyFile: t("objects.errorEmptyFile"),
+    errorTooLarge: t("objects.errorTooLarge"),
     errorPresetNotSavable: t("objects.errorPresetNotSavable"),
     errorPresetUnavailable: t("objects.errorPresetUnavailable"),
     errorPresetMissing: t("objects.errorPresetMissing"),

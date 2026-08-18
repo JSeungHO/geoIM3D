@@ -305,6 +305,8 @@ export interface Geoim3dObjectLabels {
   errorRendererUnavailable: string;
   /** Shown when the globe is up and the 2D map could not be brought back. */
   errorGlobeActive: string;
+  errorEmptyFile: string;
+  errorTooLarge: string;
   errorPresetNotSavable: string;
   errorPresetUnavailable: string;
   errorPresetMissing: string;
@@ -349,6 +351,9 @@ let labels: Geoim3dObjectLabels = {
     "A file chosen in a browser cannot be saved as a sample — its address only lives as long as this page. Use the desktop app, or load the object from a URL.",
   errorPresetUnavailable: "Reopening a saved local file is only available in the desktop app.",
   errorPresetMissing: "The saved file could not be opened. It may have been moved or deleted.",
+  errorEmptyFile: "That file is empty.",
+  errorTooLarge:
+    "That file is too large to open in the app. Reduce the splat count or export it as .sog, which is far smaller.",
 };
 
 /**
@@ -1032,6 +1037,96 @@ async function pickAndLoad(app: GeoLibreAppAPI): Promise<void> {
       revocable: file.revocable,
     });
   }
+}
+
+/**
+ * The largest local file this will try to load.
+ *
+ * A browser cannot allocate an arbitrarily large buffer, and a splat well past
+ * this fails partway through parsing — leaving a half-built scene that renders
+ * as a broken object rather than an error. Refusing up front says why.
+ */
+export const MAX_LOCAL_OBJECT_BYTES = 2 * 1024 * 1024 * 1024;
+
+/**
+ * Rejects a local file the loader cannot be expected to read.
+ *
+ * @param file - The file's name and size.
+ * @throws When the format is unsupported, the file is empty, or it is too big.
+ */
+export function validateLocalObjectFile(file: Pick<File, "name" | "size">): void {
+  if (!objectKind(file.name)) throw new Error(labels.errorUnsupported);
+  if (file.size === 0) throw new Error(labels.errorEmptyFile);
+  if (file.size > MAX_LOCAL_OBJECT_BYTES) throw new Error(labels.errorTooLarge);
+}
+
+/**
+ * Loads a file the user dropped on the map.
+ *
+ * The drop path used to run its own copy of the renderer, so a dropped scan and
+ * one added from this panel ended up in two different scenes, each with its own
+ * MapLibre layer — and only the panel's had a transform editor, an opacity
+ * slider or a way to save it as a sample. One entry point, one scene, and a
+ * dropped file gets all of it.
+ *
+ * The plugin is activated first when it is not already: a drop is a request to
+ * see the file, not a request to go and switch a plugin on.
+ *
+ * @param app - The host API.
+ * @param file - The dropped file.
+ * @param placement - Where to put it; defaults to the map centre.
+ * @returns The layer id.
+ * @throws When the file is not a format this plugin loads, or the renderer
+ *   could not start.
+ */
+export async function addDroppedObject(
+  app: GeoLibreAppAPI,
+  file: File,
+  placement?: { longitude: number; latitude: number },
+): Promise<string> {
+  validateLocalObjectFile(file);
+  if (!state.app) await app.activatePlugin?.(GEOIM3D_OBJECTS_PLUGIN_ID);
+  const host = state.app ?? app;
+
+  // A blob of the dropped file: it has no path, so there is nothing else to
+  // address it by. Revoked with the object, like a browser file pick.
+  const url = URL.createObjectURL(file);
+  const before = new Set(state.objects.map((entry) => entry.layerId));
+  await loadObject(
+    host,
+    file.name,
+    file.name,
+    { url, revocable: true },
+    placementTransform(placement, objectKind(file.name) ?? "splat"),
+  );
+
+  const added = state.objects.find((entry) => !before.has(entry.layerId));
+  if (!added) throw new Error(state.status || labels.errorLoadFailed);
+  return added.layerId;
+}
+
+/**
+ * A full transform from a bare coordinate, or undefined to use the map centre.
+ *
+ * @param placement - The requested longitude/latitude, if any.
+ * @param kind - What the file is, which decides the default rotation.
+ * @returns The transform to load with.
+ */
+function placementTransform(
+  placement: { longitude: number; latitude: number } | undefined,
+  kind: ObjectKind,
+): ObjectTransform | undefined {
+  if (!placement) return undefined;
+  return {
+    longitude: placement.longitude,
+    latitude: placement.latitude,
+    altitude: 0,
+    scale: 1,
+    // Read from the file, not assumed: splats and glTF models are authored in
+    // different axis conventions, so a dropped .glb given a splat's rotation
+    // arrives on its side.
+    rotation: defaultRotation(kind),
+  };
 }
 
 /* -------------------------------------------------------------------------- */

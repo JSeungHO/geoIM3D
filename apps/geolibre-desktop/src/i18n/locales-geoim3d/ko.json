@@ -286,6 +286,8 @@
     "errorPresetNotSavable": "브라우저에서 고른 파일은 예시로 저장할 수 없습니다 — 주소가 이 페이지에서만 유효합니다. 데스크톱 앱을 쓰거나 URL로 불러오세요.",
     "errorPresetUnavailable": "저장된 로컬 파일 다시 열기는 데스크톱 앱에서만 됩니다.",
     "errorPresetMissing": "저장된 파일을 열지 못했습니다. 옮겨졌거나 삭제된 것 같습니다.",
-    "hideBasemapBuildings": "배경지도의 3D 건물 숨기기"
+    "hideBasemapBuildings": "배경지도의 3D 건물 숨기기",
+    "errorEmptyFile": "빈 파일입니다.",
+    "errorTooLarge": "이 파일은 앱에서 열기에 너무 큽니다. 스플랫 개수를 줄이거나 훨씬 작은 .sog로 내보내세요."
   }
 }
