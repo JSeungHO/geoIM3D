@@ -1,4 +1,13 @@
 {
+  "about": {
+    "title": "geoIM3D 정보",
+    "description": "geoIM3D는 건축·토목·부동산·환경·안전 분야를 위한 JBT의 실감형 3D 공간 플랫폼입니다.",
+    "homePage": "JBT 홈페이지",
+    "copyright": "Copyright © 2026 JBT. All Rights Reserved",
+    "licenseAttribution": "GeoLibre 기반 · MIT 라이선스",
+    "licenseSectionTitle": "라이선스",
+    "githubRepository": "원본 GeoLibre 프로젝트"
+  },
   "settings": {
     "env": {
       "vworldKeyTitle": "VWorld API 키",
@@ -278,16 +287,5 @@
     "errorPresetUnavailable": "저장된 로컬 파일 다시 열기는 데스크톱 앱에서만 됩니다.",
     "errorPresetMissing": "저장된 파일을 열지 못했습니다. 옮겨졌거나 삭제된 것 같습니다.",
     "hideBasemapBuildings": "배경지도의 3D 건물 숨기기"
-  },
-  "about": {
-    "title": "geoIM3D 정보",
-    "description": "geoIM3D는 건축·토목·부동산·환경·안전 분야를 위한 JBT의 실감형 3D 공간 플랫폼입니다."
-  },
-  "geoim3dAbout": {
-    "licenseTitle": "라이선스",
-    "copyright": "Copyright © 2026 JBT. All Rights Reserved",
-    "basis": "GeoLibre 기반 · MIT 라이선스",
-    "jbtHome": "JBT 홈페이지",
-    "upstreamProject": "원본 GeoLibre 프로젝트"
   }
 }

@@ -452,11 +452,9 @@ export function SettingsDialog({
   // never expose gated content to a restricted profile.
   const isSectionVisible = (id: SettingsSection) => {
     // Automated update checks run in the desktop build only, so the section is
-    // hidden on the web where its controls would be inert.
-    if (id === "updates" && !isTauri()) return false;
-    // The Microsoft Store build has no in-app update flow to configure (policy
-    // 10.2.5), so its settings section is dropped entirely.
-    if (id === "updates" && IS_STORE_BUILD) return false;
+    // geoIM3D never checks for updates at startup, and Help > About hides its
+    // manual check too, so the whole section would configure nothing.
+    if (id === "updates") return false;
     const gate = SECTION_GATE[id];
     return gate ? showSettingsItem(gate) : true;
   };

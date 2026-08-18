@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
 import {
   DEFAULT_BASEMAP,
+  DEFAULT_MAP_CENTER,
   DEFAULT_LAYER_STYLE,
   DEFAULT_STORY_MAP,
   createEmptyProject,
@@ -1450,7 +1451,9 @@ describe("primary mapView normalization", () => {
       }),
     );
     // Invalid lon falls back to the default camera longitude; lat clamps to 90.
-    assert.deepEqual(project.mapView.center, [-100, 90]);
+    // Read from the constant rather than written out: geoIM3D moved the default
+    // to Seoul, and a literal here would pin this test to whatever it was.
+    assert.deepEqual(project.mapView.center, [DEFAULT_MAP_CENTER[0], 90]);
     assert.equal(project.mapView.zoom, 0);
     assert.equal(project.mapView.pitch, 85);
     assert.equal(project.mapView.bearing, 270);
@@ -1466,7 +1469,7 @@ describe("primary mapView normalization", () => {
         pitch: 200,
       },
     });
-    assert.deepEqual(applied.mapView.center, [-100, 90]);
+    assert.deepEqual(applied.mapView.center, [DEFAULT_MAP_CENTER[0], 90]);
     assert.equal(applied.mapView.zoom, 0);
     assert.equal(applied.mapView.pitch, 85);
     assert.equal(applied.mapView.bearing, 270);

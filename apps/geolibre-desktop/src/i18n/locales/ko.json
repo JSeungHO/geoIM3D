@@ -2714,9 +2714,13 @@
       "osm-basemap": "OpenStreetMap 베이스맵"
     },
     "fileDrop": {
-      "overlayTitle": "벡터 또는 래스터 파일을 여기에 놓아 레이어를 추가하세요",
-      "overlaySubtext": "데이터가 레이어 패널에 즉시 추가됩니다.",
+      "overlayTitle": "데이터, Gaussian Splat PLY 또는 SOG ZIP 파일을 여기에 놓으세요",
+      "overlaySubtext": "데이터와 PLY Splat, 압축 SOG 아카이브가 레이어 패널에 추가됩니다.",
       "addedLayer": "\"{{name}}\"을(를) 레이어 패널에 추가했습니다.",
+      "loadingSplat": "Gaussian Splat/SOG {{name}}을(를) 불러오는 중…",
+      "failedSplat": "{{name}}을(를) 불러오지 못했습니다: {{reason}}",
+      "nativeSplatReadFailed": "네이티브 파일을 읽을 수 없습니다.",
+      "splatTooLarge": "{{name}}이(가) 네이티브 가져오기 제한인 {{maxGb}}GB를 초과했습니다.",
       "addedVectorLayers_other": "벡터 레이어 {{count}}개를 레이어 패널에 추가했습니다.",
       "addedRasterLayers_other": "래스터 레이어 {{count}}개를 레이어 패널에 추가했습니다.",
       "addedBoth": "{{vector}}와(과) {{raster}}을(를) 레이어 패널에 추가했습니다.",

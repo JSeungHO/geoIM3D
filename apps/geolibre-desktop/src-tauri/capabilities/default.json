@@ -1,12 +1,14 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "identifier": "default",
-  "description": "Default capabilities for GeoLibre Desktop",
+  "description": "Default capabilities for geoIM3D Desktop",
   "windows": ["main"],
   "permissions": [
     "core:default",
     "dialog:default",
     "fs:default",
+    "fs:allow-open",
+    "fs:allow-read",
     "fs:allow-read-dir",
     "fs:allow-read-file",
     "fs:allow-read-text-file",

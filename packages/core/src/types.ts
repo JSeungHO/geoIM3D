@@ -918,6 +918,8 @@ export interface GeoLibreLayer {
   opacity: number;
   style: LayerStyle;
   metadata: Record<string, unknown>;
+  /** Session-only layers can opt out of temporal undo/redo snapshots. */
+  excludeFromHistory?: true;
   beforeId?: string;
   geojson?: FeatureCollection;
   /**

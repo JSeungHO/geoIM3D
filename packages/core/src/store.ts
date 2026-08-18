@@ -976,6 +976,25 @@ function pruneHistoryBySize(): void {
   }
 }
 
+/**
+ * A layer that belongs to this session only.
+ *
+ * A locally dropped 3D object lives behind a `blob:` or `asset:` URL that means
+ * nothing next session, so it is never written to a project. Letting one mark
+ * the project dirty would ask the user to save work that cannot survive the
+ * save — the prompt would be a lie.
+ */
+function isSessionOnlyLayer(layer: GeoLibreLayer | undefined): boolean {
+  return Boolean(
+    layer &&
+    (layer.excludeFromHistory === true ||
+      layer.metadata.excludeFromHistory === true ||
+      layer.metadata.sourceKind === "splatting-local-file" ||
+      // geoIM3D's own 3D objects, addressed the same way.
+      layer.metadata.sourceKind === "geoim3d-object"),
+  );
+}
+
 export const useAppStore = create<AppState>()(
   temporal(
     (set, get) => ({
@@ -1660,7 +1679,7 @@ export const useAppStore = create<AppState>()(
           return {
             layers,
             selectedLayerId: layer.id,
-            isDirty: true,
+            isDirty: isSessionOnlyLayer(layer) ? s.isDirty : true,
           };
         }),
 
@@ -1697,7 +1716,7 @@ export const useAppStore = create<AppState>()(
             loadEditorFeaturesLayerId:
               s.ui.loadEditorFeaturesLayerId === id ? null : s.ui.loadEditorFeaturesLayerId,
           },
-          isDirty: true,
+          isDirty: isSessionOnlyLayer(s.layers.find((entry) => entry.id === id)) ? s.isDirty : true,
         })),
 
       updateLayer: (id, patch) =>
@@ -1724,7 +1743,12 @@ export const useAppStore = create<AppState>()(
             }
             layers = cascadeLayerJoinRefresh(layers, id);
           }
-          return { layers, isDirty: true };
+          return {
+            layers,
+            isDirty: isSessionOnlyLayer(s.layers.find((entry) => entry.id === id))
+              ? s.isDirty
+              : true,
+          };
         }),
 
       setLayerJoins: (id, joins) =>
@@ -1735,7 +1759,12 @@ export const useAppStore = create<AppState>()(
           // Changing this layer's joins changes its materialized columns, so
           // layers joining against it (directly or transitively) re-derive too.
           layers = cascadeLayerJoinRefresh(layers, id);
-          return { layers, isDirty: true };
+          return {
+            layers,
+            isDirty: isSessionOnlyLayer(s.layers.find((entry) => entry.id === id))
+              ? s.isDirty
+              : true,
+          };
         }),
 
       setLayerAttributeForm: (id, attributeForm) => get().updateLayer(id, { attributeForm }),

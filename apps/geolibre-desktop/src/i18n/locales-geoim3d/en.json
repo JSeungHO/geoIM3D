@@ -1,4 +1,13 @@
 {
+  "about": {
+    "title": "About geoIM3D",
+    "description": "geoIM3D is JBT's immersive 3D spatial platform for architecture, civil engineering, real estate, environment, and safety.",
+    "homePage": "JBT website",
+    "copyright": "Copyright © 2026 JBT. All Rights Reserved",
+    "licenseAttribution": "Based on GeoLibre · MIT License",
+    "licenseSectionTitle": "License",
+    "githubRepository": "GeoLibre upstream project"
+  },
   "settings": {
     "env": {
       "vworldKeyTitle": "VWorld API key",
@@ -278,16 +287,5 @@
     "errorPresetUnavailable": "Reopening a saved local file is only available in the desktop app.",
     "errorPresetMissing": "The saved file could not be opened. It may have been moved or deleted.",
     "hideBasemapBuildings": "Hide the basemap’s 3D buildings"
-  },
-  "about": {
-    "title": "About geoIM3D",
-    "description": "geoIM3D is JBT's immersive 3D spatial platform for architecture, civil engineering, real estate, environment, and safety."
-  },
-  "geoim3dAbout": {
-    "licenseTitle": "Licence",
-    "copyright": "Copyright © 2026 JBT. All Rights Reserved",
-    "basis": "Based on GeoLibre · MIT Licence",
-    "jbtHome": "JBT homepage",
-    "upstreamProject": "GeoLibre upstream project"
   }
 }

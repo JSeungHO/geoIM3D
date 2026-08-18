@@ -1,7 +1,7 @@
 [package]
 name = "geolibre-desktop"
-version = "2.6.0"
-description = "GeoLibre Desktop — lightweight cloud-native desktop GIS"
+version = "1.0.0"
+description = "geoIM3D Desktop — cloud-native 3D geospatial desktop GIS"
 authors = ["GeoLibre Contributors"]
 edition = "2021"
 
