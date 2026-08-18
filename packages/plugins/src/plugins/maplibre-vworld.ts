@@ -20,7 +20,6 @@
  */
 
 import { useAppStore } from "@geolibre/core";
-import { registerOfflineBasemapStyle } from "@geolibre/map";
 import type { GeoLibreAppAPI, GeoLibrePlugin } from "../types";
 import {
   VWORLD_ATTRIBUTION,
@@ -389,7 +388,7 @@ function setReverseActive(app: GeoLibreAppAPI, active: boolean): void {
  * @param app - The host API.
  * @param id - The base map id from `VWORLD_BASE_MAPS`.
  */
-function addBaseMapLayer(app: GeoLibreAppAPI, id: string): void {
+async function addBaseMapLayer(app: GeoLibreAppAPI, id: string): Promise<void> {
   const map = VWORLD_BASE_MAPS.find((entry) => entry.id === id);
   if (!map) return;
 
@@ -402,6 +401,10 @@ function addBaseMapLayer(app: GeoLibreAppAPI, id: string): void {
   // which is the same mechanism the app uses for its own generated basemaps.
   // The tiles keep the key-free `vworld://` template, so the protocol handler
   // still swaps the key in per request and nothing is written into a project.
+  // Imported here, not at the top: `@geolibre/map` pulls MapLibre's stylesheet
+  // into the module graph, and this file is reached from `plugin-menu-groups`,
+  // which the Node test runner loads — where a `.css` import is a hard error.
+  const { registerOfflineBasemapStyle } = await import("@geolibre/map");
   const sentinel = registerOfflineBasemapStyle(`vworld-${map.id}`, {
     version: 8,
     // No glyphs or sprite: this style draws raster tiles and nothing else, so
@@ -592,7 +595,7 @@ function buildToolbarMenu(app: GeoLibreAppAPI): void {
             id: `${MENU_ID}-basemap-${map.id}`,
             label: labelFor(map.labelKey),
             disabled: !ready,
-            onSelect: () => addBaseMapLayer(app, map.id),
+            onSelect: () => void addBaseMapLayer(app, map.id),
           })),
         },
         {
