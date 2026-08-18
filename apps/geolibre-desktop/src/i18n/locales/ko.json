@@ -49,11 +49,11 @@
     "libraryLayerNeedsDesktop": "이 저장된 레이어는 디스크의 파일을 읽으므로 GeoLibre Desktop이 필요합니다. 파일을 다시 추가해 새 항목으로 저장하세요.",
     "libraryLayerConfigNotApplied": "\"{{name}}\"의 파일을 추가했지만, 저장된 스타일을 단일 레이어에 연결할 수 없어 다시 적용하지 못했습니다.",
     "libraryLayerJoinsUnresolved_other": "레이어를 추가했지만 저장된 조인 {{count}}개를 다시 적용하지 못했습니다. 조인 대상 레이어가 이 프로젝트에 없습니다."
-  }, 
+  },
   "about": {
     "trigger": "정보",
-    "title": "geoIM3D 정보",
-    "description": "geoIM3D는 건축·토목·부동산·환경·안전 분야를 위한 JBT의 실감형 3D 공간 플랫폼입니다.",
+    "title": "GeoLibre 정보",
+    "description": "GeoLibre는 경량 클라우드 네이티브 GIS 플랫폼입니다.",
     "version": "버전",
     "checkForUpdates": "업데이트 확인",
     "tryAgain": "다시 시도",
