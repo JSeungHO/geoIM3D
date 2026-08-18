@@ -438,6 +438,36 @@ let detachPitchSync: (() => void) | null = null;
 let nextObjectSequence = 1;
 
 /**
+ * The one MapLibre layer `maplibre-gl-splat` renders every object into.
+ *
+ * Fixed id, one scene for all of them (`_onMapRender` adds it as
+ * `map_scene_layer` when missing).
+ */
+const SPLAT_SCENE_LAYER_ID = "map_scene_layer";
+
+/**
+ * Raises the splat scene above the rest of the map.
+ *
+ * The scene is a custom layer added when the first object renders, so anything
+ * added afterwards — a satellite basemap, most obviously — lands on top of it
+ * in the style and paints straight over the objects.
+ *
+ * ponytail: this keeps objects above *everything*, rather than following the
+ * layer panel's order. The panel cannot reorder them anyway — the store record
+ * is a listing, not a native layer — so the alternative today is not "ordered"
+ * but "buried". Give the record real `nativeLayerIds` and let layer-sync place
+ * it if per-layer ordering is ever wanted.
+ */
+function raiseSplatScene(): void {
+  const map = state.app?.getMap?.() as
+    | { getLayer: (id: string) => unknown; moveLayer: (id: string) => void }
+    | null
+    | undefined;
+  if (!map?.getLayer(SPLAT_SCENE_LAYER_ID)) return;
+  map.moveLayer(SPLAT_SCENE_LAYER_ID);
+}
+
+/**
  * Follows the layer list: a layer deleted there removes the object, and the
  * eye/opacity controls drive the renderer.
  *
@@ -447,6 +477,10 @@ let nextObjectSequence = 1;
  */
 function watchLayerList(): void {
   unsubscribeStore ??= useAppStore.subscribe((store, previous) => {
+    // Any change to the layer set can have put something above the splat
+    // scene; putting it back on top is cheap and idempotent.
+    if (store.layers !== previous.layers && state.objects.length > 0) raiseSplatScene();
+
     const currentById = new Map(store.layers.map((layer) => [layer.id, layer]));
     for (const before of previous.layers) {
       if (!isObjectLayer(before)) continue;
@@ -633,6 +667,9 @@ async function loadObject(
     };
     state.objects.push(object);
     acquireMercatorProjectionLock(PROJECTION_LOCK_KEY, app, app.getMap?.());
+    // The scene layer is created on the first render after a load, so raise it
+    // once that has happened rather than in this tick.
+    app.getMap?.()?.once("idle", raiseSplatScene);
     useAppStore.getState().addLayer(createObjectStoreLayer(object));
     state.urlDraft = "";
   } catch (error) {
