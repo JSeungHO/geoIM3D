@@ -242,7 +242,6 @@ export interface Geoim3dObjectLabels {
   latitude: string;
   altitude: string;
   scale: string;
-  opacity: string;
   rotation: string;
   apply: string;
   remove: string;
@@ -273,7 +272,6 @@ let labels: Geoim3dObjectLabels = {
   latitude: "Latitude",
   altitude: "Altitude (m)",
   scale: "Scale",
-  opacity: "Opacity",
   rotation: "Rotation (°)",
   apply: "Apply",
   remove: "Remove",
@@ -846,23 +844,9 @@ function objectBlock(object: LoadedObject): HTMLElement {
   const scale = numberField(labels.scale, transform.scale, 0.1);
   for (const field of [lon, lat, alt, scale]) wrapper.appendChild(field.row);
 
-  // Opacity is applied live, unlike the fields above: it is a material
-  // property the renderer can change in place, where a move or a resize costs
-  // a full reload. Written to the layer record rather than the renderer, so
-  // this box and the layer panel's slider drive the same value instead of
-  // fighting over it — the store watcher passes it on.
-  const layer = useAppStore.getState().layers.find((entry) => entry.id === object.layerId);
-  const opacity = numberField(labels.opacity, layer?.opacity ?? 1, 0.05);
-  opacity.input.min = "0";
-  opacity.input.max = "1";
-  opacity.input.addEventListener("input", () => {
-    const value = Number(opacity.input.value);
-    if (!Number.isFinite(value)) return;
-    useAppStore.getState().updateLayer(object.layerId, {
-      opacity: Math.min(1, Math.max(0, value)),
-    });
-  });
-  wrapper.appendChild(opacity.row);
+  // Opacity is deliberately absent: the layer panel's slider owns it, and the
+  // store watcher passes a change straight to the renderer. A second control
+  // for one value is two places to disagree.
 
   wrapper.appendChild(element("span", "geoim3d-object__field-label", labels.rotation));
   const rotationRow = element("div", "geoim3d-object__rotation");
