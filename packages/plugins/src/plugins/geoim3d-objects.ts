@@ -404,6 +404,8 @@ interface PanelState {
   objects: LoadedObject[];
   urlDraft: string;
   busy: boolean;
+  /** What is loading right now, for the progress line. */
+  busyName: string;
   status: string;
 }
 
@@ -415,6 +417,7 @@ const state: PanelState = {
   objects: [],
   urlDraft: "",
   busy: false,
+  busyName: "",
   status: "",
 };
 
@@ -729,6 +732,7 @@ async function loadObject(
   }
 
   state.busy = true;
+  state.busyName = name;
   setStatus("");
   rerenderPanel();
 
@@ -798,6 +802,7 @@ async function loadObject(
     setStatus(loadErrorMessage(error));
   } finally {
     state.busy = false;
+    state.busyName = "";
     rerenderPanel();
   }
 }
@@ -1093,6 +1098,22 @@ function renderPanel(container: HTMLElement): void {
   if (!app) return;
   container.textContent = "";
   container.className = "geolibre-plugin-panel";
+
+  if (state.busy) {
+    // Indeterminate on purpose. The renderer does the fetching and reports no
+    // byte count, and reading the file here first to measure it would hold a
+    // second copy of a splat that is routinely tens of megabytes. What the
+    // user needs is "this is working and here is what on", not a percentage.
+    const progress = element("div", "geoim3d-progress");
+    progress.setAttribute("role", "status");
+    progress.appendChild(
+      element("p", "geoim3d-progress__label", `${labels.loading} ${state.busyName}`.trim()),
+    );
+    const track = element("div", "geoim3d-progress__track");
+    track.appendChild(element("div", "geoim3d-progress__bar"));
+    progress.appendChild(track);
+    container.appendChild(progress);
+  }
 
   // Add from a URL.
   container.appendChild(sectionTitle(labels.addFromUrl));

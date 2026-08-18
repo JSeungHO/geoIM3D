@@ -327,3 +327,56 @@
 .geoim3d-object__actions > button {
   flex: 1;
 }
+
+/* 3D object loading ----------------------------------------------------------
+ *
+ * Indeterminate: the splat renderer fetches the file itself and reports no
+ * byte count. The bar says "working", the label says on what.
+ * ------------------------------------------------------------------------- */
+.geoim3d-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding-bottom: 0.25rem;
+}
+
+.geoim3d-progress__label {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  /* A file name from a URL can be long; wrap rather than widen the panel. */
+  overflow-wrap: anywhere;
+}
+
+.geoim3d-progress__track {
+  background: hsl(var(--muted));
+  border-radius: 9999px;
+  height: 0.25rem;
+  overflow: hidden;
+}
+
+.geoim3d-progress__bar {
+  background: hsl(var(--primary));
+  border-radius: inherit;
+  height: 100%;
+  width: 40%;
+  animation: geoim3d-progress-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes geoim3d-progress-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+/* A moving bar with nothing to report is noise for anyone who asked the system
+   to stop animating; the label still says what is happening. */
+@media (prefers-reduced-motion: reduce) {
+  .geoim3d-progress__bar {
+    animation: none;
+    width: 100%;
+    opacity: 0.5;
+  }
+}
