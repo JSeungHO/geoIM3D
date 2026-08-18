@@ -432,6 +432,7 @@ function isObjectLayer(layer: GeoLibreLayer): boolean {
 }
 
 let unsubscribeStore: (() => void) | null = null;
+let detachPitchSync: (() => void) | null = null;
 
 /** Counter behind the stable layer ids. Uniqueness within a session is enough. */
 let nextObjectSequence = 1;
@@ -482,6 +483,43 @@ function rerenderPanel(): void {
 /* -------------------------------------------------------------------------- */
 
 /**
+ * Re-syncs the splat camera's projection when the pitch changes.
+ *
+ * `maplibre-gl-splat` rebuilds its projection matrix — which carries the far
+ * plane — only on the map's `resize` event; a `move` updates the view matrix
+ * alone. MapLibre's `farZ` grows with pitch, so tilting the map leaves the
+ * splat camera on the far plane it had when flat, and everything past it is
+ * clipped: the scene looks sliced off at the far edge.
+ *
+ * Re-emitting `resize` is the only public way to make the library redo that
+ * work. Fired on `moveend` and only when the pitch actually moved, so a pan or
+ * a zoom does not put every other `resize` listener in the app to work.
+ *
+ * ponytail: the projection stays stale *during* a pitch drag and corrects on
+ * release. Move this to the continuous `pitch` event if that lag is visible
+ * enough to matter — at the cost of firing `resize` on every frame of a drag.
+ *
+ * @param map - The MapLibre map the control draws into.
+ * @returns A function that detaches the listener.
+ */
+function syncSplatCameraOnPitch(map: {
+  getPitch: () => number;
+  on: (event: string, handler: () => void) => void;
+  off: (event: string, handler: () => void) => void;
+  fire: (event: string) => void;
+}): () => void {
+  let lastPitch = map.getPitch();
+  const onMoveEnd = () => {
+    const pitch = map.getPitch();
+    if (Math.abs(pitch - lastPitch) < 0.5) return;
+    lastPitch = pitch;
+    map.fire("resize");
+  };
+  map.on("moveend", onMoveEnd);
+  return () => map.off("moveend", onMoveEnd);
+}
+
+/**
  * Resolves the renderer, loading it on first use.
  *
  * Imported dynamically and added collapsed: this panel is the interface, and
@@ -505,6 +543,8 @@ async function ensureControl(app: GeoLibreAppAPI): Promise<SplatControlLike | nu
     // The control itself has no visibility/opacity; the adapter the library
     // ships for the layer control does, and that is what the layer list needs.
     state.adapter = new module.GaussianSplatLayerAdapter(control);
+    const map = app.getMap?.();
+    if (map) detachPitchSync = syncSplatCameraOnPitch(map as never);
     watchLayerList();
     return control;
   } catch (error) {
@@ -999,6 +1039,8 @@ export const geoim3dObjectsPlugin: GeoLibrePlugin = {
     }
     state.objects = [];
     releaseMercatorProjectionLock(PROJECTION_LOCK_KEY, app);
+    detachPitchSync?.();
+    detachPitchSync = null;
     state.adapter?.destroy();
     state.adapter = null;
     if (state.control) {
