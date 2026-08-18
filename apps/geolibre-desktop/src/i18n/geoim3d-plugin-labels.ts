@@ -111,6 +111,7 @@ function pushLabels(t: Translate): void {
     latitude: t("objects.latitude"),
     altitude: t("objects.altitude"),
     scale: t("objects.scale"),
+    opacity: t("objects.opacity"),
     rotation: t("objects.rotation"),
     apply: t("objects.apply"),
     remove: t("objects.remove"),

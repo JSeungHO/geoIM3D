@@ -268,7 +268,8 @@
     "errorPickerUnavailable": "이 환경에서는 파일 선택을 쓸 수 없습니다.",
     "errorLoadFailed": "객체를 불러오지 못했습니다.",
     "errorRendererUnavailable": "3D 객체 렌더러를 불러오지 못했습니다.",
-    "errorGlobeActive": "3D 객체는 2D 지도에 그려져서 Cesium 화면에서는 쓸 수 없습니다. 지도 위의 탭을 MapLibre로 바꾸세요."
+    "errorGlobeActive": "3D 객체는 2D 지도에 그려져서 Cesium 화면에서는 쓸 수 없습니다. 지도 위의 탭을 MapLibre로 바꾸세요.",
+    "opacity": "불투명도"
   },
   "about": {
     "title": "geoIM3D 정보",
