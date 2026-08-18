@@ -268,7 +268,14 @@
     "errorPickerUnavailable": "Choosing a file is not available in this build.",
     "errorLoadFailed": "The object could not be loaded.",
     "errorRendererUnavailable": "The 3D object renderer could not be loaded.",
-    "errorGlobeActive": "3D objects are drawn on the 2D map, so this is unavailable while the Cesium globe is showing. Switch the view above the map to MapLibre."
+    "errorGlobeActive": "3D objects are drawn on the 2D map, so this is unavailable while the Cesium globe is showing. Switch the view above the map to MapLibre.",
+    "savePreset": "Save as a sample",
+    "presets": "Saved samples",
+    "presetsEmpty": "Nothing saved yet.",
+    "deletePreset": "Delete",
+    "errorPresetNotSavable": "A file chosen in a browser cannot be saved as a sample — its address only lives as long as this page. Use the desktop app, or load the object from a URL.",
+    "errorPresetUnavailable": "Reopening a saved local file is only available in the desktop app.",
+    "errorPresetMissing": "The saved file could not be opened. It may have been moved or deleted."
   },
   "about": {
     "title": "About geoIM3D",

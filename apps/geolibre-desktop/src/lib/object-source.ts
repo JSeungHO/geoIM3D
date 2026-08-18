@@ -67,8 +67,7 @@ export async function pickLocalObjects(): Promise<PickedObject[]> {
     // One unreadable pick must not abandon the rest of the selection, matching
     // pickLocalRasterFiles.
     try {
-      await invoke("allow_object_asset", { path });
-      picked.push({ url: convertFileSrc(path), name: objectName(path), revocable: false });
+      picked.push(await openLocalObject(path));
     } catch (error) {
       console.warn(`Could not open the selected 3D object "${path}".`, error);
     }
@@ -103,4 +102,35 @@ function pickLocalObjectsInBrowser(): Promise<PickedObject[]> {
     input.addEventListener("cancel", () => resolve([]));
     input.click();
   });
+}
+
+/**
+ * Reopens a file a saved sample recorded by path.
+ *
+ * Works across restarts because Tauri's persisted-scope plugin keeps a file the
+ * user once picked authorized; without that the path would be refused and a
+ * saved sample would only ever load in the session that created it.
+ *
+ * @param path - The absolute path recorded with the sample.
+ * @returns The reopened file, or null when it can no longer be read.
+ */
+export async function resolveLocalObject(path: string): Promise<PickedObject | null> {
+  if (!isTauri()) return null;
+  try {
+    return await openLocalObject(path);
+  } catch (error) {
+    console.warn(`Could not reopen the saved 3D object "${path}".`, error);
+    return null;
+  }
+}
+
+/**
+ * Authorizes one path for the asset protocol and addresses it.
+ *
+ * @param path - The absolute path.
+ * @returns The file, ready for the loader.
+ */
+async function openLocalObject(path: string): Promise<PickedObject> {
+  await invoke("allow_object_asset", { path });
+  return { url: convertFileSrc(path), name: objectName(path), revocable: false, path };
 }

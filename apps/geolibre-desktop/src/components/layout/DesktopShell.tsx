@@ -35,6 +35,7 @@ import {
   setLocalRasterFileReader,
   setLocalRasterPicker,
   setLocalObjectPicker,
+  setLocalObjectResolver,
   setPrimaryViewBridge,
   setObjectFetcher,
   setNonTiledRasterHandler,
@@ -87,7 +88,11 @@ import {
   type DroppedRaster,
 } from "../../lib/tauri-io";
 import { buildKmlModelLayer } from "../../lib/kml-model-layer";
-import { fetchObjectAsBlobUrl, pickLocalObjects } from "../../lib/object-source";
+import {
+  fetchObjectAsBlobUrl,
+  pickLocalObjects,
+  resolveLocalObject,
+} from "../../lib/object-source";
 import { isPrimaryGlobeActive, subscribePrimaryView } from "./PrimaryGlobeSwitch";
 import { isPhotoDropFileName, type GeotaggedPhotoResult } from "../../lib/geotagged-photos";
 import type { LargeVectorDataset } from "../../lib/duckdb-vector-guard";
@@ -1100,6 +1105,7 @@ export function DesktopShell({
   // unregistered, the panel says so instead of failing at load time.
   useEffect(() => {
     setLocalObjectPicker(pickLocalObjects);
+    setLocalObjectResolver(resolveLocalObject);
     if (isTauri()) setObjectFetcher(fetchObjectAsBlobUrl);
     // The objects are drawn by a MapLibre control, so they are invisible while
     // the globe tab is up. This lets the plugin withdraw its menu there rather
@@ -1110,6 +1116,7 @@ export function DesktopShell({
     });
     return () => {
       setLocalObjectPicker(null);
+      setLocalObjectResolver(null);
       setObjectFetcher(null);
       setPrimaryViewBridge(null);
     };

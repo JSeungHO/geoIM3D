@@ -29,6 +29,13 @@
 
 import { DEFAULT_LAYER_STYLE, useAppStore, type GeoLibreLayer } from "@geolibre/core";
 import type { GeoLibreAppAPI, GeoLibrePlugin } from "../types";
+import {
+  isDurableSource,
+  loadPresets,
+  savePresets,
+  upsertPreset,
+  type ObjectPreset,
+} from "./geoim3d-object-presets";
 import { openThreeDTilesLayerPanel } from "./maplibre-3d-tiles";
 import {
   acquireMercatorProjectionLock,
@@ -136,7 +143,16 @@ export interface PickedObject {
   name: string;
   /** True when `url` is a `blob:` URL this plugin has to revoke. */
   revocable: boolean;
+  /**
+   * The absolute path behind `url`, where there is one. Recorded so a preset
+   * can reopen the file in a later session; a browser pick has none, which is
+   * why those objects cannot be saved.
+   */
+  path?: string;
 }
+
+/** Reopens a file a preset recorded by path. Null when it can no longer be read. */
+export type LocalObjectResolver = (path: string) => Promise<PickedObject | null>;
 
 /** Opens a file dialog and resolves what the user chose (empty when cancelled). */
 export type LocalObjectPicker = () => Promise<PickedObject[]>;
@@ -158,6 +174,7 @@ export interface PrimaryViewBridge {
 
 let objectFetcher: ObjectFetcher | null = null;
 let localObjectPicker: LocalObjectPicker | null = null;
+let localObjectResolver: LocalObjectResolver | null = null;
 let primaryViewBridge: PrimaryViewBridge | null = null;
 
 /**
@@ -197,6 +214,16 @@ export function setObjectFetcher(fetcher: ObjectFetcher | null): void {
  */
 export function setLocalObjectPicker(picker: LocalObjectPicker | null): void {
   localObjectPicker = picker;
+  rerenderPanel();
+}
+
+/**
+ * Registers (or clears) the resolver that reopens a preset's local file.
+ *
+ * @param resolver - The resolver, or null to unregister.
+ */
+export function setLocalObjectResolver(resolver: LocalObjectResolver | null): void {
+  localObjectResolver = resolver;
   rerenderPanel();
 }
 
@@ -245,6 +272,10 @@ export interface Geoim3dObjectLabels {
   rotation: string;
   apply: string;
   remove: string;
+  savePreset: string;
+  presets: string;
+  presetsEmpty: string;
+  deletePreset: string;
   errorUnsupported: string;
   errorHttpUnavailable: string;
   errorPickerUnavailable: string;
@@ -252,6 +283,9 @@ export interface Geoim3dObjectLabels {
   errorRendererUnavailable: string;
   /** Shown when the globe is up and the 2D map could not be brought back. */
   errorGlobeActive: string;
+  errorPresetNotSavable: string;
+  errorPresetUnavailable: string;
+  errorPresetMissing: string;
 }
 
 let labels: Geoim3dObjectLabels = {
@@ -275,6 +309,10 @@ let labels: Geoim3dObjectLabels = {
   rotation: "Rotation (°)",
   apply: "Apply",
   remove: "Remove",
+  savePreset: "Save as a sample",
+  presets: "Saved samples",
+  presetsEmpty: "Nothing saved yet.",
+  deletePreset: "Delete",
   errorUnsupported:
     "Not a format this plugin loads (.splat, .ply, .spz, .ksplat, .sog, .glb, .gltf).",
   errorHttpUnavailable:
@@ -284,6 +322,10 @@ let labels: Geoim3dObjectLabels = {
   errorRendererUnavailable: "The 3D object renderer could not be loaded.",
   errorGlobeActive:
     "3D objects are drawn on the 2D map. Switch the view above the map from Cesium to OSM to see them.",
+  errorPresetNotSavable:
+    "A file chosen in a browser cannot be saved as a sample — its address only lives as long as this page. Use the desktop app, or load the object from a URL.",
+  errorPresetUnavailable: "Reopening a saved local file is only available in the desktop app.",
+  errorPresetMissing: "The saved file could not be opened. It may have been moved or deleted.",
 };
 
 /**
@@ -613,6 +655,7 @@ async function loadObject(
   source: string,
   name: string,
   prepared?: { url: string; revocable: boolean },
+  placement?: ObjectTransform,
 ): Promise<void> {
   const kind = objectKind(source);
   if (!kind) {
@@ -641,7 +684,7 @@ async function loadObject(
     // Start where the user is looking. Without this an object with no
     // coordinates of its own lands at (0, 0), in the Atlantic.
     const center = app.getMap?.()?.getCenter();
-    const transform: ObjectTransform = {
+    const transform: ObjectTransform = placement ?? {
       longitude: center?.lng ?? 0,
       latitude: center?.lat ?? 0,
       altitude: 0,
@@ -778,11 +821,79 @@ async function pickAndLoad(app: GeoLibreAppAPI): Promise<void> {
   }
   const picked = await localObjectPicker();
   for (const file of picked) {
-    await loadObject(app, file.name, file.name, {
+    // The path, not the display name: it is what a preset needs to find the
+    // file again, and it still carries the extension the loader keys on.
+    await loadObject(app, file.path ?? file.name, file.name, {
       url: file.url,
       revocable: file.revocable,
     });
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Presets                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Saves an object's file and placement so it can be re-added later.
+ *
+ * @param object - The object to remember.
+ */
+function savePreset(object: LoadedObject): void {
+  if (!isDurableSource(object.source)) {
+    setStatus(labels.errorPresetNotSavable);
+    rerenderPanel();
+    return;
+  }
+  const preset: ObjectPreset = {
+    id: `${GEOIM3D_OBJECT_SOURCE_KIND}-preset-${nextObjectSequence++}`,
+    name: object.name,
+    source: object.source,
+    kind: object.kind,
+    transform: { ...object.transform, rotation: [...object.transform.rotation] },
+  };
+  savePresets(upsertPreset(loadPresets(), preset));
+  if (state.app) buildToolbarMenu(state.app);
+  setStatus("");
+  rerenderPanel();
+}
+
+/**
+ * Deletes a saved preset.
+ *
+ * @param id - The preset's id.
+ */
+function deletePreset(id: string): void {
+  savePresets(loadPresets().filter((entry) => entry.id !== id));
+  if (state.app) buildToolbarMenu(state.app);
+  rerenderPanel();
+}
+
+/**
+ * Loads a preset back onto the map at the placement it was saved with.
+ *
+ * @param app - The host API.
+ * @param preset - The preset to load.
+ */
+async function loadPreset(app: GeoLibreAppAPI, preset: ObjectPreset): Promise<void> {
+  // A recorded path is a file, not a URL: it has to be reauthorized and turned
+  // into something the webview can read before the loader sees it.
+  let prepared: { url: string; revocable: boolean } | undefined;
+  if (!/^https?:\/\//i.test(preset.source)) {
+    if (!localObjectResolver) {
+      setStatus(labels.errorPresetUnavailable);
+      rerenderPanel();
+      return;
+    }
+    const picked = await localObjectResolver(preset.source);
+    if (!picked) {
+      setStatus(labels.errorPresetMissing);
+      rerenderPanel();
+      return;
+    }
+    prepared = { url: picked.url, revocable: picked.revocable };
+  }
+  await loadObject(app, preset.source, preset.name, prepared, preset.transform);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -884,6 +995,20 @@ function objectBlock(object: LoadedObject): HTMLElement {
   actions.appendChild(remove);
   wrapper.appendChild(actions);
 
+  const save = element(
+    "button",
+    "geolibre-plugin-panel__button geolibre-plugin-panel__button--wide",
+    labels.savePreset,
+  );
+  save.type = "button";
+  // A browser pick has only a blob: URL, which dies with the page, so there is
+  // nothing durable to save. Disabled rather than hidden so the reason can be
+  // read from the tooltip instead of the option simply not being there.
+  save.disabled = !isDurableSource(object.source);
+  if (save.disabled) save.title = labels.errorPresetNotSavable;
+  save.addEventListener("click", () => savePreset(object));
+  wrapper.appendChild(save);
+
   return wrapper;
 }
 
@@ -941,6 +1066,39 @@ function renderPanel(container: HTMLElement): void {
     return;
   }
   for (const object of state.objects) container.appendChild(objectBlock(object));
+
+  presetSection(app, container);
+}
+
+/**
+ * Lists the saved samples, with a way to load or forget each one.
+ *
+ * The toolbar menu lists them too, for loading in one click; deleting lives
+ * here because a menu is a poor place to destroy something.
+ *
+ * @param app - The host API.
+ * @param container - The panel body.
+ */
+function presetSection(app: GeoLibreAppAPI, container: HTMLElement): void {
+  container.appendChild(sectionTitle(labels.presets));
+  const presets = loadPresets();
+  if (presets.length === 0) {
+    container.appendChild(element("p", "geolibre-plugin-panel__status", labels.presetsEmpty));
+    return;
+  }
+  for (const preset of presets) {
+    const row = element("div", "geoim3d-object__actions");
+    const load = element("button", "geolibre-plugin-panel__button", preset.name);
+    load.type = "button";
+    load.disabled = state.busy;
+    load.addEventListener("click", () => void loadPreset(app, preset));
+    row.appendChild(load);
+    const drop = element("button", "geolibre-plugin-panel__button", labels.deletePreset);
+    drop.type = "button";
+    drop.addEventListener("click", () => deletePreset(preset.id));
+    row.appendChild(drop);
+    container.appendChild(row);
+  }
 }
 
 /**
@@ -986,6 +1144,7 @@ let unregisterMenu: (() => void) | null = null;
 function buildToolbarMenu(app: GeoLibreAppAPI): void {
   unregisterMenu?.();
   unregisterMenu = null;
+  const presets = loadPresets();
   // Nothing here can be seen while the globe is up — the renderer is a MapLibre
   // control and that map is hidden — so the menu is withdrawn rather than left
   // offering actions whose result is invisible.
@@ -1008,6 +1167,27 @@ function buildToolbarMenu(app: GeoLibreAppAPI): void {
             showDockedPanel(app);
             void pickAndLoad(app);
           },
+        },
+        {
+          type: "submenu",
+          id: `${MENU_ID}-presets`,
+          label: labels.presets,
+          // An empty submenu opens onto nothing, so say so instead.
+          items:
+            presets.length > 0
+              ? presets.map((preset) => ({
+                  id: `${MENU_ID}-preset-${preset.id}`,
+                  label: preset.name,
+                  onSelect: () => void loadPreset(app, preset),
+                }))
+              : [
+                  {
+                    id: `${MENU_ID}-preset-empty`,
+                    label: labels.presetsEmpty,
+                    disabled: true,
+                    onSelect: () => {},
+                  },
+                ],
         },
         { type: "separator" },
         {

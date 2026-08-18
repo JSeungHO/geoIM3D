@@ -268,7 +268,14 @@
     "errorPickerUnavailable": "이 환경에서는 파일 선택을 쓸 수 없습니다.",
     "errorLoadFailed": "객체를 불러오지 못했습니다.",
     "errorRendererUnavailable": "3D 객체 렌더러를 불러오지 못했습니다.",
-    "errorGlobeActive": "3D 객체는 2D 지도에 그려져서 Cesium 화면에서는 쓸 수 없습니다. 지도 위의 탭을 MapLibre로 바꾸세요."
+    "errorGlobeActive": "3D 객체는 2D 지도에 그려져서 Cesium 화면에서는 쓸 수 없습니다. 지도 위의 탭을 MapLibre로 바꾸세요.",
+    "savePreset": "예시 파일로 저장",
+    "presets": "예시 파일",
+    "presetsEmpty": "저장된 예시가 없습니다.",
+    "deletePreset": "삭제",
+    "errorPresetNotSavable": "브라우저에서 고른 파일은 예시로 저장할 수 없습니다 — 주소가 이 페이지에서만 유효합니다. 데스크톱 앱을 쓰거나 URL로 불러오세요.",
+    "errorPresetUnavailable": "저장된 로컬 파일 다시 열기는 데스크톱 앱에서만 됩니다.",
+    "errorPresetMissing": "저장된 파일을 열지 못했습니다. 옮겨졌거나 삭제된 것 같습니다."
   },
   "about": {
     "title": "geoIM3D 정보",
