@@ -61,9 +61,27 @@ describe("defaultRotation", () => {
 });
 
 describe("needsNativeFetch", () => {
-  it("is true only for plain http", () => {
-    assert.equal(needsNativeFetch("http://host/a.glb"), true);
-    assert.equal(needsNativeFetch("HTTP://host/a.glb"), true);
+  const ORIGIN = "http://localhost:5173";
+
+  it("is true for cross-origin plain http", () => {
+    assert.equal(needsNativeFetch("http://host/a.glb", ORIGIN), true);
+    assert.equal(needsNativeFetch("HTTP://host/a.glb", ORIGIN), true);
+  });
+
+  it("leaves the app's own origin alone", () => {
+    // An object shipped in public/objects/ is served from the app itself,
+    // which is plain http in development. Sending that to a native fetcher the
+    // browser build does not have made the shipped sample refuse to load with
+    // nothing shown on the map.
+    assert.equal(needsNativeFetch(`${ORIGIN}/objects/park.sog`, ORIGIN), false);
+    assert.equal(needsNativeFetch(`${ORIGIN}/a.glb`, "HTTP://LOCALHOST:5173"), false);
+    // A different port is a different origin.
+    assert.equal(needsNativeFetch("http://localhost:4173/a.glb", ORIGIN), true);
+  });
+
+  it("assumes the worst when the origin is unknown or the URL is malformed", () => {
+    assert.equal(needsNativeFetch("http://host/a.glb", ""), true);
+    assert.equal(needsNativeFetch("http://", ORIGIN), true);
   });
 
   it("leaves everything the webview can already read alone", () => {

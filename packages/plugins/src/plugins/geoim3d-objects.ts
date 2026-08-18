@@ -233,14 +233,30 @@ export function setLocalObjectResolver(resolver: LocalObjectResolver | null): vo
 /**
  * Whether a source has to go through the native fetcher to be loadable.
  *
- * Only plain HTTP does. `https:` streams straight from the webview, and
- * `blob:`/`asset:`/`file:` are already local.
+ * Only *cross-origin* plain HTTP does. `https:` streams straight from the
+ * webview, `blob:`/`asset:`/`file:` are already local, and the app's own origin
+ * is reachable by definition — the CSP's `'self'` covers it and no
+ * mixed-content rule applies to a page fetching from itself.
+ *
+ * The same-origin case is not a nicety: an object shipped in `public/objects/`
+ * is served from the app, which is plain `http://localhost` in development.
+ * Treating that as unreachable sent it to a native fetcher the browser build
+ * does not have, and the sample refused to load with no error on the map.
  *
  * @param source - The URL to load.
+ * @param origin - The app's own origin. Defaults to the page's; pass one in a
+ *   test, where there is no `location`.
  * @returns True when the webview cannot request it directly.
  */
-export function needsNativeFetch(source: string): boolean {
-  return /^http:\/\//i.test(source);
+export function needsNativeFetch(source: string, origin?: string): boolean {
+  if (!/^http:\/\//i.test(source)) return false;
+  const self = origin ?? (typeof location === "undefined" ? "" : location.origin);
+  if (!self) return true;
+  try {
+    return new URL(source).origin.toLowerCase() !== self.toLowerCase();
+  } catch {
+    return true;
+  }
 }
 
 /* -------------------------------------------------------------------------- */
