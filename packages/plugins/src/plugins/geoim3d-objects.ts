@@ -577,6 +577,41 @@ function raiseSplatScene(): void {
 }
 
 /**
+ * Sets an object's opacity, whichever kind it is.
+ *
+ * The adapter shipped with the splat library only handles a mesh that has a
+ * `material` — which a glTF model does and a splat does not. `SplatMesh` is not
+ * a `THREE.Mesh`; it carries its own `opacity` field and no material at all, so
+ * the adapter looked it up, found nothing, and returned. The layer panel's
+ * slider moved and the map never changed.
+ *
+ * ponytail: reaches into the control's private `_splatLayers` because nothing
+ * public exposes a loaded splat's mesh (`getSplatInfo` returns only its URL and
+ * position). Drop this half the moment the library gains a real setter — it is
+ * checked defensively so a rename degrades to the old no-op rather than a
+ * crash.
+ *
+ * @param object - The object to fade.
+ * @param opacity - 0 to 1.
+ */
+function applyObjectOpacity(object: LoadedObject, opacity: number): void {
+  state.adapter?.setOpacity(object.loaderId, opacity);
+
+  const splatLayers = (
+    state.control as unknown as {
+      _splatLayers?: Map<string, { mesh?: { opacity?: number } }>;
+    } | null
+  )?._splatLayers;
+  const mesh = splatLayers?.get(object.loaderId)?.mesh;
+  if (mesh && typeof mesh.opacity === "number") {
+    mesh.opacity = opacity;
+    // The scene only redraws when the map does, so a change made while the map
+    // is still would not appear until the next pan.
+    state.app?.getMap?.()?.triggerRepaint();
+  }
+}
+
+/**
  * Follows the layer list: a layer deleted there removes the object, and the
  * eye/opacity controls drive the renderer.
  *
@@ -607,7 +642,7 @@ function watchLayerList(): void {
         state.adapter?.setVisibility(object.loaderId, after.visible);
       }
       if (after.opacity !== before.opacity) {
-        state.adapter?.setOpacity(object.loaderId, after.opacity);
+        applyObjectOpacity(object, after.opacity);
       }
     }
   });
@@ -778,10 +813,10 @@ async function loadObject(
     };
     state.objects.push(object);
     acquireMercatorProjectionLock(PROJECTION_LOCK_KEY, app, app.getMap?.());
-    // Go to what was just loaded. The library's `flyTo` option only drives its
-    // own control panel, not `load()`, so an object placed from a preset landed
-    // wherever it was told and left the camera on the other side of the world —
-    // indistinguishable from a load that failed.
+    // Go to what was just loaded, rather than leaving the camera on the other
+    // side of the world — indistinguishable from a load that failed. (The
+    // library's own `flyTo` option does fire here, contrary to an earlier note;
+    // it was the projection switch below that cancelled it.)
     //
     // A jump, not a flight: the line above switches the projection, which ends
     // an animation in progress, so the camera never arrived. Flying three
@@ -890,7 +925,7 @@ async function applyTransform(object: LoadedObject, transform: ObjectTransform):
     const layer = useAppStore.getState().layers.find((entry) => entry.id === object.layerId);
     if (layer) {
       state.adapter?.setVisibility(object.loaderId, layer.visible);
-      state.adapter?.setOpacity(object.loaderId, layer.opacity);
+      applyObjectOpacity(object, layer.opacity);
     }
   } catch (error) {
     setStatus(loadErrorMessage(error));

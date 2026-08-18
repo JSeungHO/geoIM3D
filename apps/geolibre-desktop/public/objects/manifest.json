@@ -3,13 +3,13 @@
     {
       "file": "gogiri_park.sog",
       "name": "고기리공원",
-      "longitude": 127.0705,
-      "latitude": 37.357164,
-      "altitude": 2,
+      "longitude": 127.0703,
+      "latitude": 37.35719,
+      "altitude": 1,
       "scale": 0.075,
       "rotation": [
         -90,
-        294,
+        295,
         0
       ]
     }
