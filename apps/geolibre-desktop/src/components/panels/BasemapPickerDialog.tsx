@@ -33,6 +33,7 @@ import { planetaryBasemapLabel, planetaryBasemapSectionKey } from "../../lib/pla
 import { buildRemotePmtilesBasemap, isPmtilesStyleUrl } from "../../lib/pmtiles-basemap-url";
 import { CollapsibleSection } from "../CollapsibleSection";
 import { RegionalBasemapSection } from "./RegionalBasemapSection";
+import { VWorldBasemapSection } from "./VWorldBasemapSection";
 
 // Picking the "Liberty 3D" preset applies the Liberty style and tilts the
 // current camera into a 3D perspective in place (matching the New Project
@@ -277,6 +278,16 @@ export function BasemapPickerDialog({ open, onOpenChange }: BasemapPickerDialogP
           ) : null}
 
           <RegionalBasemapSection selectedId={activeChoice} onSelect={applyRegional} />
+
+          {/* geoIM3D: the VWorld basemaps, in their own section beside the
+              other regions. Everything lives in the component. */}
+          <VWorldBasemapSection
+            activeStyleUrl={basemapStyleUrl}
+            onSelect={(styleUrl) => {
+              setBasemapStyleUrl(styleUrl);
+              onOpenChange(false);
+            }}
+          />
 
           {PLANETARY_BASEMAP_GROUPS.map((group) => {
             const heading = t(planetaryBasemapSectionKey(group.id));

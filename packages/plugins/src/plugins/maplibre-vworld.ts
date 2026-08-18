@@ -388,30 +388,37 @@ function setReverseActive(app: GeoLibreAppAPI, active: boolean): void {
  * @param app - The host API.
  * @param id - The base map id from `VWORLD_BASE_MAPS`.
  */
-async function addBaseMapLayer(app: GeoLibreAppAPI, id: string): Promise<void> {
+/**
+ * Registers a VWorld base map as a map style and returns its sentinel.
+ *
+ * Set as the map's basemap, not stacked as a layer. A base map added on top of
+ * everything is a base map in name only: it covered 3D objects and any layer
+ * added before it, and fighting that with layer ordering is fighting the wrong
+ * thing — the background belongs at the bottom by construction.
+ *
+ * Exported so the Change Basemap dialog offers the same maps as this plugin's
+ * own menu, off one definition rather than two that can drift.
+ *
+ * @param id - The base map id from {@link VWORLD_BASE_MAPS}.
+ * @returns The style sentinel, or null for an unknown id.
+ */
+export async function registerVWorldBasemapStyle(id: string): Promise<string | null> {
   const map = VWORLD_BASE_MAPS.find((entry) => entry.id === id);
-  if (!map) return;
+  if (!map) return null;
 
-  // Set as the map's basemap, not stacked as a layer. A base map added on top
-  // of everything is a base map in name only: it covered 3D objects and any
-  // layer added before it, and fighting that with layer ordering is fighting
-  // the wrong thing — the background belongs at the bottom by construction.
-  //
-  // The style is registered under a sentinel rather than fetched from a URL,
-  // which is the same mechanism the app uses for its own generated basemaps.
-  // The tiles keep the key-free `vworld://` template, so the protocol handler
-  // still swaps the key in per request and nothing is written into a project.
   // Imported here, not at the top: `@geolibre/map` pulls MapLibre's stylesheet
   // into the module graph, and this file is reached from `plugin-menu-groups`,
   // which the Node test runner loads — where a `.css` import is a hard error.
   const { registerOfflineBasemapStyle } = await import("@geolibre/map");
-  const sentinel = registerOfflineBasemapStyle(`vworld-${map.id}`, {
+  return registerOfflineBasemapStyle(`${VWORLD_BASEMAP_STYLE_PREFIX}${map.id}`, {
     version: 8,
     // No glyphs or sprite: this style draws raster tiles and nothing else, so
     // declaring them would only add two fetches that can fail.
     sources: {
       vworld: {
         type: "raster",
+        // The key-free template: the protocol handler swaps the key in per
+        // request, so nothing is written into a project file.
         tiles: [vworldTileTemplate(map)],
         tileSize: 256,
         attribution: VWORLD_ATTRIBUTION,
@@ -422,7 +429,14 @@ async function addBaseMapLayer(app: GeoLibreAppAPI, id: string): Promise<void> {
     },
     layers: [{ id: "vworld", type: "raster", source: "vworld" }],
   });
-  app.setBasemap(sentinel);
+}
+
+/** Style-id prefix for a VWorld basemap, so the picker can tell which is active. */
+export const VWORLD_BASEMAP_STYLE_PREFIX = "vworld-";
+
+async function addBaseMapLayer(app: GeoLibreAppAPI, id: string): Promise<void> {
+  const sentinel = await registerVWorldBasemapStyle(id);
+  if (sentinel) app.setBasemap(sentinel);
 }
 
 /**

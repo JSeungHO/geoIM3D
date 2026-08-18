@@ -692,6 +692,8 @@ export {
   maplibreVWorldPlugin,
   VWORLD_PLUGIN_ID,
   setVWorldLabels,
+  registerVWorldBasemapStyle,
+  VWORLD_BASEMAP_STYLE_PREFIX,
   setVWorldBuildingLayerAdder,
   type VWorldBuildingLayerAdder,
   DEFAULT_VWORLD_LABELS,

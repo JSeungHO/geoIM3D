@@ -157,7 +157,8 @@
     "buildings3d": "3D buildings (current view)",
     "buildingsTruncated": "Only the first 1,000 buildings in view were returned. Zoom in for a complete set.",
     "rawAttributes": "All source fields",
-    "openPanelFloating": "Search and geocoding (detached)…"
+    "openPanelFloating": "Search and geocoding (detached)…",
+    "basemapSection": "VWorld (Korea)"
   },
   "kma": {
     "title": "Weather (KMA)",
