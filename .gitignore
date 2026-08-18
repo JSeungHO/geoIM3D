@@ -92,3 +92,11 @@ apps/geolibre-desktop/src-tauri/mas/embedded.provisionprofile
 # defaults to sqlite:///./geolibre-server-api.db, so running it from the repo root
 # (the obvious place) drops the file here.
 /geolibre-server-api.db
+
+# Bundled 3D object binaries. A single gaussian splat runs to tens of megabytes
+# and git never forgets one, so they are deployed alongside the build instead of
+# committed. manifest.json and README.md stay tracked — the placement config is
+# the part worth versioning.
+apps/geolibre-desktop/public/objects/*
+!apps/geolibre-desktop/public/objects/manifest.json
+!apps/geolibre-desktop/public/objects/README.md

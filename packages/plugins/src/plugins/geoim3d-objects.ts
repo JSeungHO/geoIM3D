@@ -33,7 +33,7 @@ import {
   BUNDLED_OBJECTS_MANIFEST,
   isBundledPreset,
   isDurableSource,
-  loadPresets,
+  loadPresets as loadUserPresets,
   parseBundledManifest,
   savePresets,
   upsertPreset,
@@ -516,10 +516,15 @@ async function loadBundledPresets(app: GeoLibreAppAPI): Promise<void> {
 /**
  * Every sample offered, shipped ones first.
  *
+ * The two render paths — the toolbar submenu and the panel list — must both
+ * call this, never `loadUserPresets` directly, or one of them silently omits
+ * the objects that ship with the app. That is exactly what happened once: the
+ * panel listed them and the menu said there were none.
+ *
  * @returns The bundled presets followed by the user's own.
  */
 function allPresets(): ObjectPreset[] {
-  return [...bundledPresets, ...loadPresets()];
+  return [...bundledPresets, ...loadUserPresets()];
 }
 
 /**
@@ -895,7 +900,7 @@ function savePreset(object: LoadedObject): void {
     kind: object.kind,
     transform: { ...object.transform, rotation: [...object.transform.rotation] },
   };
-  savePresets(upsertPreset(loadPresets(), preset));
+  savePresets(upsertPreset(loadUserPresets(), preset));
   if (state.app) buildToolbarMenu(state.app);
   setStatus("");
   rerenderPanel();
@@ -907,7 +912,7 @@ function savePreset(object: LoadedObject): void {
  * @param id - The preset's id.
  */
 function deletePreset(id: string): void {
-  savePresets(loadPresets().filter((entry) => entry.id !== id));
+  savePresets(loadUserPresets().filter((entry) => entry.id !== id));
   if (state.app) buildToolbarMenu(state.app);
   rerenderPanel();
 }
@@ -1191,7 +1196,7 @@ let unregisterMenu: (() => void) | null = null;
 function buildToolbarMenu(app: GeoLibreAppAPI): void {
   unregisterMenu?.();
   unregisterMenu = null;
-  const presets = loadPresets();
+  const presets = allPresets();
   // Nothing here can be seen while the globe is up — the renderer is a MapLibre
   // control and that map is hidden — so the menu is withdrawn rather than left
   // offering actions whose result is invisible.

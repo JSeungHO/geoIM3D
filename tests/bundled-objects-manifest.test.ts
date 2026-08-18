@@ -24,13 +24,19 @@ describe("the shipped object manifest", () => {
     assert.ok(Array.isArray(parsed.objects), "manifest.json needs an `objects` array");
   });
 
-  it("names a file that exists for every entry", () => {
+  it("names a file that exists, wherever the binaries are present", () => {
+    // The binaries are gitignored — tens of megabytes each — so a clean clone
+    // has the manifest and no files, and this cannot demand they be there.
+    // Where a file *is* present the name still has to match, which is what
+    // catches a typo on the machine that added it, before it ships.
     const entries = (JSON.parse(raw) as { objects: { file?: string }[] }).objects;
+    const present = new Set(readdirSync(DIR).filter((name) => !/\.(md|json)$/i.test(name)));
     for (const entry of entries) {
       assert.ok(entry.file, "every entry needs a `file`");
+      if (present.size === 0) continue;
       assert.ok(
         existsSync(new URL(entry.file, DIR)),
-        `manifest names "${entry.file}", which is not in public/objects/`,
+        `manifest names "${entry.file}", which is not in public/objects/ (found: ${[...present].join(", ")})`,
       );
     }
   });
