@@ -1,3 +1,17 @@
 {
-  "objects": []
+  "objects": [
+    {
+      "file": "gogiri_park.sog",
+      "name": "고기리공원",
+      "longitude": 127.0705,
+      "latitude": 37.357164,
+      "altitude": 2,
+      "scale": 0.075,
+      "rotation": [
+        -90,
+        294,
+        0
+      ]
+    }
+  ]
 }
