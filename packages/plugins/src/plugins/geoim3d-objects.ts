@@ -30,8 +30,11 @@
 import { DEFAULT_LAYER_STYLE, useAppStore, type GeoLibreLayer } from "@geolibre/core";
 import type { GeoLibreAppAPI, GeoLibrePlugin } from "../types";
 import {
+  BUNDLED_OBJECTS_MANIFEST,
+  isBundledPreset,
   isDurableSource,
   loadPresets,
+  parseBundledManifest,
   savePresets,
   upsertPreset,
   type ObjectPreset,
@@ -478,6 +481,46 @@ let detachPitchSync: (() => void) | null = null;
 
 /** Counter behind the stable layer ids. Uniqueness within a session is enough. */
 let nextObjectSequence = 1;
+
+/**
+ * Objects shipped in `public/objects/`, read once at activation.
+ *
+ * Same-origin URLs, so they need neither the file picker nor the native
+ * fetcher, and the CSP has nothing to refuse. Empty until the manifest is read
+ * — and empty for good if there is none, which is the normal case for a build
+ * that ships no objects.
+ */
+let bundledPresets: ObjectPreset[] = [];
+
+/**
+ * Reads the shipped object manifest.
+ *
+ * @param app - The host API, for rebuilding the menu once the list is known.
+ */
+async function loadBundledPresets(app: GeoLibreAppAPI): Promise<void> {
+  const base = typeof document === "undefined" ? "" : document.baseURI;
+  if (!base) return;
+  try {
+    const response = await fetch(new URL(BUNDLED_OBJECTS_MANIFEST, base).href);
+    if (!response.ok) return;
+    bundledPresets = parseBundledManifest(await response.text(), base);
+  } catch {
+    // No manifest is the normal case, not a fault worth reporting.
+    return;
+  }
+  if (bundledPresets.length === 0) return;
+  buildToolbarMenu(app);
+  rerenderPanel();
+}
+
+/**
+ * Every sample offered, shipped ones first.
+ *
+ * @returns The bundled presets followed by the user's own.
+ */
+function allPresets(): ObjectPreset[] {
+  return [...bundledPresets, ...loadPresets()];
+}
 
 /**
  * The one MapLibre layer `maplibre-gl-splat` renders every object into.
@@ -1081,7 +1124,7 @@ function renderPanel(container: HTMLElement): void {
  */
 function presetSection(app: GeoLibreAppAPI, container: HTMLElement): void {
   container.appendChild(sectionTitle(labels.presets));
-  const presets = loadPresets();
+  const presets = allPresets();
   if (presets.length === 0) {
     container.appendChild(element("p", "geolibre-plugin-panel__status", labels.presetsEmpty));
     return;
@@ -1093,10 +1136,14 @@ function presetSection(app: GeoLibreAppAPI, container: HTMLElement): void {
     load.disabled = state.busy;
     load.addEventListener("click", () => void loadPreset(app, preset));
     row.appendChild(load);
-    const drop = element("button", "geolibre-plugin-panel__button", labels.deletePreset);
-    drop.type = "button";
-    drop.addEventListener("click", () => deletePreset(preset.id));
-    row.appendChild(drop);
+    // A shipped sample lives in the build, not in this browser's storage, so
+    // there is nothing here to delete.
+    if (!isBundledPreset(preset)) {
+      const drop = element("button", "geolibre-plugin-panel__button", labels.deletePreset);
+      drop.type = "button";
+      drop.addEventListener("click", () => deletePreset(preset.id));
+      row.appendChild(drop);
+    }
     container.appendChild(row);
   }
 }
@@ -1224,6 +1271,7 @@ export const geoim3dObjectsPlugin: GeoLibrePlugin = {
   activate(app: GeoLibreAppAPI) {
     state.app = app;
     buildToolbarMenu(app);
+    void loadBundledPresets(app);
     app.registerRightPanel?.({
       id: PANEL_ID,
       title: () => labels.getTitle?.() ?? labels.title,

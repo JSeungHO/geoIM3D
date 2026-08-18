@@ -130,3 +130,74 @@ export function savePresets(presets: readonly ObjectPreset[]): void {
     // failing the save loudly would interrupt work it cannot rescue.
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Bundled objects                                                              */
+/* -------------------------------------------------------------------------- */
+
+/** Where the shipped objects and their placements live, relative to the app. */
+export const BUNDLED_OBJECTS_MANIFEST = "objects/manifest.json";
+
+/** Marks a preset that ships with the app, so the UI does not offer to delete it. */
+export const BUNDLED_PRESET_ID_PREFIX = "bundled:";
+
+/**
+ * Whether a preset came from the shipped manifest rather than the user.
+ *
+ * @param preset - The preset to test.
+ * @returns True when it ships with the app.
+ */
+export function isBundledPreset(preset: ObjectPreset): boolean {
+  return preset.id.startsWith(BUNDLED_PRESET_ID_PREFIX);
+}
+
+/**
+ * Turns the shipped manifest into presets.
+ *
+ * The manifest names a file and where it sits; the URL is built from the app's
+ * own base, so the object is same-origin — no picker, no native fetch, and
+ * nothing for the CSP to refuse, on the desktop and in a browser alike.
+ *
+ * Each entry is validated the same way a stored preset is: a placement missing
+ * a number would put the object at NaN, which renders nothing and reads as a
+ * broken file rather than a broken manifest.
+ *
+ * @param raw - The manifest's contents.
+ * @param baseUrl - The app's base URL, for resolving each file.
+ * @returns The presets the manifest describes.
+ */
+export function parseBundledManifest(raw: string, baseUrl: string): ObjectPreset[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  const entries = (parsed as { objects?: unknown } | null)?.objects;
+  if (!Array.isArray(entries)) return [];
+
+  const presets: ObjectPreset[] = [];
+  for (const entry of entries) {
+    const item = entry as Record<string, unknown> | null;
+    const file = typeof item?.file === "string" ? item.file.trim() : "";
+    if (!file) continue;
+    const source = new URL(`objects/${file}`, baseUrl).href;
+    const candidate = {
+      id: `${BUNDLED_PRESET_ID_PREFIX}${file}`,
+      name: typeof item?.name === "string" && item.name ? item.name : file,
+      source,
+      // Read from the file name, so the manifest cannot disagree with the file
+      // about what it is.
+      kind: /\.(glb|gltf)$/i.test(file) ? "model" : "splat",
+      transform: {
+        longitude: item?.longitude,
+        latitude: item?.latitude,
+        altitude: item?.altitude ?? 0,
+        scale: item?.scale ?? 1,
+        rotation: item?.rotation,
+      },
+    };
+    if (isPreset(candidate)) presets.push(candidate);
+  }
+  return presets;
+}
