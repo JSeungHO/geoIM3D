@@ -201,3 +201,33 @@ export function parseBundledManifest(raw: string, baseUrl: string): ObjectPreset
   }
   return presets;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Basemap building extrusions                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The style's own 3D buildings, which are not any layer of ours.
+ *
+ * A basemap style draws buildings with `fill-extrusion`, and at street level
+ * they stand in front of an uploaded scan and hide it. Turning them off has to
+ * spare the user's own extrusions — the VWorld 3D building layer is a
+ * `fill-extrusion` too, and hiding that along with the basemap's would be a
+ * different bug wearing the same clothes.
+ *
+ * The test is ownership, not naming: every layer GeoLibre puts on the map
+ * records its native ids, so anything extruded that is not among them belongs
+ * to the style.
+ *
+ * @param styleLayerIds - Ids and types from `map.getStyle().layers`.
+ * @param ownedNativeIds - Native layer ids claimed by the app's own layers.
+ * @returns The style's extrusion layer ids.
+ */
+export function basemapExtrusionLayerIds(
+  styleLayerIds: ReadonlyArray<{ id: string; type: string }>,
+  ownedNativeIds: ReadonlySet<string>,
+): string[] {
+  return styleLayerIds
+    .filter((layer) => layer.type === "fill-extrusion" && !ownedNativeIds.has(layer.id))
+    .map((layer) => layer.id);
+}

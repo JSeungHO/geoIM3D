@@ -30,6 +30,7 @@
 import { DEFAULT_LAYER_STYLE, useAppStore, type GeoLibreLayer } from "@geolibre/core";
 import type { GeoLibreAppAPI, GeoLibrePlugin } from "../types";
 import {
+  basemapExtrusionLayerIds,
   BUNDLED_OBJECTS_MANIFEST,
   isBundledPreset,
   isDurableSource,
@@ -291,6 +292,7 @@ export interface Geoim3dObjectLabels {
   rotation: string;
   apply: string;
   remove: string;
+  hideBasemapBuildings: string;
   savePreset: string;
   presets: string;
   presetsEmpty: string;
@@ -328,6 +330,7 @@ let labels: Geoim3dObjectLabels = {
   rotation: "Rotation (°)",
   apply: "Apply",
   remove: "Remove",
+  hideBasemapBuildings: "Hide the basemap’s 3D buildings",
   savePreset: "Save as a sample",
   presets: "Saved samples",
   presetsEmpty: "Nothing saved yet.",
@@ -406,6 +409,8 @@ interface PanelState {
   busy: boolean;
   /** What is loading right now, for the progress line. */
   busyName: string;
+  /** Whether the basemap's own 3D buildings are hidden. */
+  hideBasemapBuildings: boolean;
   status: string;
 }
 
@@ -418,6 +423,7 @@ const state: PanelState = {
   urlDraft: "",
   busy: false,
   busyName: "",
+  hideBasemapBuildings: false,
   status: "",
 };
 
@@ -575,6 +581,43 @@ function raiseSplatScene(): void {
   if (!map?.getLayer(SPLAT_SCENE_LAYER_ID)) return;
   map.moveLayer(SPLAT_SCENE_LAYER_ID);
 }
+
+/**
+ * Shows or hides the basemap's own 3D buildings.
+ *
+ * Re-applied on `styledata` as well as on the toggle: switching the basemap
+ * loads a fresh style, and a style knows nothing about a visibility set on the
+ * one before it — the buildings would come back on the next basemap change
+ * with the checkbox still ticked.
+ */
+function applyBasemapBuildingVisibility(): void {
+  const map = state.app?.getMap?.() as
+    | {
+        getStyle: () => { layers?: Array<{ id: string; type: string }> } | undefined;
+        setLayoutProperty: (id: string, name: string, value: string) => void;
+      }
+    | null
+    | undefined;
+  if (!map) return;
+
+  // `metadata` is a loose record, so the native ids arrive untyped.
+  const owned = new Set<string>();
+  for (const layer of useAppStore.getState().layers) {
+    const ids = layer.metadata.nativeLayerIds;
+    if (Array.isArray(ids)) for (const id of ids) owned.add(String(id));
+  }
+
+  const visibility = state.hideBasemapBuildings ? "none" : "visible";
+  for (const id of basemapExtrusionLayerIds(map.getStyle()?.layers ?? [], owned)) {
+    try {
+      map.setLayoutProperty(id, "visibility", visibility);
+    } catch {
+      // A style can be swapped mid-iteration; the styledata handler re-runs.
+    }
+  }
+}
+
+let detachStyleWatch: (() => void) | null = null;
 
 /**
  * Sets an object's opacity, whichever kind it is.
@@ -1205,7 +1248,30 @@ function renderPanel(container: HTMLElement): void {
   }
   for (const object of state.objects) container.appendChild(objectBlock(object));
 
+  buildingToggle(container);
   presetSection(app, container);
+}
+
+/**
+ * The switch for the basemap's own 3D buildings.
+ *
+ * Lives here rather than in a map menu because this is where it is needed: at
+ * street level the style's buildings stand in front of a scan and hide it.
+ *
+ * @param container - The panel body.
+ */
+function buildingToggle(container: HTMLElement): void {
+  const row = element("label", "geoim3d-object__field geoim3d-object__toggle");
+  const input = element("input", "");
+  input.type = "checkbox";
+  input.checked = state.hideBasemapBuildings;
+  input.addEventListener("change", () => {
+    state.hideBasemapBuildings = input.checked;
+    applyBasemapBuildingVisibility();
+  });
+  row.appendChild(input);
+  row.appendChild(element("span", "geoim3d-object__field-label", labels.hideBasemapBuildings));
+  container.appendChild(row);
 }
 
 /**
@@ -1374,6 +1440,15 @@ export const geoim3dObjectsPlugin: GeoLibrePlugin = {
     state.app = app;
     buildToolbarMenu(app);
     void loadBundledPresets(app);
+    const map = app.getMap?.() as
+      | { on: (e: string, h: () => void) => void; off: (e: string, h: () => void) => void }
+      | null
+      | undefined;
+    if (map) {
+      const onStyle = () => applyBasemapBuildingVisibility();
+      map.on("styledata", onStyle);
+      detachStyleWatch = () => map.off("styledata", onStyle);
+    }
     app.registerRightPanel?.({
       id: PANEL_ID,
       title: () => labels.getTitle?.() ?? labels.title,
@@ -1400,6 +1475,12 @@ export const geoim3dObjectsPlugin: GeoLibrePlugin = {
 
     // Every object goes with the plugin, and every blob made for one is
     // released — they are the largest thing this plugin holds.
+    detachStyleWatch?.();
+    detachStyleWatch = null;
+    // Leave the map as it was found; a hidden basemap layer must not outlive
+    // the panel that hid it.
+    state.hideBasemapBuildings = false;
+    applyBasemapBuildingVisibility();
     unsubscribeStore?.();
     unsubscribeStore = null;
     const store = useAppStore.getState();

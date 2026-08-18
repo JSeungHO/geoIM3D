@@ -380,3 +380,11 @@
     opacity: 0.5;
   }
 }
+
+/* The basemap-buildings switch: a checkbox before its label, not the
+   label-left/value-right grid the transform fields use. */
+.geoim3d-object__toggle {
+  cursor: pointer;
+  grid-template-columns: auto 1fr;
+  padding-top: 0.5rem;
+}

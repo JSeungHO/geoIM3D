@@ -114,6 +114,7 @@ function pushLabels(t: Translate): void {
     rotation: t("objects.rotation"),
     apply: t("objects.apply"),
     remove: t("objects.remove"),
+    hideBasemapBuildings: t("objects.hideBasemapBuildings"),
     savePreset: t("objects.savePreset"),
     presets: t("objects.presets"),
     presetsEmpty: t("objects.presetsEmpty"),

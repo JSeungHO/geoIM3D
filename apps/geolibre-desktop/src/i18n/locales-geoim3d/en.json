@@ -275,7 +275,8 @@
     "deletePreset": "Delete",
     "errorPresetNotSavable": "A file chosen in a browser cannot be saved as a sample — its address only lives as long as this page. Use the desktop app, or load the object from a URL.",
     "errorPresetUnavailable": "Reopening a saved local file is only available in the desktop app.",
-    "errorPresetMissing": "The saved file could not be opened. It may have been moved or deleted."
+    "errorPresetMissing": "The saved file could not be opened. It may have been moved or deleted.",
+    "hideBasemapBuildings": "Hide the basemap’s 3D buildings"
   },
   "about": {
     "title": "About geoIM3D",

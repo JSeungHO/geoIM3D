@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  basemapExtrusionLayerIds,
   isBundledPreset,
   isDurableSource,
   parseBundledManifest,
@@ -159,5 +160,33 @@ describe("parseBundledManifest", () => {
     assert.deepEqual(parseBundledManifest("{}", BASE), []);
     // An entry with no file has nothing to load.
     assert.deepEqual(parseBundledManifest('{"objects":[{"name":"x"}]}', BASE), []);
+  });
+});
+
+describe("basemapExtrusionLayerIds", () => {
+  const STYLE = [
+    { id: "water", type: "fill" },
+    { id: "building-3d", type: "fill-extrusion" },
+    { id: "building-part", type: "fill-extrusion" },
+    { id: "roads", type: "line" },
+  ];
+
+  it("picks the style's own extrusions", () => {
+    assert.deepEqual(basemapExtrusionLayerIds(STYLE, new Set()), ["building-3d", "building-part"]);
+  });
+
+  it("spares extrusions the app owns", () => {
+    // The VWorld 3D building layer is a fill-extrusion too. Hiding it along
+    // with the basemap's would be a different bug wearing the same clothes.
+    assert.deepEqual(basemapExtrusionLayerIds(STYLE, new Set(["building-part"])), ["building-3d"]);
+    assert.deepEqual(
+      basemapExtrusionLayerIds(STYLE, new Set(["building-3d", "building-part"])),
+      [],
+    );
+  });
+
+  it("ignores everything that is not extruded", () => {
+    assert.deepEqual(basemapExtrusionLayerIds([{ id: "water", type: "fill" }], new Set()), []);
+    assert.deepEqual(basemapExtrusionLayerIds([], new Set()), []);
   });
 });
