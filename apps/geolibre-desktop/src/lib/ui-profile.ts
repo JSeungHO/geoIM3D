@@ -407,7 +407,7 @@ export const MENU_ITEM_CATALOG: readonly MenuItemCatalogEntry[] = [
   // also governs the per-category Whitebox submenus, so those categories have no
   // separate entries here. The conversion/vector/network/statistics/raster,
   // geocode, model-builder, and segmentation toggles drive GeoLibre's own
-  // client-side tools (grouped under the "GeoLibre" submenu).
+  // client-side tools (grouped under the "GeoLibre Toolbox" submenu).
   {
     id: "processing.assistant",
     menuId: "processing",
@@ -417,7 +417,10 @@ export const MENU_ITEM_CATALOG: readonly MenuItemCatalogEntry[] = [
   {
     id: "processing.whitebox",
     menuId: "processing",
-    labelKey: "toolbar.item.whitebox",
+    // Same key the Processing menu item uses, so this toggle and the item it
+    // controls read alike. A bare "Whitebox" here would send a user looking for
+    // "Whitebox Toolbox" in the visibility list past the row that hides it.
+    labelKey: "processing.whitebox.toolbox",
     tier: "advanced",
   },
   {
@@ -620,6 +623,12 @@ export const MENU_ITEM_CATALOG: readonly MenuItemCatalogEntry[] = [
     id: "controls.graticule",
     menuId: "controls",
     labelKey: "toolbar.item.graticule",
+    tier: "intermediate",
+  },
+  {
+    id: "controls.pointerElevation",
+    menuId: "controls",
+    labelKey: "toolbar.item.pointerElevation",
     tier: "intermediate",
   },
   // Id kept as `controls.clouds` (not renamed to `controls.weather`) so a

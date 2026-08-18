@@ -3,11 +3,17 @@ import { fillLayerId, lineLayerId } from "@geolibre/map";
 import type { FeatureCollection, Geometry } from "geojson";
 import type { GeoJSONSource, MapMouseEvent, Map as MapLibreMap } from "maplibre-gl";
 import type { GeoLibreAppAPI, GeoLibreCogLayerOptions, GeoLibrePlugin } from "../types";
+import { addPMTilesAsset } from "./stac-layers";
 import {
+  assetDisplayFormat,
+  assetFormat,
   connectStac,
+  horizontalBbox,
+  isAzureBlobHref,
   isVisualizableAsset,
   itemBbox,
   loadStacIndex,
+  openCatalogNode,
   searchStacApi,
   searchStaticStac,
   type StacAsset,
@@ -15,7 +21,12 @@ import {
   type StacIndexCatalog,
   type StacItem,
   type StacNextPage,
+  type StacSearchResult,
+  type StacSearchCursor,
 } from "./stac-api";
+import { buildCatalogTree } from "./stac-catalog-tree";
+import { el, setDisabled } from "../panel-dom";
+import { addVectorLayerFromUrl } from "./maplibre-vector";
 
 export const STAC_PLUGIN_ID = "geolibre-stac-catalogs";
 const PANEL_ID = STAC_PLUGIN_ID;
@@ -111,6 +122,9 @@ export interface StacLabels {
   resultsCleared: string;
   searching: string;
   loadingMore: string;
+  noMatchesHere: string;
+  treeEmpty: string;
+  treeOpenFailed: string;
   noResults: string;
   searchFailed: string;
   loadMore: string;
@@ -130,7 +144,14 @@ export interface StacLabels {
   download: string;
   addUnsupported: string;
   addFailed: string;
+  addNoSourceLayers: string;
   cogUnsupported: string;
+  formatCog: string;
+  formatGeoJson: string;
+  formatPmtiles: string;
+  formatParquet: string;
+  formatUnknown: string;
+  notAddable: string;
   showing: (count: number) => string;
   showingOfMatched: (count: number, matched: number) => string;
   adding: (asset: string) => string;
@@ -178,6 +199,9 @@ let labels: StacLabels = {
   resultsCleared: "Search results cleared.",
   searching: "Searching STAC items…",
   loadingMore: "Loading more items…",
+  noMatchesHere: "Nothing matched in that part of the catalog. Load more to keep searching.",
+  treeEmpty: "Empty",
+  treeOpenFailed: "Could not open this catalog",
   noResults: "No STAC items matched these filters.",
   searchFailed: "STAC search failed",
   loadMore: "Load more",
@@ -197,9 +221,17 @@ let labels: StacLabels = {
   zoom: "Zoom",
   add: "Add",
   download: "Download",
-  addUnsupported: "Only GeoTIFF/COG and GeoJSON assets can be added to the map",
+  addUnsupported:
+    "Only GeoTIFF/COG, GeoJSON, GeoParquet, and PMTiles assets can be added to the map",
   addFailed: "Could not add asset",
+  addNoSourceLayers: "This archive lists no layers to draw",
   cogUnsupported: "This GeoLibre host cannot visualize remote GeoTIFF assets",
+  formatCog: "COG",
+  formatGeoJson: "GeoJSON",
+  formatPmtiles: "PMTiles",
+  formatParquet: "Parquet",
+  formatUnknown: "Unknown format",
+  notAddable: "not addable",
   showing: (count) => `Showing ${count} items.`,
   showingOfMatched: (count, matched) => `Showing ${count} of ${matched} items.`,
   adding: (asset) => `Adding ${asset}…`,
@@ -245,20 +277,12 @@ const style = {
   // the controls above it scroll as a group rather than pushing it off-panel.
   results:
     "display:flex;flex:1 1 auto;min-height:150px;overflow:auto;flex-direction:column;gap:7px;",
-  controls: "display:flex;flex-direction:column;gap:10px;flex:0 1 auto;min-height:0;overflow:auto;",
+  controls:
+    "display:flex;flex-direction:column;gap:10px;flex:0 1 auto;min-height:180px;overflow:auto;",
   card:
     "display:flex;flex-direction:column;gap:5px;padding:8px;border:1px solid hsl(var(--border));" +
     "border-radius:7px;background:hsl(var(--muted));",
 } as const;
-
-function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  text?: string,
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
 
 function field(label: string, type = "text"): { wrap: HTMLElement; input: HTMLInputElement } {
   const wrap = el("label");
@@ -344,7 +368,11 @@ function showDrawBox(map: MapLibreMap, bbox: [number, number, number, number]): 
     id: DRAW_LINE,
     type: "line",
     source: DRAW_SOURCE,
-    paint: { "line-color": "#f59e0b", "line-width": 2, "line-dasharray": [2, 1] },
+    paint: {
+      "line-color": "#f59e0b",
+      "line-width": 2,
+      "line-dasharray": [2, 1],
+    },
   });
 }
 
@@ -493,6 +521,67 @@ function assetLabel(key: string, asset: StacAsset): string {
   return asset.title || key;
 }
 
+function assetFormatLabel(asset: StacAsset): string {
+  switch (assetDisplayFormat(asset)) {
+    case "cog":
+      return labels.formatCog;
+    case "geojson":
+      return labels.formatGeoJson;
+    case "pmtiles":
+      return labels.formatPmtiles;
+    case "parquet":
+      return labels.formatParquet;
+    case null:
+      return labels.formatUnknown;
+  }
+}
+
+function assetOptionLabel(key: string, asset: StacAsset): string {
+  const addability = isVisualizableAsset(asset) ? "" : ` (${labels.notAddable})`;
+  return `${assetLabel(key, asset)} — ${assetFormatLabel(asset)}${addability}`;
+}
+
+type SasSigner = { signUrl(url: string, collectionId: string): Promise<string> };
+let sasManager: Promise<SasSigner> | null = null;
+
+function planetaryComputerSigner(): Promise<SasSigner> {
+  sasManager ??= import("maplibre-gl-planetary-computer")
+    .then((module) => new module.SASTokenManager())
+    .catch((error) => {
+      // Don't let one failed import disable signing for the rest of the session.
+      sasManager = null;
+      throw error;
+    });
+  return sasManager;
+}
+
+/**
+ * Planetary Computer serves several collections — most of the GeoParquet ones — from private
+ * containers that answer 409 without a SAS token, while others (NAIP) read fine anonymously.
+ * Tokens are per-collection and expire within the hour, so they are minted when the asset is
+ * added rather than when the item is parsed, and the upstream manager caches them. Anything
+ * that is not an Azure blob, or that cannot be signed, is read unsigned.
+ *
+ * Only the GeoParquet path signs, because that is the one this branch made addable and it cannot
+ * read a private container at all unsigned. PMTiles and COG read unsigned exactly as they did
+ * before, rather than gaining a token they never had.
+ *
+ * Every one of these formats persists whatever URL it is handed: PMTiles and COG through the
+ * store layer they create, and the vector control through `createVectorStoreLayer`, which records
+ * the URL as both `source.url` and `sourcePath`. A project saved with a signed GeoParquet layer
+ * therefore holds a token that `restoreVectorLayers` replays as-is and never re-signs, so the
+ * layer stops reloading once the token lapses (about an hour). Fixing that properly means minting
+ * the token per request, or re-signing on restore, rather than baking one in at add time.
+ */
+async function readableHref(item: StacItem, href: string): Promise<string> {
+  if (!isAzureBlobHref(href) || !item.collection) return href;
+  try {
+    return await (await planetaryComputerSigner()).signUrl(href, item.collection);
+  } catch {
+    return href;
+  }
+}
+
 async function visualizeAsset(
   item: StacItem,
   key: string,
@@ -501,19 +590,46 @@ async function visualizeAsset(
   signal?: AbortSignal,
 ): Promise<void> {
   const name = `${item.id} — ${assetLabel(key, asset)}`;
-  const value = `${asset.type ?? ""} ${asset.href}`.toLowerCase();
-  if (value.includes("geo+json") || /\.geojson($|\?)/i.test(asset.href)) {
-    const response = await fetch(asset.href, {
-      headers: { Accept: "application/geo+json, application/json" },
-      signal,
-    });
-    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-    const data = (await response.json()) as FeatureCollection;
-    appRef?.addGeoJsonLayer(name, data, asset.href);
-  } else if (appRef?.addCogLayer) {
-    await appRef.addCogLayer(name, asset.href, cogOptions);
-  } else {
-    throw new Error(labels.cogUnsupported);
+  const format = assetFormat(asset);
+  switch (format) {
+    case "pmtiles": {
+      // No appRef check: the layer goes to the store, not through the app API.
+      if (!(await addPMTilesAsset(asset.href, name, signal))) {
+        throw new Error(labels.addNoSourceLayers);
+      }
+      return;
+    }
+    case "geojson": {
+      if (!appRef) throw new Error(labels.addFailed);
+      const response = await fetch(asset.href, {
+        headers: { Accept: "application/geo+json, application/json" },
+        signal,
+      });
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      const data = (await response.json()) as FeatureCollection;
+      appRef.addGeoJsonLayer(name, data, asset.href);
+      return;
+    }
+    case "parquet": {
+      if (!appRef) throw new Error(labels.addFailed);
+      if (!(await addVectorLayerFromUrl(appRef, await readableHref(item, asset.href), { name }))) {
+        throw new Error(labels.addFailed);
+      }
+      return;
+    }
+    case "cog": {
+      if (!appRef?.addCogLayer) throw new Error(labels.cogUnsupported);
+      await appRef.addCogLayer(name, asset.href, cogOptions);
+      return;
+    }
+    case null:
+      throw new Error(labels.addUnsupported);
+    default: {
+      // A format added to VISUALIZABLE_FORMATS with no branch here fails to compile, rather than
+      // falling through to a renderer that cannot read it.
+      const unhandled: never = format;
+      throw new Error(`Unhandled asset format: ${String(unhandled)}`);
+    }
   }
 }
 
@@ -549,6 +665,13 @@ function buildPanel(container: HTMLElement): () => void {
   // Catalogs can advertise hundreds of collections, so let the list be dragged taller.
   collectionSelect.style.cssText = `${style.input}resize:vertical;overflow:auto;min-height:58px;`;
   collectionSelect.title = labels.collectionsHint;
+  // An API answers with a flat list of collections; a static catalog is a tree read as it opens.
+  const tree = buildCatalogTree({
+    labels: { empty: labels.treeEmpty, openFailed: labels.treeOpenFailed },
+    onError: (message) => setStatus(message, true),
+    onActivate: showCollection,
+    signal: controller.signal,
+  });
   const extentRow = el("label");
   extentRow.style.cssText = style.row;
   const useExtent = el("input");
@@ -588,12 +711,15 @@ function buildPanel(container: HTMLElement): () => void {
   searchButton.style.cssText = `${style.primary}flex:1 1 0;`;
   const clearResultsButton = el("button", labels.clearResults);
   clearResultsButton.type = "button";
-  clearResultsButton.disabled = true;
+  // cssText first: it replaces the whole inline declaration, so setting the
+  // disabled look before it would be wiped out.
   clearResultsButton.style.cssText = `${style.button}flex:1 1 0;`;
+  setDisabled(clearResultsButton, true);
   searchActions.append(searchButton, clearResultsButton);
   searchSection.append(
     catalogInfo,
     collectionSelect,
+    tree.element,
     extentRow,
     bboxField.wrap,
     drawRow,
@@ -661,8 +787,13 @@ function buildPanel(container: HTMLElement): () => void {
   let filtered: StacIndexCatalog[] = [];
   let connection: StacConnection | null = null;
   let nextPage: StacNextPage | undefined;
+  let searchCursor: StacSearchCursor | undefined;
   let allItems: StacItem[] = [];
   let searchGeneration = 0;
+  /** The walk a search is doing; starting another stops it, since a static walk reads to find. */
+  let walking: AbortController | null = null;
+  /** The extent read a collection asked for, cancelled when another collection is asked for. */
+  let extentRead: AbortController | null = null;
   let cancelDraw: (() => void) | null = null;
   let selectedItemId: string | null = null;
   const cardsByItemId = new Map<string, HTMLElement>();
@@ -714,13 +845,14 @@ function buildPanel(container: HTMLElement): () => void {
     searchGeneration += 1;
     allItems = [];
     nextPage = undefined;
+    searchCursor = undefined;
     results.innerHTML = "";
     cardsByItemId.clear();
     selectItem(null, false);
     removeFootprints();
     loadMore.hidden = true;
-    clearResultsButton.disabled = true;
-    searchButton.disabled = false;
+    setDisabled(clearResultsButton, true);
+    setDisabled(searchButton, false);
     if (announce) setStatus(labels.resultsCleared);
   };
 
@@ -778,7 +910,7 @@ function buildPanel(container: HTMLElement): () => void {
         const assetSelect = el("select");
         assetSelect.style.cssText = `${style.input}flex:1 1 140px;width:auto;`;
         for (const [key, asset] of assets) {
-          const option = el("option", assetLabel(key, asset));
+          const option = el("option", assetOptionLabel(key, asset));
           option.value = key;
           assetSelect.append(option);
         }
@@ -800,7 +932,7 @@ function buildPanel(container: HTMLElement): () => void {
           const addable = isVisualizableAsset(asset);
           assetSelect.title = asset.href;
           download.title = asset.href;
-          add.disabled = adding || !addable;
+          setDisabled(add, adding || !addable);
           add.title = addable ? asset.href : labels.addUnsupported;
         };
 
@@ -854,11 +986,51 @@ function buildPanel(container: HTMLElement): () => void {
     return parsed as Record<string, unknown>;
   };
 
-  const runSearch = async (append: boolean): Promise<void> => {
+  const searchStatus = (result: StacSearchResult): string => {
+    if (!result.items.length && result.cursor) return labels.noMatchesHere;
+    if (!allItems.length) return labels.noResults;
+    if (result.matched) return labels.showingOfMatched(allItems.length, result.matched);
+    return labels.showing(allItems.length);
+  };
+
+  // A double-click means the same here as in the tree: search this one.
+  collectionSelect.addEventListener("dblclick", () => {
+    const chosen = collectionSelect.selectedOptions[0]?.value;
+    const extent = connection?.collections.find((collection) => collection.id === chosen)?.extent;
+    const box = horizontalBbox(extent?.spatial?.bbox?.[0]);
+    void runSearch(false);
+    if (box) appRef?.fitBounds?.(box);
+  });
+
+  /** The tree asked for a collection: search it, and send the map to it. */
+  function showCollection(href: string, bbox?: [number, number, number, number]): void {
+    void runSearch(false, ++searchGeneration);
+    if (bbox) return void appRef?.fitBounds?.(bbox);
+    // A collection guessed from its link has never been read, so its extent has to be fetched.
+    // Asking for a second collection cancels that read rather than letting it finish and be
+    // thrown away, so the map cannot be sent where the user no longer is.
+    extentRead?.abort();
+    const reading = new AbortController();
+    extentRead = reading;
+    const scope = AbortSignal.any([reading.signal, controller.signal]);
+    void openCatalogNode(href, fetch, scope)
+      .then((node) => {
+        if (!scope.aborted && node.bbox) appRef?.fitBounds?.(node.bbox);
+      })
+      .catch(() => undefined);
+  }
+
+  /**
+   * `generation` says which search this is, so a late answer can tell whether it is still wanted.
+   * The caller may take it first, when it has its own late answer to check; taking it here would
+   * mean it moves on a call that does nothing.
+   */
+  async function runSearch(append: boolean, generation?: number): Promise<void> {
     if (!connection) return;
-    const generation = ++searchGeneration;
-    searchButton.disabled = true;
-    loadMore.disabled = true;
+    const search = generation ?? ++searchGeneration;
+
+    setDisabled(searchButton, true);
+    setDisabled(loadMore, true);
     setStatus(append ? labels.loadingMore : labels.searching);
     try {
       const selectedCollections = Array.from(collectionSelect.selectedOptions)
@@ -867,44 +1039,46 @@ function buildPanel(container: HTMLElement): () => void {
       const start = startField.input.value;
       const end = endField.input.value;
       const datetime = start || end ? `${start || ".."}/${end || ".."}` : undefined;
+      walking?.abort();
+      walking = new AbortController();
+      const reading = AbortSignal.any([walking.signal, controller.signal]);
       const options = {
         bbox: parseBbox(),
         datetime,
         collections: selectedCollections,
+        entries: connection.isApi ? [] : tree.selection(),
         additional: parseAdditionalParams(),
         limit: 20,
         next: append ? nextPage : undefined,
-        signal: controller.signal,
+        cursor: append ? searchCursor : undefined,
+        signal: reading,
       };
       const response = connection.isApi
         ? await searchStacApi(connection, options)
         : await searchStaticStac(connection, options);
-      if (generation !== searchGeneration) return;
+      if (search !== searchGeneration) return;
       allItems = append ? [...allItems, ...response.items] : response.items;
       nextPage = response.next;
+      searchCursor = response.cursor;
       // A fresh search invalidates the selection; "Load more" keeps it.
       if (!append) selectedItemId = null;
       renderItems();
       showFootprints(allItems);
       applySelection(false);
-      loadMore.hidden = !nextPage;
-      clearResultsButton.disabled = allItems.length === 0;
-      setStatus(
-        allItems.length
-          ? response.matched
-            ? labels.showingOfMatched(allItems.length, response.matched)
-            : labels.showing(allItems.length)
-          : labels.noResults,
-      );
+      loadMore.hidden = !nextPage && !searchCursor;
+      setDisabled(clearResultsButton, allItems.length === 0);
+      setStatus(searchStatus(response));
     } catch (error) {
+      // A search the user has moved on from must not report its failure over the current one.
+      if (search !== searchGeneration) return;
       setStatus(error instanceof Error ? error.message : labels.searchFailed, true);
     } finally {
-      if (generation === searchGeneration) {
-        searchButton.disabled = false;
-        loadMore.disabled = false;
+      if (search === searchGeneration) {
+        setDisabled(searchButton, false);
+        setDisabled(loadMore, false);
       }
     }
-  };
+  }
 
   catalogSearch.input.addEventListener("input", renderCatalogs);
   catalogSelect.addEventListener("change", () => {
@@ -912,7 +1086,7 @@ function buildPanel(container: HTMLElement): () => void {
   });
   connectButton.addEventListener("click", async () => {
     const url = urlField.input.value.trim();
-    connectButton.disabled = true;
+    setDisabled(connectButton, true);
     setStatus(labels.connecting);
     try {
       connection = await connectStac(url, fetch, controller.signal);
@@ -931,6 +1105,9 @@ function buildPanel(container: HTMLElement): () => void {
       } else {
         collectionSelect.hidden = true;
       }
+      const children = connection.children ?? [];
+      tree.reset(children);
+      tree.element.hidden = connection.isApi || !children.length;
       searchSection.hidden = false;
       renderSection.hidden = false;
       clearSearchResults(false);
@@ -941,7 +1118,7 @@ function buildPanel(container: HTMLElement): () => void {
       renderSection.hidden = true;
       setStatus(error instanceof Error ? error.message : labels.connectFailed, true);
     } finally {
-      connectButton.disabled = false;
+      setDisabled(connectButton, false);
     }
   });
   searchButton.addEventListener("click", () => void runSearch(false));

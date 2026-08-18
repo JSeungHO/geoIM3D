@@ -6,6 +6,7 @@ import {
   setExternalNativePaintBridge,
   useAppStore,
 } from "@geolibre/core";
+import { createPMTilesStoreLayer } from "@geolibre/map/pmtiles-layer";
 import type {
   QueryGeometry,
   QueryOptions,
@@ -17,7 +18,7 @@ import type { Layer } from "@deck.gl/core";
 import type { MapboxOverlay } from "@deck.gl/mapbox";
 import { RasterLayer, type RasterLayerProps } from "@developmentseed/deck.gl-raster";
 import { fromArrayBuffer } from "geotiff";
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 import proj4 from "proj4";
 import type {
   AddVectorControl,
@@ -77,6 +78,8 @@ import { ensureMercatorProjection } from "./map-projection-utils";
 import { ensureSharedDeckOverlay, setSharedDeckLayers } from "./shared-deck-overlay";
 import { attachTerrainMeasure, measurePanelElement, type TerrainMapLike } from "./terrain-measure";
 import { INTERNAL_HELPER_LAYER_PATTERNS } from "./internal-layers";
+import { savedRasterState } from "./raster-layer-sync";
+import type { SwipeRasterSnapshot } from "./swipe-raster-mirror";
 import {
   KerchunkReferenceStore,
   loadKerchunkReference,
@@ -1744,7 +1747,11 @@ export function openPMTilesLayerPanel(app: GeoLibreAppAPI): void {
  * @returns True when the archive was added.
  * @throws If the archive could not be loaded (unreachable, not PMTiles, 403).
  */
-export async function addPMTilesLayerFromUrl(app: GeoLibreAppAPI, url: string): Promise<boolean> {
+export async function addPMTilesLayerFromUrl(
+  app: GeoLibreAppAPI,
+  url: string,
+  options: { fit?: boolean } = {},
+): Promise<boolean> {
   const { PMTilesLayerControl: PMTilesLayerControlClass } = await getComponentsConstructors();
 
   pmtilesControl ??= createPMTilesControl(PMTilesLayerControlClass);
@@ -1761,7 +1768,41 @@ export async function addPMTilesLayerFromUrl(app: GeoLibreAppAPI, url: string): 
     pmtilesControl.hide();
   }
 
-  await pmtilesControl.addLayer(url);
+  const map = options.fit === false ? app.getMap?.() : undefined;
+  const readCamera = () =>
+    map
+      ? {
+          center: map.getCenter(),
+          zoom: map.getZoom(),
+          bearing: map.getBearing(),
+          pitch: map.getPitch(),
+        }
+      : null;
+  let camera = readCamera();
+  let userMoving = false;
+  const onMoveStart = (event: { originalEvent?: unknown }) => {
+    if (event.originalEvent) userMoving = true;
+  };
+  const onMoveEnd = () => {
+    if (userMoving) {
+      camera = readCamera();
+      userMoving = false;
+    }
+  };
+  map?.on("movestart", onMoveStart);
+  map?.on("moveend", onMoveEnd);
+  try {
+    await pmtilesControl.addLayer(url);
+  } finally {
+    // Preserve a host user's camera interaction that happened while the archive
+    // header was loading, rather than restoring the older pre-load position.
+    if (userMoving) camera = readCamera();
+    map?.off("movestart", onMoveStart);
+    map?.off("moveend", onMoveEnd);
+  }
+  // The upstream PMTiles control always frames a newly added archive. Restore
+  // the host's camera when a programmatic caller explicitly opts out.
+  if (camera) map?.jumpTo(camera);
   // A failed load does NOT reject: the control catches it, records it on
   // `state.error`, and emits "error" (same convention as CogLayerControl, which
   // addLayerWithCogRasterControl has to check the same way). Without this a
@@ -3503,6 +3544,11 @@ export interface SwipeCogRasterSnapshot {
   nodata?: number;
 }
 
+// The snapshot getSwipeMaplibreRasters produces is exactly what SwipeRasterMirror
+// consumes, so the mirror owns the shape and this is an alias rather than a
+// second copy to keep in sync by hand.
+export type SwipeMaplibreRasterSnapshot = SwipeRasterSnapshot;
+
 // Notified when the set/state of CogLayerControl rasters changes, so the swipe
 // provider can refresh its list and re-mirror. Backed by a single store
 // subscription while at least one listener is registered.
@@ -3528,7 +3574,7 @@ function notifySwipeCogChange(): void {
 function swipeCogFingerprint(layers: GeoLibreLayer[]): string {
   const parts: unknown[][] = [];
   for (const layer of layers) {
-    if (!isCogRasterControlLayer(layer)) continue;
+    if (!isCogRasterControlLayer(layer) && !isMaplibreRasterControlLayer(layer)) continue;
     const source = layer.source as {
       url?: unknown;
       bands?: unknown;
@@ -3550,6 +3596,11 @@ function swipeCogFingerprint(layers: GeoLibreLayer[]): string {
       source.rescaleMin,
       source.rescaleMax,
       source.nodata,
+      // maplibre-gl-raster layers keep their visualization (mode/bands/
+      // colormap/rescale/nodata/...) in metadata.rasterState, not on `source`;
+      // without it a restyle of a mirrored raster would not notify. Always
+      // undefined for cog-url layers, so this is a no-op there.
+      layer.metadata.rasterState,
     ]);
   }
   return JSON.stringify(parts);
@@ -3630,6 +3681,30 @@ export function getSwipeCogRasters(): SwipeCogRasterSnapshot[] {
     });
   }
   return snapshots;
+}
+
+/** Snapshot the newer maplibre-gl-raster layers, including project restores. */
+export function getSwipeMaplibreRasters(): SwipeMaplibreRasterSnapshot[] {
+  return useAppStore
+    .getState()
+    .layers.filter(isMaplibreRasterControlLayer)
+    .flatMap((layer) => {
+      const url = (layer.source as { url?: unknown }).url;
+      if (typeof url !== "string") return [];
+      return [
+        {
+          id: layer.id,
+          name: layer.name,
+          url,
+          visible: layer.visible,
+          opacity: layer.opacity,
+          // Sanitized the same way the normal restore path does, so a
+          // hand-edited project file cannot push malformed fields straight
+          // into the mirror control's addRaster.
+          state: savedRasterState(layer),
+        },
+      ];
+    });
 }
 
 /**
@@ -4708,7 +4783,7 @@ function createPMTilesLayerAddHandler(): PMTilesLayerEventHandler {
     if (!layerInfo) return;
 
     const store = useAppStore.getState();
-    const layer = createPMTilesStoreLayer(event.layerId, layerInfo);
+    const layer = pmtilesStoreLayer(event.layerId, layerInfo);
     if (store.layers.some((item) => item.id === layer.id)) {
       store.updateLayer(layer.id, {
         metadata: layer.metadata,
@@ -5315,43 +5390,22 @@ function createGeoTiffRasterStoreLayer(state: GeoTiffRasterLayerState): GeoLibre
   };
 }
 
-function createPMTilesStoreLayer(id: string, layerInfo: PMTilesLayerInfo): GeoLibreLayer {
-  const firstSourceLayer = layerInfo.sourceLayers[0];
-  const fillColor =
-    (firstSourceLayer && layerInfo.sourceLayerColors?.[firstSourceLayer]) ??
-    DEFAULT_LAYER_STYLE.fillColor;
-
-  return {
+/** @internal Exported only so the control's layer shape can be unit-tested. */
+export function pmtilesStoreLayer(id: string, layerInfo: PMTilesLayerInfo): GeoLibreLayer {
+  return createPMTilesStoreLayer({
     id,
     name: layerInfo.name || layerNameFromUrl(layerInfo.url, id),
-    type: "pmtiles",
-    source: {
-      sourceId: layerInfo.id,
-      sourceLayers: layerInfo.sourceLayers,
-      tileType: layerInfo.tileType,
-      type: layerInfo.tileType === "raster" ? "raster" : "vector",
-      url: layerInfo.url,
-    },
-    visible: true,
+    url: layerInfo.url,
+    // The control also reports "unknown", which it and the map both draw as vector tiles.
+    tileType: layerInfo.tileType === "raster" ? "raster" : "vector",
+    sourceLayers: layerInfo.sourceLayers,
     opacity: layerInfo.opacity,
-    style: {
-      ...DEFAULT_LAYER_STYLE,
-      fillOpacity: layerInfo.tileType === "raster" ? 0.6 : 1,
-      fillColor,
-      strokeColor: fillColor,
-    },
-    metadata: {
-      externalNativeLayer: true,
-      nativeLayerIds: layerInfo.layerIds,
-      pickable: layerInfo.pickable,
-      sourceId: layerInfo.id,
-      sourceKind: "pmtiles-url",
-      sourceLayerColors: layerInfo.sourceLayerColors,
-      sourceLayers: layerInfo.sourceLayers,
-      tileType: layerInfo.tileType,
-    },
-    sourcePath: layerInfo.url,
-  };
+    style: { fillOpacity: layerInfo.tileType === "raster" ? 0.6 : 1 },
+    pickable: layerInfo.pickable,
+    // The control created these MapLibre layers itself, so its ids stand rather than derived ones.
+    nativeLayerIds: layerInfo.layerIds,
+    ...(layerInfo.sourceLayerColors ? { sourceLayerColors: layerInfo.sourceLayerColors } : {}),
+  });
 }
 
 function createZarrStoreLayer(id: string, layerInfo: ZarrLayerInfo): GeoLibreLayer {
@@ -5545,6 +5599,14 @@ function isCogRasterControlLayer(layer: GeoLibreLayer): boolean {
   return (
     layer.type === "cog" &&
     layer.metadata.sourceKind === "cog-url" &&
+    layer.metadata.externalNativeLayer === true
+  );
+}
+
+function isMaplibreRasterControlLayer(layer: GeoLibreLayer): boolean {
+  return (
+    layer.type === "cog" &&
+    layer.metadata.sourceKind === "maplibre-gl-raster" &&
     layer.metadata.externalNativeLayer === true
   );
 }

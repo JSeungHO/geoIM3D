@@ -47,7 +47,14 @@ import {
   TIME_SLIDER_PLUGIN_ID,
   VIEWER_BLOCKED_PLUGIN_IDS,
 } from "@geolibre/plugins";
-import { convertGeoTiffToCog, isTiff, readGeoTiffInfo } from "@geolibre/processing";
+import {
+  convertGeoTiffToCog,
+  exceedsBrowserCogConversionLimit,
+  geoTiffSampleCount,
+  isTiff,
+  LARGE_BROWSER_COG_CONVERSION_SAMPLES,
+  readGeoTiffInfo,
+} from "@geolibre/processing";
 import {
   type CSSProperties,
   type DragEvent,
@@ -127,6 +134,7 @@ import { registerXyzTileProtocol } from "../../lib/xyz-url";
 import { useEmbedBridge } from "../../hooks/useEmbedBridge";
 import { useRasterIdentify } from "../../hooks/useRasterIdentify";
 import { useNetcdfIdentify } from "../../hooks/useNetcdfIdentify";
+import { useCogSpectralIdentify } from "../../hooks/useCogSpectralIdentify";
 import {
   useAutoCollapsedPanel,
   useReplaceLayersPanelId,
@@ -144,6 +152,7 @@ import { NetcdfSampleMarkers } from "./NetcdfSampleMarkers";
 import { NetcdfCubeSetupDialog } from "./NetcdfCubeSetupDialog";
 import { NetcdfCubeWindow } from "./NetcdfCubeWindow";
 import { NetcdfProfileWindow } from "./NetcdfProfileWindow";
+import { hasElevationConsent } from "../../lib/elevation-consent";
 import { MapLegendPanel } from "../legend/MapLegendPanel";
 import { RasterSubsetPanel } from "./RasterSubsetPanel";
 import { BasemapExtractPanel } from "./BasemapExtractPanel";
@@ -196,14 +205,6 @@ import type { ProjectUrlLoadState } from "../../hooks/useProjectUrlLoader";
  * `window.confirm` (see the handlers below): a `false` return aborts that one
  * file's load without affecting the rest of a multi-file drop.
  */
-/**
- * Sample count (width × height × bands) above which in-browser COG conversion
- * gets an extra "this may be slow / memory-intensive" confirmation. The
- * converter reads the whole raster into memory as f64, so ~40M samples is
- * roughly where the transient allocation starts to be felt.
- */
-const LARGE_RASTER_SAMPLE_LIMIT = 40_000_000;
-
 function confirmLargeVectorDataset({ name, featureCount }: LargeVectorDataset) {
   return window.confirm(
     i18n.t("toolbar.item.largeVectorDesc", {
@@ -496,6 +497,7 @@ interface DesktopShellProps {
   layoutOptions: LayoutOptions;
   projectUrlLoadState?: ProjectUrlLoadState;
   dataUrlLoadState?: DataUrlLoadState;
+  mapAppAPI: ReturnType<typeof createAppAPI> | null;
   themeMode: ThemeMode;
   onToggleThemeMode: () => void;
   onMapReady?: (app: ReturnType<typeof createAppAPI>) => void;
@@ -551,6 +553,7 @@ export function DesktopShell({
   layoutOptions,
   projectUrlLoadState,
   dataUrlLoadState,
+  mapAppAPI,
   themeMode,
   onToggleThemeMode,
   onMapReady,
@@ -582,6 +585,8 @@ export function DesktopShell({
       meanSlope: t("terrainMeasure.meanSlope"),
       computing: t("terrainMeasure.computing"),
       partialData: t("terrainMeasure.partialData"),
+      heading: t("terrainMeasure.heading"),
+      finalHeading: t("terrainMeasure.finalHeading"),
     });
   }, [t]);
   // The map's Fullscreen control maximizes the map *canvas* (it calls
@@ -617,10 +622,9 @@ export function DesktopShell({
   useEffect(() => () => activeResizeCleanupRef.current?.(), []);
   const mapControllerRef = useRef<MapController | null>(null);
 
-  // Frame the GeoJSON layers a `?data=` deep link added. Only those are listed:
-  // the raster, PMTiles, and GeoParquet loaders move the camera themselves. The
-  // extent comes from the store's own GeoJSON, which is already in memory by the
-  // time the hook publishes the ids, so this needs no wait for layer sync.
+  // Frame layers a `?data=` deep link added. Single non-GeoJSON datasets move
+  // the camera in their format-specific loader; a repeated `data` batch lists
+  // every added layer here so their stored extents are combined into one fit.
   useEffect(() => {
     const fitLayerIds = dataUrlLoadState?.fitLayerIds;
     if (dataUrlLoadState?.status !== "loaded" || !fitLayerIds?.length) return;
@@ -895,7 +899,7 @@ export function DesktopShell({
   // Runtime postMessage API for a third-party host page that frames the app
   // (fly to a record, highlight it, open a tool; selection/view/tool events back
   // out). Off unless the deployment configured GEOLIBRE_EMBED_ORIGINS.
-  useEmbedApi(mapControllerRef);
+  useEmbedApi(mapControllerRef, mapAppAPI);
   // Same scripting surface, reached over the desktop Jupyter server's relay, so
   // a kernel driven from an EXTERNAL client (VS Code's Jupyter extension) can
   // control the map too. Inert until that server is running.
@@ -904,6 +908,7 @@ export function DesktopShell({
   // COG layers (read band values on click). Inert until a COG is identified.
   useRasterIdentify();
   useNetcdfIdentify(mapControllerRef, mapReadyGeneration);
+  useCogSpectralIdentify(mapControllerRef, mapReadyGeneration);
   const [layerPanelWidth, setLayerPanelWidth] = useState(initialSidePanelWidth);
   const [stylePanelWidth, setStylePanelWidth] = useState(initialSidePanelWidth);
   const [stylePanelOpenRequest, setStylePanelOpenRequest] = useState(0);
@@ -1169,13 +1174,21 @@ export function DesktopShell({
           window.alert(t("raster.rasterNotGeotiff", { name }));
           return;
         }
+        const info = await readGeoTiffInfo(bytes);
+        if (!info.ok) throw new Error("Not a readable GeoTIFF.");
+        const samples = geoTiffSampleCount(info);
+        if (exceedsBrowserCogConversionLimit(samples)) {
+          console.warn(
+            `[GeoLibre] Skipping in-browser COG conversion for "${name}": ${samples.toLocaleString()} decoded samples exceed the safe memory limit.`,
+          );
+          window.alert(t("raster.cogConvertTooLarge", { name }));
+          return;
+        }
         if (!bytesAreRemote) {
           // Local file: pick the prompt by size now that the header is cheap to
           // read, then confirm once. (A remote source already confirmed above.)
-          const info = await readGeoTiffInfo(bytes);
-          const samples = info.width * info.height * Math.max(info.bands, 1);
           const message =
-            samples > LARGE_RASTER_SAMPLE_LIMIT
+            samples > LARGE_BROWSER_COG_CONVERSION_SAMPLES
               ? t("raster.cogConvertLargeConfirm", {
                   name,
                   width: info.width,
@@ -2306,6 +2319,7 @@ export function DesktopShell({
                   renderBuiltin={({ collapsed, onCollapsedChange }) => (
                     <LayerPanel
                       mapControllerRef={mapControllerRef}
+                      collaborationApi={collaboration}
                       onResizeStart={startLayerPanelResize}
                       geometryEditLayerId={geometryEditLayerId}
                       onToggleGeometryEdit={handleToggleGeometryEdit}
@@ -2332,6 +2346,7 @@ export function DesktopShell({
                 ) : (
                   <LayerPanel
                     mapControllerRef={mapControllerRef}
+                    collaborationApi={collaboration}
                     onResizeStart={startLayerPanelResize}
                     geometryEditLayerId={geometryEditLayerId}
                     onToggleGeometryEdit={handleToggleGeometryEdit}
@@ -2389,6 +2404,7 @@ export function DesktopShell({
                   this file only gains the wrapper. */}
               <PrimaryGlobeSwitch>
                 <MapCanvas
+                  canUseRemoteElevation={hasElevationConsent}
                   controllerRef={mapControllerRef}
                   onMapDiagnosticEvent={handleMapDiagnosticEvent}
                   onControllerReady={handleMapControllerReady}
@@ -2418,10 +2434,7 @@ export function DesktopShell({
                     over the map, so a fault here must never take down the map
                     itself (it shares this subtree's error boundary otherwise). */}
                 <SilentErrorBoundary label="Collaboration status">
-                  <CollaborationStatusBadge
-                    api={collaboration}
-                    mapControllerRef={mapControllerRef}
-                  />
+                  <CollaborationStatusBadge api={collaboration} mapControllerRef={mapControllerRef} />
                 </SilentErrorBoundary>
                 <MapModeBanner mapControllerRef={mapControllerRef} />
                 <QuickAnalysisBanner />

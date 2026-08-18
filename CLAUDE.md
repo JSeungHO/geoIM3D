@@ -14,6 +14,7 @@ The same React app ships three ways: native desktop via **Tauri v2** (`apps/geol
 npm run dev            # web dev server → http://localhost:5173
 npm run tauri:dev      # desktop app (required for filesystem dialogs, local MBTiles, local raster reads)
 npm run build          # production web build → apps/geolibre-desktop/dist/
+npm run lite:build     # same, but DuckDB-WASM from jsDelivr — for hosts with a per-asset size cap
 npm run tauri:build    # desktop installers → apps/geolibre-desktop/src-tauri/target/release/bundle/
 npm run typecheck      # alias for the full build (tsc -b && vite build) — writes to dist/, not a pure type-check
 npm run ci             # full local gate: build + frontend + worker + backend + rust check
@@ -41,7 +42,31 @@ a few points under the current numbers as a **ratchet** — regressions fail CI,
 and when coverage rises comfortably above a floor, raise the floor to lock in the
 gain. The frontend
 report only counts files a test actually imports, so a module with no test does
-not appear at all rather than as 0%. The backend coverage run (and `npm run ci`,
+not appear at all rather than as 0%.
+
+That last point is the one that bites: writing the *first* test for a large
+untested module reads as a coverage **regression**, because the module and
+everything it imports enter the denominator at once. GeoLibre#1784 added a test
+that imported `usePlugins.ts` and so pulled in the whole built-in plugin
+registry, 39 files, dropping function coverage 72.90% → 60.36% and reddening
+`main`. The fix is to test against a leaf module rather than to lower the floor
+(GeoLibre#1888 extracted `lib/plugin-layer-queries.ts`; `geo-editor-geometry.ts`
+in `@geolibre/plugins` is the same pattern). Check what a new test *transitively*
+imports before assuming a coverage drop means the code got worse.
+
+`test:frontend:coverage` runs through `scripts/coverage-check.mjs` rather than
+calling `node --test` directly. Node still enforces all three floors; the wrapper
+only re-measures once when **line** coverage alone comes up short with every test
+passing. Line coverage is nondeterministic on CI (GeoLibre#1889: two runs over
+byte-identical sources reported 81.82% and 76.47%, 114 of 444 files differing on
+lines and *none* on branches or functions), and it is not reproducible locally on
+either Node 22 or 26. Branch and function shortfalls, and any test failure, fail
+on the spot with no retry, so a real regression still fails fast. `classify()` is
+exported and covered by `tests/coverage-check.test.ts` — change the retry policy
+there, not by loosening a floor. If the retry starts firing regularly, fix the
+measurement instead of widening the mitigation.
+
+The backend coverage run (and `npm run ci`,
 which calls the `:coverage` variants) needs `pytest-cov` from the backend `dev`
 extra. Install the **`test`** extra to run the *full* backend suite — without
 the optional engines (geopandas/rasterio/sedona/httpx) the vector/raster/SQL/ML
@@ -106,6 +131,7 @@ The browser build proxies the sidecar at `/sidecar` (same-origin, no CORS); conf
 - `MAX_VECTOR_PMTILES_ZOOM` (`packages/processing/src/wasm-convert.ts`) mirrors the deepest zoom `vector_to_pmtiles` accepts (18 — past it the tool exits with `validation error: max_zoom must be <= 18`). The cap lives inside the WASM binary and is not exported, so whenever `geolibre-wasm` is bumped — including Dependabot PRs — re-check it. If it drifts, the browser's Vector to PMTiles either refuses a zoom the tiler would now accept, or accepts one it will reject after the user has waited. Note this is **not** the sidecar's cap: freestiler allows 24 (`MAX_PMTILES_ZOOM` in `ConversionDialog.tsx`, mirroring `backend/geolibre_server/geolibre_server/app/conversion.py`), and the dialog validates against whichever engine is about to run. `tests/wasm-convert.test.ts` ("accepts the documented maximum zoom and rejects one deeper") fails in CI if the mirror drifts, so running the frontend suite after a bump is enough to catch it.
 - `MAX_VECTOR_BYTES` (`packages/plugins/src/plugins/remote-file-formats.ts`) mirrors `MAX_REMOTE_FILE_BYTES`, an **internal, unexported** constant in `maplibre-gl-vector` (2 GiB — DuckDB-WASM holds remote file sizes in 32 bits). It cannot be imported, so whenever `maplibre-gl-vector` is bumped (in `packages/plugins/package.json`) — including Dependabot PRs — re-check `src/lib/utils/remote.ts` in that package and update the mirror if it moved. If it drifts, the remote-browse panels (Source Cooperative, Hugging Face) silently block GeoParquet the engine could now open, or offer an Add that is certain to fail. Updating the constant is enough: the limit the user is shown is rendered from it, not written into the copy. `remote-file-formats.ts` is the **single** home for this and the other format/reader/size rules those panels share — a per-panel copy would miss this check, so add new browse panels against that module rather than duplicating it (`source-coop-api.ts` re-exports it under its own names for compatibility).
 - `MAP_PANEL_SELECTOR` (`apps/geolibre-desktop/src/components/layout/RecordVideoDialog.tsx`) mirrors the **rendered** control class names from `maplibre-gl-components` — `maplibre-gl-html-control`, `maplibre-gl-legend`, `maplibre-gl-colorbar` — so the Record Video "Include map panels" option can rasterize those on-map overlays into the recording. These are the display elements, deliberately **not** the `*-gui-control` authoring editors. The classes are internal and unexported, so whenever `maplibre-gl-components` is bumped (in `packages/plugins/package.json`) — including Dependabot PRs — re-check them against the rendered controls and update the selector if they moved. If a class drifts, the option silently stops burning that panel into the video (or the checkbox never appears) with no build error.
+- `GLOBE_CONTROL_TOGGLE_SELECTOR` (`packages/map/src/globe-control-toggle.ts`) mirrors the class names MapLibre's own `GlobeControl` puts on its toggle button — `maplibregl-ctrl-globe` and `maplibregl-ctrl-globe-enabled`, swapped on every projection change. `MapCanvas` persists a projection change from a **click** on that button rather than from the `projectiontransition` event, because style initialization and project reconciliation emit that event too and a stale one overwrites the projection of a project that has just loaded. The classes are internal and unexported, so whenever `maplibre-gl` is bumped (including Dependabot PRs) run the frontend suite — `tests/globe-control-toggle.test.ts` builds a real `GlobeControl` and fails if the mirror stops matching. Without that check a renamed class silently stops persisting the user's projection, with no build error.
 - `propertySpecFor` (`packages/core/src/expressions.ts`) fabricates the **unexported** `StylePropertySpecification` shape that `@maplibre/maplibre-gl-style-spec`'s `createExpression` uses for expected-result-type enforcement (the Expression Builder's filter → boolean / color checks). The cast hides any contract change from the compiler, so whenever `@maplibre/maplibre-gl-style-spec` is bumped (including Dependabot PRs) run the frontend suite — the "enforces an expected result type" test in `tests/expressions.test.ts` fails if the shape stops being honored.
 - `DISTANCE_SEGMENTS` / `NON_DISTANCE_NAMES` (`apps/geolibre-desktop/src/lib/whitebox-distance-params.ts`) decide, by parameter *name*, which Whitebox parameters are ground distances and so get the Processing dialog's metric unit picker (GeoLibre#1540). The segments are generic (`tolerance`, `radius`, `length`, `resolution`), so a tool can carry a matching name that is not a length — `corridor_tolerance` is a 0-1 fraction. Those are safe today only because the picker is confined to tools whose every dataset input is a vector layer, and the colliding names happen to sit on imagery/LiDAR tools; that is a coincidence, not a guarantee. So whenever `geolibre-wasm` is bumped (in `packages/processing/package.json`) — including Dependabot PRs — scan the new catalog for a `double` matching the rule whose description reads as a fraction, ratio, angle or weight, and add it to `NON_DISTANCE_NAMES`. If one is missed, that tool's field offers metres and silently converts a dimensionless number as if it were a distance, with no build error.
 - UI strings are translatable via **react-i18next**; catalogs live in `apps/geolibre-desktop/src/i18n/locales/*.json` (`en.json` is the source of truth, typed by `i18next.d.ts`). Use `t()` for new user-facing strings; a `?locale`/`?lang` query param sets the embed language. The UI mirrors for right-to-left locales (Arabic), so style new components with Tailwind's logical utilities (`ms-`/`me-`/`ps-`/`pe-`/`text-start`/`border-s`/`start-`…), not the physical `ml-`/`left-` forms. See `docs/i18n.md`.

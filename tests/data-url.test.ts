@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { strToU8, zipSync } from "fflate";
 import {
   dataUrlParameters,
+  serviceUrlParameter,
   fetchRemoteData,
   mapboxStyleForDataLayer,
   parseRasterUrlStyle,
@@ -11,6 +12,92 @@ import {
 const collection = (id: string) => ({
   type: "FeatureCollection" as const,
   features: [{ type: "Feature" as const, id, properties: {}, geometry: null }],
+});
+
+describe("serviceUrlParameter", () => {
+  it("accepts supported service-prefill links", () => {
+    assert.deepEqual(
+      serviceUrlParameter(
+        "?add=xyz&serviceUrl=https%3A%2F%2Ftiles.example.com%2F%7Bz%7D%2F%7Bx%7D%2F%7By%7D.png",
+      ),
+      {
+        kind: "xyz",
+        url: "https://tiles.example.com/{z}/{x}/{y}.png",
+        layer: null,
+        styleUrl: null,
+      },
+    );
+  });
+
+  it("carries the requested layer and a vector tileset's style", () => {
+    assert.deepEqual(
+      serviceUrlParameter(
+        "?add=wfs&serviceUrl=https%3A%2F%2Fmaps.example.com%2Fwfs&serviceLayer=osm%3Awater_areas",
+      ),
+      {
+        kind: "wfs",
+        url: "https://maps.example.com/wfs",
+        layer: "osm:water_areas",
+        styleUrl: null,
+      },
+    );
+    assert.deepEqual(
+      serviceUrlParameter(
+        "?add=ogc-vector-tiles&serviceUrl=https%3A%2F%2Ftiles.example.com%2F%7Bz%7D%2F%7Bx%7D%2F%7By%7D.pbf&serviceStyle=https%3A%2F%2Ftiles.example.com%2Fstyle.json",
+      ),
+      {
+        kind: "ogc-vector-tiles",
+        url: "https://tiles.example.com/{z}/{x}/{y}.pbf",
+        layer: null,
+        styleUrl: "https://tiles.example.com/style.json",
+      },
+    );
+  });
+
+  it("restores tile-template braces only for the kinds that use them", () => {
+    // A WMS token that legitimately encodes a brace must reach the server as it
+    // was signed, not as a literal brace.
+    assert.equal(
+      serviceUrlParameter(
+        "?add=wms&serviceUrl=https%3A%2F%2Fmaps.example.com%2Fwms%3Ftoken%3Da%257Bb%257Dc",
+      )?.url,
+      "https://maps.example.com/wms?token=a%7Bb%7Dc",
+    );
+    assert.equal(
+      serviceUrlParameter(
+        "?add=wmts&serviceUrl=https%3A%2F%2Ftiles.example.com%2Fwmts%3FTileMatrix%3D%257Bz%257D",
+      )?.url,
+      "https://tiles.example.com/wmts?TileMatrix={z}",
+    );
+  });
+
+  it("ignores a blank layer and a non-web style link", () => {
+    assert.deepEqual(
+      serviceUrlParameter(
+        "?add=wms&serviceUrl=https://maps.example.com/wms&serviceLayer=%20&serviceStyle=file:///tmp/style.json",
+      ),
+      { kind: "wms", url: "https://maps.example.com/wms", layer: null, styleUrl: null },
+    );
+  });
+
+  it("restores lower-case encoded tile-template braces", () => {
+    assert.deepEqual(
+      serviceUrlParameter(
+        "?add=xyz&serviceUrl=https://tiles.example.com/%257bz%257d/%257bx%257d/%257by%257d.png",
+      ),
+      {
+        kind: "xyz",
+        url: "https://tiles.example.com/{z}/{x}/{y}.png",
+        layer: null,
+        styleUrl: null,
+      },
+    );
+  });
+
+  it("rejects unsupported kinds and non-web URLs", () => {
+    assert.equal(serviceUrlParameter("?add=bogus&serviceUrl=https://example.com"), null);
+    assert.equal(serviceUrlParameter("?add=xyz&serviceUrl=file:///tmp/tiles"), null);
+  });
 });
 
 describe("per-file ZIP styles", () => {
@@ -109,8 +196,8 @@ describe("data URL deep links", () => {
     const parsed = dataUrlParameters(
       `?data=${encodeURIComponent(endpoint)}&style=${encodeURIComponent(style)}`,
     );
-    assert.equal(parsed?.dataUrl, endpoint);
-    assert.equal(parsed?.styleUrl, style);
+    assert.equal(parsed?.[0]?.dataUrl, endpoint);
+    assert.equal(parsed?.[0]?.styleUrl, style);
   });
 
   it("parses raw, unencoded data and style URLs as documented", () => {
@@ -120,13 +207,51 @@ describe("data URL deep links", () => {
       "?data=https://assets.geolibre.app/data/places.geojson" +
         "&style=https://assets.geolibre.app/data/sample.style.json",
     );
-    assert.equal(parsed?.dataUrl, "https://assets.geolibre.app/data/places.geojson");
-    assert.equal(parsed?.styleUrl, "https://assets.geolibre.app/data/sample.style.json");
+    assert.equal(parsed?.[0]?.dataUrl, "https://assets.geolibre.app/data/places.geojson");
+    assert.equal(parsed?.[0]?.styleUrl, "https://assets.geolibre.app/data/sample.style.json");
 
     // Only the first `=` of each `&`-delimited pair separates name from value,
     // so a nested `=` survives unencoded — the docs tell readers not to escape it.
     const nested = dataUrlParameters("?data=https://api.example.com/features?category=parks");
-    assert.equal(nested?.dataUrl, "https://api.example.com/features?category=parks");
+    assert.equal(nested?.[0]?.dataUrl, "https://api.example.com/features?category=parks");
+  });
+
+  it("parses repeated data URLs and pairs repeated styles by position", () => {
+    assert.deepEqual(
+      dataUrlParameters(
+        "?data=https://example.com/roads.geojson" +
+          "&data=https://example.com/buildings.parquet" +
+          "&style=https://example.com/roads.style.json" +
+          "&style=https://example.com/buildings.style.json",
+      ),
+      [
+        {
+          dataUrl: "https://example.com/roads.geojson",
+          styleUrl: "https://example.com/roads.style.json",
+        },
+        {
+          dataUrl: "https://example.com/buildings.parquet",
+          styleUrl: "https://example.com/buildings.style.json",
+        },
+      ],
+    );
+  });
+
+  it("allows an empty positional style when only a later dataset is styled", () => {
+    assert.deepEqual(
+      dataUrlParameters(
+        "?data=https://example.com/roads.geojson" +
+          "&data=https://example.com/dem.tif" +
+          "&style=&style=https://example.com/dem.style.json",
+      ),
+      [
+        { dataUrl: "https://example.com/roads.geojson", styleUrl: null },
+        {
+          dataUrl: "https://example.com/dem.tif",
+          styleUrl: "https://example.com/dem.style.json",
+        },
+      ],
+    );
   });
 
   it("rejects non-http data URLs", () => {

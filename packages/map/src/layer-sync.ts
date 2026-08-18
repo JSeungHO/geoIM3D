@@ -3,6 +3,7 @@ import {
   DEFAULT_LAYER_STYLE,
   type GeoLibreLayer,
   type ExternalNativePaintBridge,
+  generatorCircleRadiusValue,
   geojsonHasZCoordinates,
   getExternalNativePaintBridge,
   type LayerStyle,
@@ -13,10 +14,12 @@ import {
   styleValue,
   validateMapExpression,
 } from "@geolibre/core";
+import { normalizePMTilesUrl, PMTILES_PROTOCOL, pmtilesVectorLayerId } from "./pmtiles-layer";
+import { encodeVectorTileLayerPart } from "./vector-tile-layer-ids";
 import { addProtocol, config } from "maplibre-gl";
 import type { GeoJSON } from "geojson";
-import type maplibregl from "maplibre-gl";
-import type { PropertyValueSpecification } from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
+import type { DataDrivenPropertyValueSpecification, PropertyValueSpecification } from "maplibre-gl";
 import { FileSource, PMTiles, Protocol } from "pmtiles";
 import {
   ensureGeoJsonVtProtocol,
@@ -57,6 +60,12 @@ import {
 } from "./derived-geometry";
 import { ensureGeneratedImageHandler } from "./generated-images";
 import { prepareFillPattern } from "./fill-patterns";
+import {
+  getDynamicLayoutProperty,
+  getDynamicPaintProperty,
+  setDynamicLayoutProperty,
+  setDynamicPaintProperty,
+} from "./dynamic-style-property";
 import { prepareLineDecoration } from "./line-decorations";
 import {
   KML_ICON_URL_PROPERTY,
@@ -94,7 +103,6 @@ export function setExternalDeckLayerOrderHandler(
 }
 
 const WMS_PROXY_PATH = "/__geolibre_wms_proxy";
-const PMTILES_PROTOCOL = "pmtiles";
 const PMTILES_PROTOCOL_GLOBAL_KEY = "__geolibrePMTilesProtocol";
 const PMTILES_ARCHIVE_KEYS_GLOBAL_KEY = "__geolibrePMTilesArchiveKeys";
 const MIN_LAYER_ZOOM = DEFAULT_LAYER_STYLE.minZoom;
@@ -378,7 +386,7 @@ function intersectZoomRange(
 }
 
 export function syncLayer(map: maplibregl.Map, layer: GeoLibreLayer, beforeId?: string): void {
-  if (isExternalNativeLayer(layer)) {
+  if (isExternalNativeLayer(layer) || isVectorControlLayer(layer)) {
     syncExternalNativeLayer(map, layer, beforeId);
     return;
   }
@@ -442,6 +450,42 @@ export function syncLayer(map: maplibregl.Map, layer: GeoLibreLayer, beforeId?: 
 
 function isExternalNativeLayer(layer: GeoLibreLayer): boolean {
   return getExternalNativeLayerIds(layer).length > 0;
+}
+
+/** `metadata.sourceKind` for the layers maplibre-gl-vector owns. */
+const VECTOR_CONTROL_SOURCE_KIND = "maplibre-gl-vector";
+
+/**
+ * A layer the Add Vector Layer control owns, matched by its metadata rather
+ * than by having native layer ids.
+ *
+ * Restoring after a style change, the control clears its retained record's
+ * `layerIds` and then *awaits* re-reading the source data before it can fill
+ * them back in. GeoLibre mirrors the control's layer list into the store, so a
+ * sync landing inside that window sees `nativeLayerIds: []`, no longer
+ * recognizes the layer as external, and rebuilds it down the ordinary GeoJSON
+ * path: a second source and circle layer carrying GeoLibre's own paint,
+ * stacked under the one the control restores a moment later. That is the
+ * concentric point ring of opengeos/GeoLibre#1902.
+ *
+ * The control owns these layers in either window, so route them to the
+ * external path throughout. There they take the {@link isExternalCustomLayer}
+ * branch, which already tolerates an empty id list: it no-ops until the
+ * control brings its layers back and the next sync reconciles them normally.
+ *
+ * `customLayerType` is part of the match because
+ * `createVectorStoreLayer` always sets it (`vectorCustomLayerType` falls back
+ * to `"custom"`), so every genuine control layer carries it at every point in
+ * its lifecycle. Requiring it leaves a layer that claims the `sourceKind`
+ * without it — a hand-edited or pre-`customLayerType` project file, which no
+ * live control will ever hand native layer ids — on the ordinary GeoJSON path,
+ * where its embedded `geojson` still renders.
+ */
+function isVectorControlLayer(layer: GeoLibreLayer): boolean {
+  return (
+    layer.metadata.sourceKind === VECTOR_CONTROL_SOURCE_KIND &&
+    typeof layer.metadata.customLayerType === "string"
+  );
 }
 
 function syncExternalNativeLayer(
@@ -804,9 +848,12 @@ function ensurePMTilesExternalLayer(
         tileSize: 256,
       });
     } else {
+      const encoding = layer.source.encoding;
       map.addSource(sourceId, {
         type: "vector",
         url: tileUrl,
+        // An MLT archive decodes through a different worker path than plain MVT.
+        ...(encoding === "mlt" ? { encoding } : {}),
       });
     }
   }
@@ -925,73 +972,6 @@ function ensurePMTilesProtocol(url: string): void {
 }
 
 /**
- * The MapLibre layer ids `syncLayers` creates for a `pmtiles` store layer, in
- * the exact naming scheme `ensurePMTilesExternalLayer` uses. A layer built
- * outside the PMTiles control (e.g. the offline basemap extract dialog) must
- * put these in `metadata.nativeLayerIds` — a non-empty list is what marks the
- * layer renderable rather than a placeholder.
- */
-export function pmtilesNativeLayerIds(
-  sourceId: string,
-  tileType: "vector" | "raster",
-  sourceLayers: readonly string[],
-): string[] {
-  if (tileType === "raster") {
-    return [`${sourceId}-raster`];
-  }
-  return sourceLayers.flatMap((sourceLayer) =>
-    ["fill", "line", "circle"].map((kind) => pmtilesVectorLayerId(sourceId, sourceLayer, kind)),
-  );
-}
-
-/** Facts about a PMTiles archive needed to build a GeoLibre layer for it. */
-export interface PMTilesArchiveInfo {
-  tileType: "vector" | "raster";
-  /** Vector-tile layer ids from the archive metadata (empty for raster). */
-  sourceLayers: string[];
-  /** `[minLon, minLat, maxLon, maxLat]` from the archive header. */
-  bounds: [number, number, number, number];
-  minZoom: number;
-  maxZoom: number;
-}
-
-/**
- * Reads the header (and, for vector archives, the metadata's `vector_layers`)
- * of an in-memory PMTiles archive, so callers can construct a properly-shaped
- * `pmtiles` store layer for it.
- */
-export async function readPMTilesArchiveInfo(bytes: Uint8Array): Promise<PMTilesArchiveInfo> {
-  const file = new File([bytes as BlobPart], "archive.pmtiles", {
-    type: "application/octet-stream",
-  });
-  const archive = new PMTiles(new FileSource(file));
-  const header = await archive.getHeader();
-  // PMTiles TileType: 1 = MVT (vector); everything else renders as raster.
-  const tileType = header.tileType === 1 ? "vector" : "raster";
-  let sourceLayers: string[] = [];
-  if (tileType === "vector") {
-    try {
-      const metadata = (await archive.getMetadata()) as {
-        vector_layers?: Array<{ id?: unknown }>;
-      };
-      sourceLayers = (metadata.vector_layers ?? [])
-        .map((layer) => layer.id)
-        .filter((id): id is string => typeof id === "string" && id.length > 0);
-    } catch {
-      // Metadata is optional; a vector archive without it still renders once
-      // the user knows its layer names.
-    }
-  }
-  return {
-    tileType,
-    sourceLayers,
-    bounds: [header.minLon, header.minLat, header.maxLon, header.maxLat],
-    minZoom: header.minZoom,
-    maxZoom: header.maxZoom,
-  };
-}
-
-/**
  * Registers an in-memory PMTiles archive (e.g. an offline basemap extract)
  * under a synthetic key so store layers can reference it like any remote
  * archive. Returns the `pmtiles://<key>` URL to use as the layer's
@@ -1086,10 +1066,6 @@ function isMapLibreProtocolRegistered(): boolean {
   );
 }
 
-function normalizePMTilesUrl(url: string): string {
-  return url.startsWith(`${PMTILES_PROTOCOL}://`) ? url : `${PMTILES_PROTOCOL}://${url}`;
-}
-
 function stripPMTilesProtocol(url: string): string {
   return url.startsWith(`${PMTILES_PROTOCOL}://`)
     ? url.slice(`${PMTILES_PROTOCOL}://`.length)
@@ -1127,10 +1103,6 @@ function hasPMTilesNativeSourceLayer(
   return ["fill", "line", "circle"].some((kind) =>
     nativeLayerIds.includes(pmtilesVectorLayerId(sourceId, sourceLayer, kind)),
   );
-}
-
-function pmtilesVectorLayerId(sourceId: string, sourceLayer: string, kind: string): string {
-  return `${sourceId}-${encodeVectorTileLayerPart(sourceLayer)}-${kind}`;
 }
 
 function getPMTilesSourceLayers(layer: GeoLibreLayer): string[] {
@@ -1616,7 +1588,7 @@ function syncVectorControlPointSymbology(
   layer: GeoLibreLayer,
   beforeId?: string,
 ): void {
-  if (layer.metadata.sourceKind !== "maplibre-gl-vector") return;
+  if (!isVectorControlLayer(layer)) return;
   const syntheticMarkerId = markerLayerId(layer.id);
   const singleRenderer = styleValue(layer.style, "pointRenderer") === "single";
   const circleNativeId = getExternalNativeLayerIds(layer).find(
@@ -1692,8 +1664,8 @@ function syncVectorControlPointSymbology(
   // of the other rule-based paint overrides apply to control-owned layers.
   const radius = proportionalRadiusExpression(layer.style);
   if (radius) {
-    if (!styleValuesEqual(map.getPaintProperty?.(circleNativeId, "circle-radius"), radius)) {
-      map.setPaintProperty(circleNativeId, "circle-radius", radius);
+    if (!styleValuesEqual(getDynamicPaintProperty(map, circleNativeId, "circle-radius"), radius)) {
+      setDynamicPaintProperty(map, circleNativeId, "circle-radius", radius);
     }
     overriddenRadiusIdsFor(map).add(circleNativeId);
   } else {
@@ -1749,8 +1721,8 @@ function setExternalNativeLayerPaint(
 
   for (const [property, value] of Object.entries(paint)) {
     try {
-      if (!styleValuesEqual(map.getPaintProperty?.(nativeLayerId, property), value)) {
-        map.setPaintProperty(nativeLayerId, property, value);
+      if (!styleValuesEqual(getDynamicPaintProperty(map, nativeLayerId, property), value)) {
+        setDynamicPaintProperty(map, nativeLayerId, property, value);
       }
     } catch {
       // External controls can create heterogeneous style layers. Ignore paint
@@ -2538,6 +2510,7 @@ function applyGeometryGeneratorLayers(
           layer.geojson,
           generatorType,
           styleValue(layer.style, "geometryGeneratorBufferDistance"),
+          styleValue(layer.style, "geometryGeneratorBufferProperty"),
         )
       : null;
   if (!generated || generated.features.length === 0) {
@@ -2615,7 +2588,9 @@ function applyGeometryGeneratorLayers(
         filter: ["match", ["geometry-type"], ["Point", "MultiPoint"], true, false],
         paint: {
           "circle-color": fillColor,
-          "circle-radius": Math.max(1, styleValue(layer.style, "geometryGeneratorCircleRadius")),
+          "circle-radius": generatorCircleRadiusValue(
+            layer.style,
+          ) as DataDrivenPropertyValueSpecification<number>,
           "circle-opacity": genOpacity,
           "circle-stroke-color": strokeColor,
           "circle-stroke-width": strokeWidth,
@@ -3284,10 +3259,6 @@ function encodeMbtilesLayerPart(value: string): string {
   return encodeURIComponent(value).replaceAll("%", "_");
 }
 
-function encodeVectorTileLayerPart(value: string): string {
-  return encodeURIComponent(value).replaceAll("%", "_");
-}
-
 export function mbtilesFillLayerId(layerId: string, sourceLayer: string): string {
   return `layer-${layerId}-mbtiles-${encodeMbtilesLayerPart(sourceLayer)}-fill`;
 }
@@ -3436,15 +3407,15 @@ function ensureLayer(
   if (map.getLayer(id)) {
     if (spec.paint) {
       for (const [key, value] of Object.entries(spec.paint)) {
-        if (!styleValuesEqual(map.getPaintProperty?.(id, key), value)) {
-          map.setPaintProperty(id, key, value);
+        if (!styleValuesEqual(getDynamicPaintProperty(map, id, key), value)) {
+          setDynamicPaintProperty(map, id, key, value);
         }
       }
     }
     if (spec.layout) {
       for (const [key, value] of Object.entries(spec.layout)) {
-        if (!styleValuesEqual(map.getLayoutProperty?.(id, key), value)) {
-          map.setLayoutProperty(id, key, value);
+        if (!styleValuesEqual(getDynamicLayoutProperty(map, id, key), value)) {
+          setDynamicLayoutProperty(map, id, key, value);
         }
       }
     }

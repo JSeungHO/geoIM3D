@@ -79,13 +79,13 @@ Run DuckDB Spatial SQL in the browser against loaded layers, local files, and re
 <div class="feature-card" markdown>
 ### Vector tools
 
-Geometry tools under Processing → Vector — buffer, centroids, convex hull, dissolve, bounding box, simplify, smooth, regular grid, clip, overlay (intersect/difference/union), spatial and attribute joins, selection, Voronoi/Delaunay, and H3 grids and binning — run in the browser with Turf.js, with an optional GeoPandas sidecar engine. A Spatial Statistics toolbox and a batch runner with model/pipeline chaining round out Processing.
+Geometry tools under Processing → GeoLibre Toolbox → Vector — buffer, centroids, convex hull, dissolve, bounding box, simplify, smooth, regular grid, clip, overlay (intersect/difference/union), spatial and attribute joins, selection, Voronoi/Delaunay, and H3 grids and binning — run in the browser with Turf.js, with an optional GeoPandas sidecar engine. A Spatial Statistics toolbox and a batch runner with model/pipeline chaining round out Processing.
 </div>
 
 <div class="feature-card" markdown>
 ### Raster tools
 
-Raster tools under Processing → Raster — hillshade, slope, aspect, reproject, resample, clip, polygonize, contour, zonal and focal statistics, raster calculator, reclassify, mosaic, and a Spectral Index toolbox (NDVI, NDWI, EVI with band presets) — run on a rasterio sidecar with a client-side fallback. Includes a Georeferencer and single-band or RGB raster styling.
+Raster tools under Processing → GeoLibre Toolbox → Raster — hillshade, slope, aspect, reproject, resample, clip, polygonize, contour, zonal and focal statistics, raster calculator, reclassify, mosaic, and a Spectral Index toolbox (NDVI, NDWI, EVI with band presets) — run on a rasterio sidecar with a client-side fallback. Includes a Georeferencer and single-band or RGB raster styling.
 </div>
 
 <div class="feature-card" markdown>
@@ -163,7 +163,7 @@ For map-focused embeds, add `&panels=none` to hide the Layers, Style, and Attrib
 https://web.geolibre.app/?url=https://share.geolibre.app/giswqs/3d-tiles.geolibre.json&layout=compact&panels=none
 ```
 
-Use `toolbar=icons` when you only want icon-only toolbar buttons. `panels=hidden`, `panels=hide`, `panels=off`, and `hidePanels=true` are accepted aliases for hiding panels.
+Use `toolbar=icons` when you only want icon-only toolbar buttons, or `toolbar=none` to hide the top toolbar while retaining panels and the status bar. `panels=hidden`, `panels=hide`, `panels=off`, and `hidePanels=true` are accepted aliases for hiding panels.
 
 Use `panels=collapsed` to keep the Layers and Style icon rails visible while
 starting both panels collapsed.
@@ -206,7 +206,7 @@ full release history and what comes next, see the [Roadmap](roadmap.md).
 - **Attribute depth** — virtual fields, persistent attribute joins, an attribute form designer, a Raster Attribute Table, and editable source layers that write vector edits back to GeoPackage, GeoJSON, and PostGIS.
 - **Catalog browsers** — a QGIS-style Browser panel (Data Source Manager) plus panels for STAC, NASA Earthdata, Hugging Face, GeoLens, Natural Earth, Source Cooperative, ArcGIS Hub, Socrata, and CKAN.
 - **Media and capture** — map recording to video, route animation with a track-follow camera, a Camera Tour recorder, a Print Layout composer with Atlas / map series, in-browser ONNX/YOLO object detection, and a native-resolution geotagged photo viewer.
-- **Distribution** — embed-friendly URL parameters including `maponly`, a versioned `postMessage` API and the typed `@geolibre/embed` client for host pages, cross-platform installers (with a macOS Homebrew Cask, a [Mac App Store](https://apps.apple.com/app/geolibre-desktop/id6796848769) listing for the sandboxed build, and a Windows Microsoft Store listing), Docker for the browser app, and a native **Android** app built from the same codebase via Tauri v2 mobile on [Google Play](https://play.google.com/store/apps/details?id=org.geolibre.app) (see [Android](android.md)) with a responsive touch layout and offline improvements (Download Offline Area plus service-worker caching of the CDN-loaded Pyodide and PGlite/PostGIS engines).
+- **Distribution** — embed-friendly URL parameters including `maponly`, a versioned `postMessage` API and the typed `@geolibre/embed` client for host pages, cross-platform installers (with a macOS Homebrew Cask, a [Mac App Store](https://apps.apple.com/app/geolibre-desktop/id6796848769) listing for the sandboxed build, and a Windows Microsoft Store listing), Docker for the browser app, and native **Android** and **iOS** apps built from the same codebase via Tauri v2 mobile, on [Google Play](https://play.google.com/store/apps/details?id=org.geolibre.app) (see [Android](android.md)) and the [App Store](https://apps.apple.com/app/geolibre/id6796039674) (see [iOS](ios.md)), with a responsive touch layout and offline improvements (Download Offline Area plus service-worker caching of the CDN-loaded Pyodide and PGlite/PostGIS engines).
 
 ### Recently added
 

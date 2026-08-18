@@ -19,7 +19,7 @@
  *   map store having silently assumed a projection.
  */
 
-import maplibregl from "maplibre-gl";
+import { addProtocol } from "maplibre-gl";
 
 const VWORLD_ORIGIN = "https://api.vworld.kr";
 
@@ -427,7 +427,7 @@ let protocolRegistered = false;
  */
 export function registerVWorldProtocol(): void {
   if (protocolRegistered) return;
-  maplibregl.addProtocol("vworld", async (params, abortController) => {
+  addProtocol("vworld", async (params, abortController) => {
     const response = await transport(resolveVWorldProtocolUrl(params.url), {
       signal: abortController.signal,
     });

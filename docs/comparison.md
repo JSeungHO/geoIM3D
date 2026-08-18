@@ -8,7 +8,7 @@ GeoLibre is not trying to replace any of these outright. It occupies a spot none
 of them quite fills: a **free and open-source GIS that runs in a browser tab with
 nothing installed**, keeps your data on your own machine, and still ships real
 analysis, spatial SQL, cartography, and a project file — then packages the *same*
-app as a desktop install, an Android app, and a Jupyter widget.
+app as a desktop install, an Android app, an iOS app, and a Jupyter widget.
 
 !!! note "How to read this"
     Comparisons like this age quickly and are written by an interested party. The
@@ -21,6 +21,18 @@ app as a desktop install, an Android app, and a Jupyter widget.
     out of date? Please
     [open an issue](https://github.com/opengeos/GeoLibre/issues) — corrections
     are welcome.
+
+!!! info "This page is closed to new columns"
+    The tables below cover a fixed set of platforms and are **not accepting
+    additional ones**. Every extra column means more than forty cells that have
+    to be researched, dated, and re-verified on each update, and the tables have
+    reached the width a page can readably hold. Adding more would make the
+    comparison harder to read and harder to keep honest.
+
+    Corrections to the platforms already listed are still very welcome. If you
+    maintain another tool and want it compared with GeoLibre, publish that
+    comparison on your own site and add a link under
+    [Comparisons hosted elsewhere](#comparisons-hosted-elsewhere).
 
 ## Complementary, not competing
 
@@ -57,7 +69,7 @@ you pick the right tool for a given job, not to declare a winner.
 | **Cost** | Free | Free | Paid subscription | Paid subscription (credit-metered analysis) | Paid subscription | Paid subscription | Free |
 | **Browser** | Full app, nothing to install | No official browser build | No | Yes (the product *is* the browser app) | Yes | Yes (the authoring product) | Yes |
 | **Desktop** | Windows, macOS, Linux (Tauri) | Windows, macOS, Linux | Windows only | — | — | — | — |
-| **Mobile** | Native Android app; responsive touch layout | Via QField / Mergin Maps (separate apps) | — | Via ArcGIS Field Maps (separate app) | — | Felt Field App for iOS and Android (separate app) | Responsive web |
+| **Mobile** | Native Android and iOS apps; responsive touch layout | Via QField / Mergin Maps (separate apps) | — | Via ArcGIS Field Maps (separate app) | — | Felt Field App for iOS and Android (separate app) | Responsive web |
 | **In Jupyter** | Full app as an anywidget, two-way sync | Via `qgis` bindings, not the UI | Notebooks drive `arcpy`, not the UI | ArcGIS API for Python | Via `pydeck-carto` | — | Yes (widget) |
 | **Works offline** | Yes — PWA install, offline area download, desktop build | Yes | Yes | Limited (Field Maps offline areas) | No — connected platform by design | Field App offline areas, syncing on reconnect (higher plans) | Client-side, but assets are hosted |
 | **Where your data lives** | Your device — processed client-side in the browser session | Your device | Your device / your enterprise geodatabase | Vendor cloud | Your own cloud data warehouse — no CARTO-side storage (except cache) or sync; imports write to a warehouse you own | Vendor cloud, or a single-tenant instance in your own AWS account (Enterprise) | Your browser |
@@ -177,6 +189,38 @@ Stated plainly, so the table above is worth trusting:
 - **Maturity.** GeoLibre is stable and in active development, but it is far
   younger than QGIS or ArcGIS. Some capabilities listed as shipping are recent —
   see [Recently added](index.md#recently-added).
+
+## Comparisons hosted elsewhere
+
+Since this page cannot keep growing, other projects are welcome to compare
+themselves with GeoLibre on their own site, and to have that page linked from
+here.
+
+<!--
+  Entries go here, one line each, alphabetical by tool name:
+  - [<Tool> vs GeoLibre](<https URL>), maintained by <the project or author>
+  Delete the "none submitted yet" line below once the first one lands.
+-->
+
+*No external comparisons have been submitted yet. Yours can be the first.*
+
+To add one, follow the [documentation contribution
+instructions](contributing.md#documentation) and open a pull request adding a
+single line of the form
+`- [Acme vs GeoLibre](https://acme.example/vs-geolibre), maintained by Acme`.
+To keep the list useful:
+
+- The linked page must actually compare your tool with GeoLibre, rather than
+  being a general product, pricing, or marketing page.
+- Link the comparison itself, not a site root or a redirect.
+- Say who maintains it, so readers know whose viewpoint they are reading.
+- It must be publicly readable, with no login, paywall, or signup.
+- One entry per project.
+
+These pages are written and maintained by their own authors. GeoLibre does not
+review, verify, or endorse what they claim, including what they claim about
+GeoLibre. Links that stop working, or that describe GeoLibre inaccurately and
+are not corrected when asked, will be removed.
 
 ## See also
 

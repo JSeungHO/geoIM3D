@@ -61,7 +61,7 @@ import {
   type TimePropertyCandidate,
   type TimePropertyRecord,
 } from "@geolibre/plugins";
-import type { MapController } from "@geolibre/map";
+import { startFeatureSelection, type MapController } from "@geolibre/map";
 import {
   applyMapboxStyleImport,
   applyQmlImport,
@@ -133,6 +133,7 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  CircleDashed,
   ClipboardPaste,
   Copy,
   Database,
@@ -146,9 +147,11 @@ import {
   FolderPlus,
   GripVertical,
   Info,
+  LassoSelect,
   Layers,
   Library,
   Locate,
+  Lock,
   Map as MapIcon,
   MoreHorizontal,
   MousePointerClick,
@@ -159,6 +162,7 @@ import {
   Pencil,
   PencilRuler,
   PenTool,
+  Pentagon,
   RefreshCw,
   Save,
   Shuffle,
@@ -170,6 +174,7 @@ import {
   TableProperties,
   Timer,
   Trash2,
+  Unlock,
   Upload,
   X,
   ZoomIn,
@@ -228,12 +233,15 @@ import {
 import { IS_MAS_BUILD } from "../../lib/build-flags";
 import { isTauri } from "../../lib/is-tauri";
 import { getNetcdfLayerState } from "../../lib/netcdf-image-symbology";
+import { participantCanEditLayer } from "../../lib/collab-protocol";
+import type { CollaborationApi } from "../../hooks/useCollaboration";
 import { BasemapPickerDialog } from "./BasemapPickerDialog";
 import { LayerPanelPlaceSearch } from "./LayerPanelPlaceSearch";
 import { LayerSwatchIcon } from "./LayerSwatchIcon";
 
 interface LayerPanelProps {
   mapControllerRef: RefObject<MapController | null>;
+  collaborationApi?: CollaborationApi;
   onResizeStart: (event: ReactPointerEvent<HTMLDivElement>) => void;
   /** Id of the layer currently in a geometry-edit session, or null. */
   geometryEditLayerId: string | null;
@@ -611,6 +619,7 @@ function hasNativeIdentifyLayers(layer: GeoLibreLayer): boolean {
 
 export function LayerPanel({
   mapControllerRef,
+  collaborationApi,
   onResizeStart,
   geometryEditLayerId,
   onToggleGeometryEdit,
@@ -706,6 +715,40 @@ export function LayerPanel({
   const setRasterAttributeTableOpen = useAppStore((s) => s.setRasterAttributeTableOpen);
   const setLoadEditorFeaturesOpen = useAppStore((s) => s.setLoadEditorFeaturesOpen);
   const setSqlWorkspaceOpen = useAppStore((s) => s.setSqlWorkspaceOpen);
+  const collaboration = useAppStore((s) => s.collaboration);
+  const selfParticipant = useMemo(() => {
+    if (!collaboration.isActive || !collaboration.clientId) return null;
+    return collaboration.participants.find((p) => p.clientId === collaboration.clientId) ?? null;
+  }, [collaboration.isActive, collaboration.clientId, collaboration.participants]);
+
+  const canEditLayer = useCallback(
+    (layerId: string): boolean => {
+      if (!collaboration.isActive) return true;
+      if (collaborationApi?.canEditLayer) return collaborationApi.canEditLayer(layerId);
+      if (!selfParticipant) {
+        if (collaboration.role === "host") return true;
+        return (
+          collaboration.mode === "co-edit" &&
+          !(collaboration.lockedLayerIds ?? []).includes(layerId)
+        );
+      }
+      return participantCanEditLayer(
+        selfParticipant,
+        collaboration.mode,
+        layerId,
+        collaboration.lockedLayerIds ?? [],
+      );
+    },
+    [
+      collaboration.isActive,
+      collaboration.role,
+      collaboration.mode,
+      collaboration.lockedLayerIds,
+      selfParticipant,
+      collaborationApi,
+    ],
+  );
+
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [basemapPickerOpen, setBasemapPickerOpen] = useState(false);
@@ -1485,7 +1528,9 @@ export function LayerPanel({
           updateLayer(layer.id, {
             ...setLayerConnectionResult(latest, { error: message }),
             ...(latest.connection?.onFailure === "clear" && latest.geojson
-              ? { geojson: { type: "FeatureCollection" as const, features: [] } }
+              ? {
+                  geojson: { type: "FeatureCollection" as const, features: [] },
+                }
               : {}),
           });
         }
@@ -1690,7 +1735,9 @@ export function LayerPanel({
           return { text: mapboxStyleToJson(result), warnings: result.warnings };
         },
         {
-          defaultName: `${sanitizeExportFileName(geoLibreStyleSourceName(layer))}.geolibre.style.json`,
+          defaultName: `${sanitizeExportFileName(
+            geoLibreStyleSourceName(layer),
+          )}.geolibre.style.json`,
           filters: [{ name: "GeoLibre URL style", extensions: ["json"] }],
           browserTypes: [
             {
@@ -1924,10 +1971,15 @@ export function LayerPanel({
               ? layer.metadata.postgisSchema
               : "public";
           const table = layer.metadata.postgisTable as string;
+          const geometryColumn =
+            typeof layer.metadata.postgisGeometryColumn === "string"
+              ? layer.metadata.postgisGeometryColumn
+              : undefined;
           const result = await writePostgisTable({
             connection,
             schema_name: schema,
             table,
+            geometry_column: geometryColumn,
             geojson,
             // Scope deletions to the rows this session actually read so a
             // save cannot sweep away rows inserted concurrently elsewhere.
@@ -1944,6 +1996,7 @@ export function LayerPanel({
               connection,
               schema_name: schema,
               table,
+              geometry_column: geometryColumn,
               excluded_fields: layer.fieldVisibility
                 ? Object.keys(layer.fieldVisibility).filter(
                     (k) => layer.fieldVisibility![k] === "excluded",
@@ -2835,9 +2888,17 @@ export function LayerPanel({
   }
 
   return (
+    // The two named rows do not have to match the child count: the header takes
+    // the `auto` row, the layer list takes `minmax(0, 1fr)`, and the separator
+    // and place search below it fall into implicit auto rows (the dialogs and
+    // menus after them render through Radix portals, so they take no row at
+    // all). Only the list sits in the flexible row, which is what makes it the
+    // part that shrinks and scrolls once the panel reaches its max height — so
+    // a new direct child added here must not displace the ScrollArea from the
+    // second in-flow position.
     <aside
       aria-label={t("sharedRail.layers")}
-      className="relative flex max-h-[min(24rem,42vh)] supports-[max-height:1dvh]:max-h-[min(24rem,42dvh)] w-full shrink-0 flex-col border-b bg-card max-md:absolute max-md:inset-x-0 max-md:top-0 max-md:z-30 max-md:shadow-xl md:max-h-none md:w-[var(--layer-panel-width)] md:border-b-0 md:border-e"
+      className="relative grid max-h-[min(24rem,42vh)] supports-[max-height:1dvh]:max-h-[min(24rem,42dvh)] w-full shrink-0 grid-rows-[auto_minmax(0,1fr)] border-b bg-card max-md:absolute max-md:inset-x-0 max-md:top-0 max-md:z-30 max-md:shadow-xl md:max-h-none md:w-[var(--layer-panel-width)] md:border-b-0 md:border-e"
     >
       <div
         role="separator"
@@ -2942,10 +3003,15 @@ export function LayerPanel({
         </div>
       </div>
       <ScrollArea
-        className="flex-1 [&_[data-radix-scroll-area-viewport]>div]:block! [&_[data-radix-scroll-area-viewport]>div]:w-full! [&_[data-radix-scroll-area-viewport]>div]:min-w-0!"
+        className="min-h-0 [&_[data-radix-scroll-area-viewport]]:touch-pan-y [&_[data-radix-scroll-area-viewport]]:overscroll-contain [&_[data-radix-scroll-area-viewport]>div]:block! [&_[data-radix-scroll-area-viewport]>div]:w-full! [&_[data-radix-scroll-area-viewport]>div]:min-w-0!"
         // Radix measures scroll content with an injected display:table
         // wrapper. Opt this viewport into block sizing so long layer names
-        // cannot establish a wider min-content table.
+        // cannot establish a wider min-content table. The panel's minmax(0, 1fr)
+        // content row constrains overflowing cards without making short lists fill
+        // the mobile panel's maximum height. `-webkit-overflow-scrolling` is not
+        // set here: Radix already injects it for every viewport, and it is a
+        // legacy iOS property that does nothing on the Android WebView this fix
+        // targets.
       >
         <div className="w-full min-w-0 space-y-1 p-2">
           {layers.length === 0 && (
@@ -2966,8 +3032,8 @@ export function LayerPanel({
             // immediate parent, so a hidden grandparent gets the cue too. Given
             // the memoized `groupById` rather than the array, so folding every
             // row does not rebuild that map once per layer.
-            const groupHidden =
-              layer.visible && !effectiveLayerRenderState(layer, groupById).visible;
+            const layerRendered = effectiveLayerRenderState(layer, groupById).visible;
+            const groupHidden = layer.visible && !layerRendered;
             const visibilityToggleLabel = groupHidden
               ? `${t("layers.hiddenByGroup")} — ${t("layers.hideLayer")}`
               : layer.visible
@@ -3087,6 +3153,9 @@ export function LayerPanel({
             // dismissed (and its on-map icon removed) when closed.
             const canEditRasterStyle = layer.metadata.sourceKind === RASTER_SOURCE_KIND;
             const canRefresh = isRefreshableLayer(layer);
+            const isLayerLocked =
+              collaboration.isActive && (collaboration.lockedLayerIds ?? []).includes(layer.id);
+            const layerEditable = canEditLayer(layer.id);
             const refreshConfig = getLayerRefreshConfig(layer);
             // Live SQL query layers (issue #1295) refresh by re-running their
             // stored DuckDB statement and offer a shortcut to edit it.
@@ -3148,6 +3217,10 @@ export function LayerPanel({
                     aria-pressed={selectedLayerIds.has(layer.id)}
                     onClick={(e) => handleLayerSelection(e, layer.id)}
                     onKeyDown={(e) => {
+                      // Only act on the card itself: preventDefault here would
+                      // otherwise cancel the Enter activation of the action
+                      // buttons nested inside it.
+                      if (e.target !== e.currentTarget) return;
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
                         setSelectedLayerIds(new Set([layer.id]));
@@ -3238,16 +3311,28 @@ export function LayerPanel({
                             groupHidden ? "text-muted-foreground" : ""
                           }`}
                           title={
-                            groupHidden
-                              ? `${t("layers.hiddenByGroup")} — ${t("layers.doubleClickToRename")}`
-                              : t("layers.doubleClickToRename")
+                            isLayerLocked
+                              ? t("collaborate.layerLockedHint")
+                              : groupHidden
+                                ? `${t("layers.hiddenByGroup")} — ${t(
+                                    "layers.doubleClickToRename",
+                                  )}`
+                                : t("layers.doubleClickToRename")
                           }
                           onDoubleClick={(e: ReactMouseEvent) => {
                             e.stopPropagation();
-                            beginRename(layer);
+                            if (layerEditable) beginRename(layer);
                           }}
                         >
                           {layer.name}
+                        </span>
+                      )}
+                      {isLayerLocked && (
+                        <span title={t("collaborate.layerLockedHint")}>
+                          <Lock
+                            className="h-3 w-3 shrink-0 text-amber-500"
+                            aria-label={t("collaborate.layerLockedHint")}
+                          />
                         </span>
                       )}
                       <span className="shrink-0 text-[10px] uppercase text-muted-foreground">
@@ -3317,7 +3402,7 @@ export function LayerPanel({
                         onChange={(v) => setLayerOpacity(layer.id, v)}
                       />
                     )}
-                    <div className="mt-2 flex gap-1">
+                    <div className="mt-2 flex flex-wrap gap-1">
                       <Button
                         variant="ghost"
                         size="icon"
@@ -3377,6 +3462,22 @@ export function LayerPanel({
                       >
                         <MousePointerClick className="h-3.5 w-3.5" />
                       </Button>
+                      {onOpenStylePanel && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          title={t("layers.openStylePanel")}
+                          aria-label={t("layers.openStylePanel")}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            selectLayer(layer.id);
+                            onOpenStylePanel();
+                          }}
+                        >
+                          <Palette className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -3396,13 +3497,40 @@ export function LayerPanel({
                           align="end"
                           onClick={(e: ReactMouseEvent) => e.stopPropagation()}
                         >
-                          {/* Rename is always available — name is a display-only
-                          label, so no per-layer-type guard is needed here.
+                          {collaboration.isActive && collaboration.role === "host" && (
+                            <>
+                              <DropdownMenuItem
+                                onSelect={() => {
+                                  const currentLocks = collaboration.lockedLayerIds ?? [];
+                                  const nextLocks = currentLocks.includes(layer.id)
+                                    ? currentLocks.filter((id) => id !== layer.id)
+                                    : [...currentLocks, layer.id];
+                                  collaborationApi?.setLayerLocks(nextLocks);
+                                }}
+                              >
+                                {isLayerLocked ? (
+                                  <>
+                                    <Unlock className="me-2 h-3.5 w-3.5 text-amber-500" />
+                                    {t("collaborate.unlockLayer")}
+                                  </>
+                                ) : (
+                                  <>
+                                    <Lock className="me-2 h-3.5 w-3.5" />
+                                    {t("collaborate.lockLayer")}
+                                  </>
+                                )}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                            </>
+                          )}
+                          {/* Rename is available when layer is editable.
                           preventDefault keeps the menu's default close from
                           racing autoFocus on the rename input. */}
                           <DropdownMenuItem
+                            disabled={!layerEditable}
                             onSelect={(e: Event) => {
                               e.preventDefault();
+                              if (!layerEditable) return;
                               beginRename(layer);
                             }}
                           >
@@ -3476,7 +3604,9 @@ export function LayerPanel({
                           {canMaterializeDuckDB && (
                             <>
                               <DropdownMenuItem
+                                disabled={!layerEditable}
                                 onSelect={() => {
+                                  if (!layerEditable) return;
                                   onMaterializeDuckDBLayer(layer);
                                 }}
                               >
@@ -3488,8 +3618,9 @@ export function LayerPanel({
                           )}
                           {(canEditGeometry || geometryEditActive) && (
                             <DropdownMenuItem
-                              disabled={geometryEditElsewhere}
+                              disabled={geometryEditElsewhere || !layerEditable}
                               onSelect={() => {
+                                if (!layerEditable) return;
                                 selectLayer(layer.id);
                                 if (identifyActive) setIdentifyLayer(null);
                                 onToggleGeometryEdit(layer.id);
@@ -3503,7 +3634,9 @@ export function LayerPanel({
                           )}
                           {canLoadIntoEditor && (
                             <DropdownMenuItem
+                              disabled={!layerEditable}
                               onSelect={() => {
+                                if (!layerEditable) return;
                                 selectLayer(layer.id);
                                 setLoadEditorFeaturesOpen(true, layer.id);
                               }}
@@ -3610,6 +3743,54 @@ export function LayerPanel({
                           )}
                           {canSelectFeatures && (
                             <>
+                              <DropdownMenuSub>
+                                <DropdownMenuSubTrigger>
+                                  <MousePointerClick className="h-3.5 w-3.5" />
+                                  {t("layers.selectFeaturesMenu")}
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent>
+                                  {(
+                                    [
+                                      ["single", MousePointerClick, "layers.selectFeaturesSingle"],
+                                      ["rectangle", SquareDashed, "layers.selectFeaturesRectangle"],
+                                      ["polygon", Pentagon, "layers.selectFeaturesPolygon"],
+                                      ["freehand", LassoSelect, "layers.selectFeaturesFreehand"],
+                                      ["radius", CircleDashed, "layers.selectFeaturesRadius"],
+                                    ] as const
+                                  ).map(([shape, Icon, label]) => (
+                                    <DropdownMenuItem
+                                      key={shape}
+                                      // Drawing on the map only makes sense
+                                      // against features the user can see, and
+                                      // a click gesture on a hidden layer would
+                                      // match nothing at all.
+                                      disabled={!layerRendered}
+                                      onSelect={() => {
+                                        if (identifyActive) setIdentifyLayer(null);
+                                        startFeatureSelection({
+                                          layerId: layer.id,
+                                          shape,
+                                        });
+                                      }}
+                                    >
+                                      <Icon className="me-2 h-3.5 w-3.5" />
+                                      {t(label)}
+                                    </DropdownMenuItem>
+                                  ))}
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    disabled={!holdsSelection}
+                                    onSelect={clearFeatureSelection}
+                                  >
+                                    <X className="me-2 h-3.5 w-3.5" />
+                                    {t("toolbar.item.clearSelection")}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuLabel className="max-w-64 whitespace-normal text-xs font-normal text-muted-foreground">
+                                    {t("layers.selectFeaturesModifiers")}
+                                  </DropdownMenuLabel>
+                                </DropdownMenuSubContent>
+                              </DropdownMenuSub>
                               {/* Not selectLayer() + open: that would clear the
                               live selection the dialogs' add/remove/intersect
                               modes combine with, so the target travels via the
@@ -4026,11 +4207,17 @@ export function LayerPanel({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 text-destructive"
-                        title={t("layers.removeLayer")}
+                        className="h-7 w-7 text-destructive disabled:opacity-40"
+                        title={
+                          !layerEditable
+                            ? t("collaborate.layerLockedHint")
+                            : t("layers.removeLayer")
+                        }
                         aria-label={t("layers.removeLayer")}
+                        disabled={!layerEditable}
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (!layerEditable) return;
                           setLayerPendingRemoval(layer);
                         }}
                       >

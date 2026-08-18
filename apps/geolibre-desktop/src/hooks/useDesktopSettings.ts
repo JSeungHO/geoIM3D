@@ -93,6 +93,8 @@ export interface StartupSettings {
   mode: StartupProjectMode;
   projectPath: string | null;
   projectName: string | null;
+  /** Projection used when startup does not restore or receive a project. */
+  globeByDefault: boolean;
 }
 
 export interface ThemeSettings {
@@ -110,6 +112,17 @@ export interface UpdateSettings {
 }
 
 export interface DesktopLayoutSettings {
+  /**
+   * Whether the Browser (Data Source Manager) right panel is registered as
+   * visible. Unlike {@link layerPanelVisible} this does not describe a fixed
+   * dock slot: the Browser is a dockable right panel, so the flag is the
+   * persisted seed its registration hook applies on mount (open + collapsed onto
+   * its rail, or closed). Without it the panel reopened on every launch no
+   * matter what the Settings toggle said (#1935).
+   */
+  browserPanelVisible: boolean;
+  /** Same as {@link browserPanelVisible}, for the Comments right panel. */
+  commentsPanelVisible: boolean;
   layerPanelVisible: boolean;
   showProjectInfo: boolean;
   stylePanelVisible: boolean;
@@ -157,6 +170,8 @@ interface DesktopSettingsState {
 }
 
 export const DEFAULT_DESKTOP_LAYOUT_SETTINGS: DesktopLayoutSettings = {
+  browserPanelVisible: true,
+  commentsPanelVisible: true,
   layerPanelVisible: true,
   showProjectInfo: true,
   stylePanelVisible: true,
@@ -187,6 +202,7 @@ export const DEFAULT_STARTUP_SETTINGS: StartupSettings = {
   mode: "default",
   projectPath: null,
   projectName: null,
+  globeByDefault: true,
 };
 
 export const DEFAULT_THEME_SETTINGS: ThemeSettings = {
@@ -266,6 +282,7 @@ function normalizeStartupSettings(startup: unknown): StartupSettings {
     mode: mode === "specific" && !projectPath ? "default" : mode,
     projectPath,
     projectName,
+    globeByDefault: typeof candidate.globeByDefault === "boolean" ? candidate.globeByDefault : true,
   };
 }
 
@@ -410,6 +427,14 @@ function normalizeDesktopLayoutSettings(layout: unknown): DesktopLayoutSettings 
   // cannot smuggle non-boolean values into the layout settings.
   const candidate = layout as Partial<DesktopLayoutSettings>;
   return {
+    browserPanelVisible:
+      typeof candidate.browserPanelVisible === "boolean"
+        ? candidate.browserPanelVisible
+        : DEFAULT_DESKTOP_LAYOUT_SETTINGS.browserPanelVisible,
+    commentsPanelVisible:
+      typeof candidate.commentsPanelVisible === "boolean"
+        ? candidate.commentsPanelVisible
+        : DEFAULT_DESKTOP_LAYOUT_SETTINGS.commentsPanelVisible,
     layerPanelVisible:
       typeof candidate.layerPanelVisible === "boolean"
         ? candidate.layerPanelVisible

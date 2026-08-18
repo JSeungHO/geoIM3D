@@ -1100,6 +1100,21 @@ body,
 }
 
 /*
+ * Geoman's `text_marker` mode (via the GeoEditor plugin) appends a bare
+ * <textarea> into the map container with only inline position/opacity — no
+ * class, no appearance. `all: revert` undoes Tailwind's Preflight reset, which
+ * leaves it transparent and borderless (invisible while you type); its inline
+ * styles outrank the revert, so positioning survives. The z-index clears the
+ * Effects plugin's `z-index: 4` map canvas, and must come after `all`.
+ * Direct child only — that is the sole way to target the element, which carries
+ * no class, so re-check it on `@geoman-io/maplibre-geoman-free` bumps.
+ */
+.maplibregl-map > textarea {
+  all: revert;
+  z-index: 10;
+}
+
+/*
  * The overlaid deck.gl canvas (COG rasters via CogLayerControl, ArcGIS I3S, the
  * Tauri raster fallback) is map content and must sit UNDER the map-control
  * panels, not over them. It lives inside `.maplibregl-control-container` (pinned
@@ -2040,10 +2055,12 @@ body,
 
 /* Maptoolkit logo control (Controls → Logos → Maptoolkit logo). The branding
    companion to Maptoolkit basemaps; mirrors MapLibre's own logo control. The
-   wordmark is an inline SVG with its own brand colours, so it needs no theming —
-   only sizing/placement. Maptoolkit's attribution terms require a minimum height
-   of 24px, so the mark is pinned there. The container reuses `maplibregl-ctrl`
-   for corner margins, so drop the control-group chrome to leave just the logo. */
+   mark is their official attribution PNG (apps/geolibre-desktop/public/
+   maptoolkit-attribution.png) with its own fixed brand colours, so it needs no
+   theming — only sizing/placement. Maptoolkit's attribution terms require a
+   minimum height of 24px, so the mark is pinned there. The container reuses
+   `maplibregl-ctrl` for corner margins, so drop the control-group chrome to
+   leave just the logo. */
 .geolibre-maptoolkit-logo-ctrl {
   background: none;
   box-shadow: none;
@@ -2059,7 +2076,7 @@ body,
   opacity: 1;
 }
 
-.geolibre-maptoolkit-logo svg {
+.geolibre-maptoolkit-logo img {
   display: block;
   height: 24px;
   width: auto;
@@ -3760,7 +3777,14 @@ html.dark .maplibregl-popup-anchor-right:has(.vector-control-popup) .maplibregl-
   stroke-width: 1.5;
 }
 
-/* Hover readout */
+/* Hover readout. Its box must measure exactly one line whether or not it holds
+   text: the chart above it is `flex: 1 1 auto`, so any height the readout gains
+   on hover is taken out of the chart, which retriggers the chart's
+   ResizeObserver, which redraws and clears the readout again — the pointer sees
+   a flickering chart and a value that never settles. Hence an explicit
+   line-height matching min-height (the inherited 1.4 would make a filled line
+   15.4px against a 14px empty box) and nowrap, so a long
+   "distance · elevation" string in a narrow panel cannot wrap to two lines. */
 .elevation-profile-readout {
   margin-top: 6px;
   text-align: center;
@@ -3768,6 +3792,10 @@ html.dark .maplibregl-popup-anchor-right:has(.vector-control-popup) .maplibregl-
   font-weight: 500;
   color: var(--ep-text);
   min-height: 14px;
+  line-height: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .elevation-profile-readout:empty {

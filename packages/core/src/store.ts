@@ -35,6 +35,7 @@ import {
   MAX_PROCESSING_HISTORY,
   MIN_DASHBOARD_COLUMNS,
   type AddTileLayerOptions,
+  type CollabInvite,
   type CollaborationChatMessage,
   type CollaborationParticipant,
   type CollaborationPresence,
@@ -45,6 +46,7 @@ import {
   type LayerGroup,
   type LayerLibraryEntry,
   type AttributeFormConfig,
+  type EditorTrackingConfig,
   type LayerJoin,
   type LayerVirtualField,
   type LayerStyle,
@@ -262,6 +264,22 @@ export interface AppState {
   selectedFeatureIds: string[];
   identifyLayerId: string | null;
   pointerCoords: [number, number] | null;
+  /**
+   * Ground elevation in true metres under the pointer, for the status bar
+   * (issue #1813). Null when it cannot be resolved — the pointer is off the
+   * map, terrain is off and the remote lookup has not answered (or failed), or
+   * the active body is not Earth. Set alongside `pointerCoords` by MapCanvas,
+   * which owns the map instance the terrain sample comes from.
+   */
+  pointerElevation: number | null;
+  /**
+   * Camera height above sea level in metres — Google Earth Pro's "Eye alt"
+   * (issue #1816). Derived from the camera, so deliberately *not* part of
+   * `mapView`: that shape is persisted into the project file, and a stored
+   * altitude could only drift from the center/zoom/pitch it is computed from.
+   * Null before the map loads, or when MapLibre cannot report it.
+   */
+  cameraAltitude: number | null;
   /** Live GPS fix for the status bar, or null while GPS tracking is off. */
   gpsStatus: GpsStatusFix | null;
   /** Anchored review comments on map points or features (issue #1518). */
@@ -342,6 +360,8 @@ export interface AppState {
   };
 
   setPointerCoords: (coords: [number, number] | null) => void;
+  setPointerElevation: (elevation: number | null) => void;
+  setCameraAltitude: (altitude: number | null) => void;
   setGpsStatus: (fix: GpsStatusFix | null) => void;
   setCollaboration: (patch: Partial<CollaborationState>) => void;
   updateCollaborationPresence: (clientId: string, presence: CollaborationPresence | null) => void;
@@ -577,6 +597,12 @@ export interface AppState {
    */
   setLayerAttributeForm: (id: string, attributeForm: AttributeFormConfig | undefined) => void;
   /**
+   * Replace the layer's editor tracking configuration (whether creation/edit
+   * author and timestamp columns are maintained, and under which names). Pass
+   * `undefined` to drop the configuration entirely.
+   */
+  setLayerEditorTracking: (id: string, editorTracking: EditorTrackingConfig | undefined) => void;
+  /**
    * Replace a layer's virtual fields and immediately re-derive its computed
    * columns (strip what the previous fields added, evaluate the new list).
    * Pass an empty array to detach every virtual field.
@@ -689,6 +715,10 @@ export const DEFAULT_COLLABORATION_STATE: CollaborationState = Object.freeze({
   >,
   followHost: false,
   chat: Object.freeze([] as CollaborationChatMessage[]) as CollaborationChatMessage[],
+  requireIdentity: false,
+  identitySupported: false,
+  lockedLayerIds: Object.freeze([] as string[]) as string[],
+  invites: Object.freeze([] as CollabInvite[]) as CollabInvite[],
   error: null,
 });
 
@@ -980,6 +1010,8 @@ export const useAppStore = create<AppState>()(
       selectedFeatureIds: [],
       identifyLayerId: null,
       pointerCoords: null,
+      pointerElevation: null,
+      cameraAltitude: null,
       gpsStatus: null,
       comments: [],
       metadata: {},
@@ -1023,7 +1055,10 @@ export const useAppStore = create<AppState>()(
         collaborateDialogOpen: false,
       },
 
-      setPointerCoords: (coords) => set({ pointerCoords: coords }),
+      setPointerCoords: (coords) =>
+        set(coords ? { pointerCoords: coords } : { pointerCoords: null, pointerElevation: null }),
+      setPointerElevation: (elevation) => set({ pointerElevation: elevation }),
+      setCameraAltitude: (altitude) => set({ cameraAltitude: altitude }),
       setGpsStatus: (fix) => set({ gpsStatus: fix }),
 
       addComment: (comment) =>
@@ -1705,6 +1740,8 @@ export const useAppStore = create<AppState>()(
 
       setLayerAttributeForm: (id, attributeForm) => get().updateLayer(id, { attributeForm }),
 
+      setLayerEditorTracking: (id, editorTracking) => get().updateLayer(id, { editorTracking }),
+
       setLayerVirtualFields: (id, fields) =>
         set((s) => {
           let layers = s.layers.map((l) =>
@@ -2149,6 +2186,8 @@ export const useAppStore = create<AppState>()(
           // paste in the new one would apply an orphaned entry.
           copiedLayerStyle: null,
           pointerCoords: null,
+          pointerElevation: null,
+          cameraAltitude: null,
           attributeFilter: "",
           // Don't carry an active story presentation into a different project.
           ui: {
@@ -2200,6 +2239,13 @@ export const useAppStore = create<AppState>()(
           // The copied style names a layer from the previous project, so a
           // paste in the loaded one would apply an orphaned entry.
           copiedLayerStyle: null,
+          // Ephemeral readouts describe the previous project's map. The
+          // elevation and altitude especially: a project that switches to a
+          // planetary body would otherwise keep showing Earth-scaled values
+          // until the next hover or camera move.
+          pointerCoords: null,
+          pointerElevation: null,
+          cameraAltitude: null,
           // Present a bundled story on load; otherwise drop any presentation
           // carried over from the previous project.
           ui: {

@@ -476,19 +476,26 @@ export {
   type StacLabels,
 } from "./plugins/maplibre-stac";
 export {
+  assetDisplayFormat,
+  assetFormat,
   connectStac,
   isVisualizableAsset,
   itemBbox,
   loadStacIndex,
+  openCatalogNode,
   searchStacApi,
   searchStaticStac,
   STAC_INDEX_CATALOGS_URL,
   type StacAsset,
+  type StacCatalogNode,
   type StacCollection,
   type StacConnection,
+  type StacOpenedNode,
   type StacIndexCatalog,
   type StacItem,
   type StacNextPage,
+  type StacAssetFormat,
+  type StacAssetDisplayFormat,
   type StacSearchOptions,
   type StacSearchResult,
 } from "./plugins/stac-api";
@@ -580,6 +587,9 @@ export {
   type GraticuleLabels,
   type GraticuleLabelFormat,
   type GraticuleLabelEdges,
+  lngLatToUtm,
+  utmZoneDesignation,
+  type UtmCoordinate,
 } from "./plugins/maplibre-graticule";
 export {
   PLUGIN_MENU_GROUPS,

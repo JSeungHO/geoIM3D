@@ -113,6 +113,7 @@ import { IS_MAS_BUILD } from "../../lib/build-flags";
 import { masHidesDataSource } from "../../lib/mas-build";
 import { IS_STORE_BUILD } from "../../lib/updates";
 import { AddDataDialog, type AddDataKind } from "./AddDataDialog";
+import { serviceUrlParameter } from "../../lib/data-url";
 import {
   OPEN_ADD_DATA_EVENT,
   type OpenAddDataDetail,
@@ -905,6 +906,9 @@ export function TopToolbar({
       resultsCleared: t("stacPlugin.resultsCleared"),
       searching: t("stacPlugin.searching"),
       loadingMore: t("stacPlugin.loadingMore"),
+      noMatchesHere: t("stacPlugin.noMatchesHere"),
+      treeEmpty: t("stacPlugin.treeEmpty"),
+      treeOpenFailed: t("stacPlugin.treeOpenFailed"),
       noResults: t("stacPlugin.noResults"),
       searchFailed: t("stacPlugin.searchFailed"),
       showing: (count) => t("stacPlugin.showing", { count }),
@@ -929,7 +933,14 @@ export function TopToolbar({
       added: (asset) => t("stacPlugin.added", { asset }),
       addUnsupported: t("stacPlugin.addUnsupported"),
       addFailed: t("stacPlugin.addFailed"),
+      addNoSourceLayers: t("stacPlugin.addNoSourceLayers"),
       cogUnsupported: t("stacPlugin.cogUnsupported"),
+      formatCog: t("stacPlugin.formatCog"),
+      formatGeoJson: t("stacPlugin.formatGeoJson"),
+      formatPmtiles: t("stacPlugin.formatPmtiles"),
+      formatParquet: t("stacPlugin.formatParquet"),
+      formatUnknown: t("stacPlugin.formatUnknown"),
+      notAddable: t("stacPlugin.notAddable"),
     });
   }, [t]);
 
@@ -1025,7 +1036,16 @@ export function TopToolbar({
       {} as Record<ToolbarMapControl, boolean>,
     ),
   );
-  const [addDataKind, setAddDataKind] = useState<AddDataKind | null>(null);
+  const [initialService, setInitialService] = useState(() =>
+    viewer || typeof window === "undefined" ? null : serviceUrlParameter(window.location.search),
+  );
+  const [addDataKind, setAddDataKind] = useState<AddDataKind | null>(() => {
+    const kind = initialService?.kind as AddDataKind | undefined;
+    // Every other path that opens this dialog from outside the component
+    // filters MAS-hidden sources first; a deep link must not be the way around
+    // that, even though no service kind is hidden today.
+    return kind && !masHidesDataSource(kind) ? kind : null;
+  });
   const [addDataTargetGroupId, setAddDataTargetGroupId] = useState<string | null>(null);
   const addDataInitialLayerIdsRef = useRef<Set<string>>(new Set());
   // Every path that opens the dialog outside the OPEN_ADD_DATA_EVENT listener
@@ -1145,20 +1165,40 @@ export function TopToolbar({
     });
   };
 
-  // The Maptoolkit logo is Maptoolkit-basemap attribution, so it must not linger
-  // over a different basemap. When no Maptoolkit basemap is active (see
-  // isMaptoolkitBasemapActive), turn the logo back off through the same path as
-  // the menu, so the map controller and this menu's checkmark stay in sync.
+  // The Maptoolkit logo is Maptoolkit-basemap attribution, required by their
+  // terms whenever a Maptoolkit basemap is in use (see isMaptoolkitBasemapActive)
+  // and meaningless otherwise, so it tracks that flag automatically: shown the
+  // moment a Maptoolkit basemap activates, hidden the moment it doesn't. The
+  // imperative call is made directly in the effect body, not inside the
+  // setControlsVisible updater — React (Strict Mode) runs a mount effect twice,
+  // and add/removeMaptoolkitLogoControl report "already there"/"already gone" as
+  // false, which isn't a failure; gating the state update on that return value
+  // made the second of the two mount runs read as failed and leave the control
+  // (and desired-vs-applied state) permanently out of sync. Calling it
+  // unconditionally is safe: both helpers no-op when already in the desired
+  // state.
+  //
+  // Deliberately NOT keyed on mapReadyGeneration (unlike
+  // useVectorTileGeometryBackfill above): that generation bumps on every
+  // basemap style load, not just the controller's first readiness (see
+  // MapCanvas's per-basemap-change `onControllerReadyRef` call), so including
+  // it here re-fires this effect on every Maptoolkit-to-Maptoolkit style
+  // switch — reapplying the flag and silently clobbering a manual toggle the
+  // user made while that basemap stayed active. The effect depends only on
+  // the flag itself (edge-triggered), so a manual toggle from the menu is left
+  // alone until the flag actually flips; the trade-off is that an activation
+  // landing before the controller exists (mapControllerRef.current still
+  // null) is not retried, which our mount ordering does not otherwise hit.
   const maptoolkitBasemapActive = useAppStore((s) =>
     isMaptoolkitBasemapActive(s.basemapStyleUrl, s.layers),
   );
   useEffect(() => {
-    if (maptoolkitBasemapActive) return;
-    setControlsVisible((current) => {
-      if (!current["maptoolkit-logo"]) return current;
-      mapControllerRef.current?.setBuiltInControlVisible("maptoolkit-logo", false);
-      return { ...current, "maptoolkit-logo": false };
-    });
+    mapControllerRef.current?.setBuiltInControlVisible("maptoolkit-logo", maptoolkitBasemapActive);
+    setControlsVisible((current) =>
+      current["maptoolkit-logo"] === maptoolkitBasemapActive
+        ? current
+        : { ...current, "maptoolkit-logo": maptoolkitBasemapActive },
+    );
   }, [maptoolkitBasemapActive, mapControllerRef]);
 
   // The command registry: the single source of truth shared by the command
@@ -1917,6 +1957,7 @@ export function TopToolbar({
           onToggleDirections={consent.handleToggleDirections}
           onToggleReverseGeocode={consent.handleToggleReverseGeocode}
           onToggleGraticule={() => toggle(GRATICULE_PLUGIN_ID, appApi)}
+          onTogglePointerElevation={consent.handleTogglePointerElevation}
           onToggleClouds={() => toggle(CLOUDS_PLUGIN_ID, appApi)}
           onTogglePrecipitation={() => toggle(PRECIPITATION_PLUGIN_ID, appApi)}
           onOpenFieldCollection={() => setFieldCollectionOpen(true)}
@@ -2066,6 +2107,13 @@ export function TopToolbar({
         mapControllerRef={mapControllerRef}
         initialDeckVizKind={addDataDeckVizKind}
         initialPostgres={addDataPostgres}
+        initialUrl={addDataKind === initialService?.kind ? initialService.url : undefined}
+        initialLayer={
+          addDataKind === initialService?.kind ? (initialService.layer ?? undefined) : undefined
+        }
+        initialStyleUrl={
+          addDataKind === initialService?.kind ? (initialService.styleUrl ?? undefined) : undefined
+        }
         onOpenChange={(open: boolean) => {
           if (!open) {
             if (addDataTargetGroupId) {
@@ -2078,6 +2126,7 @@ export function TopToolbar({
               }
             }
             setAddDataKind(null);
+            setInitialService(null);
             setAddDataTargetGroupId(null);
             setAddDataDeckVizKind(undefined);
             setAddDataPostgres(undefined);
