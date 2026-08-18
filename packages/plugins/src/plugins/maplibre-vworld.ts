@@ -39,6 +39,7 @@ import {
   vworldFeatureInfo,
   vworldSearch,
   vworldTileTemplate,
+  vworldCoverageView,
   type VWorldAddressType,
   type VWorldErrorKind,
   type VWorldSearchResult,
@@ -436,7 +437,21 @@ export const VWORLD_BASEMAP_STYLE_PREFIX = "vworld-";
 
 async function addBaseMapLayer(app: GeoLibreAppAPI, id: string): Promise<void> {
   const sentinel = await registerVWorldBasemapStyle(id);
-  if (sentinel) app.setBasemap(sentinel);
+  if (!sentinel) return;
+
+  // Same reason as the basemap picker: VWorld has tiles for Korea from zoom 6
+  // down, so applying one from a world view leaves an empty map.
+  const map = app.getMap?.();
+  const centre = map?.getCenter();
+  if (map && centre) {
+    const view = vworldCoverageView({
+      longitude: centre.lng,
+      latitude: centre.lat,
+      zoom: map.getZoom(),
+    });
+    if (view) map.jumpTo({ center: [view.longitude, view.latitude], zoom: view.zoom });
+  }
+  app.setBasemap(sentinel);
 }
 
 /**

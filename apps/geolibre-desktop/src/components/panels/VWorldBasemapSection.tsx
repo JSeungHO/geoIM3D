@@ -4,7 +4,9 @@ import {
   registerVWorldBasemapStyle,
   VWORLD_BASE_MAPS,
   VWORLD_BASEMAP_STYLE_PREFIX,
+  vworldCoverageView,
 } from "@geolibre/plugins";
+import { useAppStore } from "@geolibre/core";
 import { cn } from "@geolibre/ui";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -51,6 +53,8 @@ function useHasVWorldKey(): boolean {
 export function VWorldBasemapSection({ activeStyleUrl, onSelect }: VWorldBasemapSectionProps) {
   const { t } = useTranslation();
   const configured = useHasVWorldKey();
+  const mapView = useAppStore((s) => s.mapView);
+  const setMapView = useAppStore((s) => s.setMapView);
   if (!configured) return null;
 
   // Each apply registers a fresh sentinel, so the active one cannot be matched
@@ -76,7 +80,18 @@ export function VWorldBasemapSection({ activeStyleUrl, onSelect }: VWorldBasemap
             )}
             onClick={() => {
               void registerVWorldBasemapStyle(basemap.id).then((styleUrl) => {
-                if (styleUrl) onSelect(styleUrl);
+                if (!styleUrl) return;
+                // VWorld covers Korea from zoom 6 down. Chosen from a world
+                // view it draws nothing at all, and a blank globe reads as a
+                // basemap that failed rather than one you are standing too far
+                // from. A view already inside the coverage is left alone.
+                const view = vworldCoverageView({
+                  longitude: mapView.center[0],
+                  latitude: mapView.center[1],
+                  zoom: mapView.zoom,
+                });
+                if (view) setMapView({ center: [view.longitude, view.latitude], zoom: view.zoom });
+                onSelect(styleUrl);
               });
             }}
           >

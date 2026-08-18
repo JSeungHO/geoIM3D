@@ -367,6 +367,48 @@ export const VWORLD_BASE_MAPS: readonly VWorldBaseMap[] = [
 /** Approximate bounds of VWorld's Korean coverage, `[west, south, east, north]`. */
 export const VWORLD_BOUNDS: [number, number, number, number] = [124.5, 33.0, 132.0, 38.7];
 
+/**
+ * The lowest zoom at which any VWorld base map has tiles.
+ *
+ * Mirrors the `minzoom` on every entry of {@link VWORLD_BASE_MAPS}; the
+ * shallowest of them decides where the coverage begins.
+ */
+export const VWORLD_MIN_ZOOM = 6;
+
+/**
+ * Where to move the camera so a VWorld basemap has something to draw, or null
+ * when the current view already works.
+ *
+ * VWorld covers Korea from zoom 6 down. Applied while looking at the Atlantic
+ * at zoom 1.6 it is not broken, it is simply empty — and an empty white globe
+ * is indistinguishable from a basemap that failed to load. So switching to one
+ * takes the view to its coverage, and leaves a view already inside it alone
+ * rather than yanking the camera off whatever the user was looking at.
+ *
+ * @param view - The current centre and zoom.
+ * @returns The view to apply, or null to keep the current one.
+ */
+export function vworldCoverageView(view: {
+  longitude: number;
+  latitude: number;
+  zoom: number;
+}): { longitude: number; latitude: number; zoom: number } | null {
+  const [west, south, east, north] = VWORLD_BOUNDS;
+  const inside =
+    view.longitude >= west &&
+    view.longitude <= east &&
+    view.latitude >= south &&
+    view.latitude <= north;
+  if (inside && view.zoom >= VWORLD_MIN_ZOOM) return null;
+  return {
+    longitude: (west + east) / 2,
+    latitude: (south + north) / 2,
+    // Just inside the coverage: enough to see the country, not so close that a
+    // deliberate wide view becomes a street.
+    zoom: Math.max(view.zoom, VWORLD_MIN_ZOOM + 1),
+  };
+}
+
 export const VWORLD_ATTRIBUTION =
   '<a href="https://www.vworld.kr/" target="_blank" rel="noreferrer">국토교통부 공간정보 오픈플랫폼(V-World)</a>';
 

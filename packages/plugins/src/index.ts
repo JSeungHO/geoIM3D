@@ -738,6 +738,8 @@ export {
   VWORLD_THEMATIC_LAYERS,
   VWORLD_ATTRIBUTION,
   VWORLD_BOUNDS,
+  VWORLD_MIN_ZOOM,
+  vworldCoverageView,
   VWORLD_CRS,
   type VWorldBaseMap,
   type VWorldThematicLayer,

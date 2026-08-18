@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import {
   VWORLD_BASE_MAPS,
+  VWORLD_MIN_ZOOM,
+  vworldCoverageView,
   VWORLD_THEMATIC_LAYERS,
   VWorldError,
   hasVWorldApiKey,
@@ -571,5 +573,43 @@ describe("narrowing a click to one feature", () => {
     // Even when the click is outside it: one hit is the answer either way.
     const narrowed = narrowToClicked([feature("only", SQUARE)], 9, 9);
     assert.equal(narrowed.length, 1);
+  });
+});
+
+describe("vworldCoverageView", () => {
+  it("leaves a view already over Korea alone", () => {
+    // Switching basemaps must not yank the camera off what the user is looking
+    // at when the tiles are right there.
+    assert.equal(vworldCoverageView({ longitude: 127.0, latitude: 37.5, zoom: 12 }), null);
+  });
+
+  it("moves a world view onto the coverage", () => {
+    // VWorld has tiles for Korea from zoom 6 down, so a world view draws
+    // nothing — and an empty globe reads as a basemap that failed to load.
+    const view = vworldCoverageView({ longitude: -102, latitude: 43, zoom: 1.6 });
+    assert.ok(view);
+    assert.ok(view.longitude > 124.5 && view.longitude < 132);
+    assert.ok(view.latitude > 33 && view.latitude < 38.7);
+    assert.ok(view.zoom >= VWORLD_MIN_ZOOM);
+  });
+
+  it("moves a view over Korea that is too far out", () => {
+    // Inside the box but above the tiles' shallowest zoom is still blank.
+    const view = vworldCoverageView({ longitude: 127.0, latitude: 37.5, zoom: 3 });
+    assert.ok(view);
+    assert.ok(view.zoom >= VWORLD_MIN_ZOOM);
+  });
+
+  it("keeps a closer zoom when it has to recentre", () => {
+    // Someone looking at a street in Tokyo should arrive at street level in
+    // Korea, not be pulled back to a country view.
+    const view = vworldCoverageView({ longitude: 139.7, latitude: 35.7, zoom: 17 });
+    assert.equal(view?.zoom, 17);
+  });
+
+  it("agrees with the base maps' own minimum zoom", () => {
+    // The constant mirrors every entry; a new base map with a shallower
+    // minzoom would make it wrong.
+    assert.equal(Math.min(...VWORLD_BASE_MAPS.map((map) => map.minzoom)), VWORLD_MIN_ZOOM);
   });
 });
