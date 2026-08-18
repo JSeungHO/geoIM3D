@@ -5,6 +5,7 @@ import {
   isBundledPreset,
   isDurableSource,
   parseBundledManifest,
+  placementBounds,
   parsePresets,
   upsertPreset,
   type ObjectPreset,
@@ -188,5 +189,31 @@ describe("basemapExtrusionLayerIds", () => {
   it("ignores everything that is not extruded", () => {
     assert.deepEqual(basemapExtrusionLayerIds([{ id: "water", type: "fill" }], new Set()), []);
     assert.deepEqual(basemapExtrusionLayerIds([], new Set()), []);
+  });
+});
+
+describe("placementBounds", () => {
+  it("puts a box around the placement", () => {
+    const [west, south, east, north] = placementBounds(127.0705, 37.357164, 150);
+    assert.ok(west < 127.0705 && east > 127.0705);
+    assert.ok(south < 37.357164 && north > 37.357164);
+    // ~150 m north-south, in degrees of latitude.
+    assert.ok(Math.abs((north - south) / 2 - 150 / 111320) < 1e-9);
+  });
+
+  it("widens the box in longitude as latitude rises", () => {
+    // A degree of longitude shrinks towards the poles, so the same distance
+    // spans more of them.
+    const near = placementBounds(0, 0, 150);
+    const far = placementBounds(0, 60, 150);
+    assert.ok(far[2] - far[0] > near[2] - near[0]);
+  });
+
+  it("stays finite at the pole", () => {
+    // cos() runs to zero there; without a floor the box would be the width of
+    // the world.
+    const [west, , east] = placementBounds(0, 90, 150);
+    assert.ok(Number.isFinite(west) && Number.isFinite(east));
+    assert.ok(east - west < 1);
   });
 });

@@ -231,3 +231,44 @@ export function basemapExtrusionLayerIds(
     .filter((layer) => layer.type === "fill-extrusion" && !ownedNativeIds.has(layer.id))
     .map((layer) => layer.id);
 }
+
+/* -------------------------------------------------------------------------- */
+/* Placement bounds                                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Half-width of the box an object claims on the map, in metres.
+ *
+ * ponytail: a guess, because the real extent is not knowable from here — the
+ * scale is a multiplier on the source file's own size, and nothing public on a
+ * loaded splat reports its bounding box. 150 m suits the site scans this is
+ * built for (a park, a building and its grounds) and puts the zoom button
+ * somewhere near where the object was loaded. Compute it from the mesh if the
+ * library ever exposes one.
+ */
+const PLACEMENT_RADIUS_M = 150;
+
+/**
+ * A small box around an object's placement.
+ *
+ * The layer panel's zoom button needs bounds; without them it looks up the
+ * layer, finds nothing, and returns — the button did nothing at all for a 3D
+ * object.
+ *
+ * @param longitude - Placement longitude.
+ * @param latitude - Placement latitude.
+ * @param radiusMetres - Half-width of the box. Defaults to {@link PLACEMENT_RADIUS_M}.
+ * @returns `[west, south, east, north]`.
+ */
+export function placementBounds(
+  longitude: number,
+  latitude: number,
+  radiusMetres: number = PLACEMENT_RADIUS_M,
+): [number, number, number, number] {
+  const latDelta = radiusMetres / 111_320;
+  // Longitude degrees shrink towards the poles; the floor keeps the box from
+  // exploding near them, where cos() runs to zero.
+  const cos = Math.max(Math.cos((latitude * Math.PI) / 180), 0.01);
+  const lonDelta = latDelta / cos;
+  return [longitude - lonDelta, latitude - latDelta, longitude + lonDelta, latitude + latDelta];
+}

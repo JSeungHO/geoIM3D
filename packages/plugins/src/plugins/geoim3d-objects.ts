@@ -36,6 +36,7 @@ import {
   isDurableSource,
   loadPresets as loadUserPresets,
   parseBundledManifest,
+  placementBounds,
   savePresets,
   upsertPreset,
   type ObjectPreset,
@@ -473,6 +474,9 @@ function createObjectStoreLayer(object: LoadedObject): GeoLibreLayer {
     type: "gaussian-splat",
     source: {
       assetType: object.kind,
+      // The layer panel's zoom button fits a layer to its bounds and does
+      // nothing at all without them.
+      bounds: placementBounds(object.transform.longitude, object.transform.latitude),
       sourceId: object.layerId,
       type: "gaussian-splat",
       // The original source, not the blob: a blob URL is dead on the next run,
@@ -655,6 +659,24 @@ function applyObjectOpacity(object: LoadedObject, opacity: number): void {
 }
 
 /**
+ * Whether layers were added or removed, as opposed to merely changed.
+ *
+ * Zustand hands back a new array for any mutation, so identity says nothing
+ * about which kind it was.
+ *
+ * @param before - The previous layers.
+ * @param after - The current layers.
+ * @returns True when the set of ids differs.
+ */
+function layerIdsChanged(
+  before: ReadonlyArray<{ id: string }>,
+  after: ReadonlyArray<{ id: string }>,
+): boolean {
+  if (before.length !== after.length) return true;
+  return before.some((layer, index) => layer.id !== after[index].id);
+}
+
+/**
  * Follows the layer list: a layer deleted there removes the object, and the
  * eye/opacity controls drive the renderer.
  *
@@ -664,9 +686,14 @@ function applyObjectOpacity(object: LoadedObject, opacity: number): void {
  */
 function watchLayerList(): void {
   unsubscribeStore ??= useAppStore.subscribe((store, previous) => {
-    // Any change to the layer set can have put something above the splat
-    // scene; putting it back on top is cheap and idempotent.
-    if (store.layers !== previous.layers && state.objects.length > 0) raiseSplatScene();
+    // Only when a layer was added or removed — not on every property change.
+    // `moveLayer` re-orders the style, which for a custom 3D layer holding tens
+    // of millions of splats is expensive, and the opacity slider fires on every
+    // tick of a drag: the map froze the moment it was touched. Nothing that
+    // merely changes a layer's opacity or visibility can bury the scene.
+    if (state.objects.length > 0 && layerIdsChanged(previous.layers, store.layers)) {
+      raiseSplatScene();
+    }
 
     const currentById = new Map(store.layers.map((layer) => [layer.id, layer]));
     for (const before of previous.layers) {
@@ -963,6 +990,18 @@ async function applyTransform(object: LoadedObject, transform: ObjectTransform):
       scale: transform.scale,
     });
     object.transform = transform;
+    // The zoom button reads the layer's bounds, so a moved object needs its
+    // box moved too or the button keeps going where it used to be.
+    const store = useAppStore.getState();
+    const existing = store.layers.find((entry) => entry.id === object.layerId);
+    if (existing) {
+      store.updateLayer(object.layerId, {
+        source: {
+          ...existing.source,
+          bounds: placementBounds(transform.longitude, transform.latitude),
+        },
+      });
+    }
     // A reload starts visible and opaque, so a hidden or faded layer would
     // silently come back at full strength on every Apply.
     const layer = useAppStore.getState().layers.find((entry) => entry.id === object.layerId);
