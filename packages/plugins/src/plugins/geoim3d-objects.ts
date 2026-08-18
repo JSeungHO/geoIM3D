@@ -781,10 +781,16 @@ async function loadObject(
     // Go to what was just loaded. The library's `flyTo` option only drives its
     // own control panel, not `load()`, so an object placed from a preset landed
     // wherever it was told and left the camera on the other side of the world —
-    // indistinguishable from a load that failed. Not done when a transform is
-    // applied: that reloads too, and yanking the camera on every edit would
-    // fight the user positioning it.
-    app.getMap?.()?.flyTo({
+    // indistinguishable from a load that failed.
+    //
+    // A jump, not a flight: the line above switches the projection, which ends
+    // an animation in progress, so the camera never arrived. Flying three
+    // seconds across the globe while a 68 MB splat renders is not worth
+    // rescuing anyway.
+    //
+    // Not done when a transform is applied: that reloads too, and yanking the
+    // camera on every edit would fight the user positioning it.
+    app.getMap?.()?.jumpTo({
       center: [transform.longitude, transform.latitude],
       // The zoom the splat library uses for the same purpose; a site-scale
       // scan fills the view at roughly this level.
@@ -1279,7 +1285,14 @@ function buildToolbarMenu(app: GeoLibreAppAPI): void {
               ? presets.map((preset) => ({
                   id: `${MENU_ID}-preset-${preset.id}`,
                   label: preset.name,
-                  onSelect: () => void loadPreset(app, preset),
+                  onSelect: () => {
+                    // Opened first so a failure has somewhere to be read, and
+                    // so the progress line is visible while a large file
+                    // loads. A menu click that shows nothing at all is the
+                    // same shape as a broken one.
+                    showDockedPanel(app);
+                    void loadPreset(app, preset);
+                  },
                 }))
               : [
                   {
