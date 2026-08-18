@@ -20,6 +20,7 @@
  */
 
 import { useAppStore } from "@geolibre/core";
+import { registerOfflineBasemapStyle } from "@geolibre/map";
 import type { GeoLibreAppAPI, GeoLibrePlugin } from "../types";
 import {
   VWORLD_ATTRIBUTION,
@@ -391,13 +392,34 @@ function setReverseActive(app: GeoLibreAppAPI, active: boolean): void {
 function addBaseMapLayer(app: GeoLibreAppAPI, id: string): void {
   const map = VWORLD_BASE_MAPS.find((entry) => entry.id === id);
   if (!map) return;
-  app.addWmtsLayer?.(labelFor(map.labelKey), vworldTileTemplate(map), {
-    attribution: VWORLD_ATTRIBUTION,
-    bounds: VWORLD_BOUNDS,
-    minzoom: map.minzoom,
-    maxzoom: map.maxzoom,
-    tileSize: 256,
+
+  // Set as the map's basemap, not stacked as a layer. A base map added on top
+  // of everything is a base map in name only: it covered 3D objects and any
+  // layer added before it, and fighting that with layer ordering is fighting
+  // the wrong thing — the background belongs at the bottom by construction.
+  //
+  // The style is registered under a sentinel rather than fetched from a URL,
+  // which is the same mechanism the app uses for its own generated basemaps.
+  // The tiles keep the key-free `vworld://` template, so the protocol handler
+  // still swaps the key in per request and nothing is written into a project.
+  const sentinel = registerOfflineBasemapStyle(`vworld-${map.id}`, {
+    version: 8,
+    // No glyphs or sprite: this style draws raster tiles and nothing else, so
+    // declaring them would only add two fetches that can fail.
+    sources: {
+      vworld: {
+        type: "raster",
+        tiles: [vworldTileTemplate(map)],
+        tileSize: 256,
+        attribution: VWORLD_ATTRIBUTION,
+        bounds: VWORLD_BOUNDS,
+        minzoom: map.minzoom,
+        maxzoom: map.maxzoom,
+      },
+    },
+    layers: [{ id: "vworld", type: "raster", source: "vworld" }],
   });
+  app.setBasemap(sentinel);
 }
 
 /**
