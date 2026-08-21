@@ -8,6 +8,7 @@ import type { Viewer } from "cesium";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { applyMapViewToCamera, isSameView, readMapViewFromCamera } from "./cesium-camera";
 import { CesiumLayerSync } from "./cesium-layer-sync";
+import { getOfflineBasemapStyle } from "./protomaps-basemap";
 
 // The Cesium 3D-globe view (see private/cesium-view-plan.md). M1 wired the
 // build, token, and split-pane mount; M2 synced the camera with the shared store
@@ -112,6 +113,13 @@ export const CesiumCanvas = memo(function CesiumCanvas({
   const syncView = useAppStore((s) => s.mapLayout.syncView);
   const globalView = useAppStore((s) => s.mapView);
   const entryView = useAppStore((s) => s.secondaryMapViews.find((p) => p.id === viewId)?.view);
+
+  // Basemap inputs. The globe can only replay a *raster* basemap style as
+  // imagery, so these drive the background only when one is applied; a vector
+  // basemap leaves the viewer's own Ion/OpenStreetMap imagery in place.
+  const basemapStyleUrl = useAppStore((s) => s.basemapStyleUrl);
+  const basemapVisible = useAppStore((s) => s.basemapVisible);
+  const basemapOpacity = useAppStore((s) => s.basemapOpacity);
 
   // Layer sync inputs, mirrored from SecondaryMapCanvas: the shared layers with
   // this pane's per-layer visibility overrides, then group effects folded in.
@@ -320,6 +328,18 @@ export const CesiumCanvas = memo(function CesiumCanvas({
     if (!ready) return;
     layerSyncRef.current?.sync(paneLayers);
   }, [ready, paneLayers]);
+
+  // Mirror the 2D map's background onto the globe. Without this, choosing a
+  // basemap moved the map and left the globe on its own imagery, so the two
+  // panes showed different worlds. Only a registered raster style resolves here;
+  // anything else yields null and restores the default imagery.
+  useEffect(() => {
+    if (!ready) return;
+    layerSyncRef.current?.syncBasemap(getOfflineBasemapStyle(basemapStyleUrl), {
+      visible: basemapVisible,
+      opacity: basemapOpacity,
+    });
+  }, [ready, basemapStyleUrl, basemapVisible, basemapOpacity]);
 
   // Synced: follow the shared global camera. Depend on primitives so an
   // equal-valued mapView object does not re-apply. `ready` re-runs this once the

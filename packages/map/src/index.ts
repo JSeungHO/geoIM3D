@@ -9,7 +9,7 @@ export {
 } from "./feature-selection";
 export { SecondaryMapCanvas, type SecondaryMapCanvasProps } from "./SecondaryMapCanvas";
 export { CesiumCanvas, type CesiumCanvasProps } from "./CesiumCanvas";
-export { isCesiumSupportedLayerType } from "./cesium-layer-sync";
+export { isCesiumSupportedLayerType, setCesiumTileUrlResolver } from "./cesium-layer-sync";
 export {
   applyMapViewToCamera,
   cesiumPitchToMapLibreDeg,

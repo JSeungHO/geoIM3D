@@ -1,5 +1,6 @@
 import { resolveThreeDTilesRequestHeaders, type GeoLibreLayer } from "@geolibre/core";
 import type { Cesium3DTileset, DataSource, ImageryLayer, Viewer } from "cesium";
+import type { StyleSpecification } from "maplibre-gl";
 
 // Reconciles the store's `GeoLibreLayer[]` onto a Cesium globe, mirroring what
 // MapController.syncLayers does for MapLibre. M3 covers the layer kinds where
@@ -31,13 +32,56 @@ interface LayerEntry {
   appliedAlpha?: string;
 }
 
+/**
+ * Rewrites a tile URL the globe cannot fetch into one it can.
+ *
+ * MapLibre lets a host serve a custom scheme with `addProtocol`, and GeoLibre
+ * uses that to keep an API key out of the URL a project file records. Cesium has
+ * no such registry: it hands the URL straight to the browser, so a layer on a
+ * custom scheme renders nothing on the globe and reports no error. A host that
+ * registers a MapLibre protocol registers the matching resolver here, and the
+ * same layer draws in both renderers.
+ *
+ * Synchronous by design: it stands in for building a request URL, not for making
+ * the request.
+ */
+let tileUrlResolver: ((url: string) => string) | null = null;
+
+/**
+ * Installs the resolver, or clears it.
+ *
+ * @param resolve - Maps a URL to a fetchable one, returning it unchanged when
+ *   the scheme is not its own. May throw; a throw leaves the URL as it was.
+ */
+export function setCesiumTileUrlResolver(resolve: ((url: string) => string) | null): void {
+  tileUrlResolver = resolve;
+}
+
+/**
+ * Applies the resolver, best-effort.
+ *
+ * @param url - The stored URL.
+ * @returns The fetchable URL, or the original when nothing resolves it.
+ */
+function resolveTileUrl(url: string): string {
+  try {
+    return tileUrlResolver?.(url) ?? url;
+  } catch {
+    // A resolver throws when it cannot serve the URL — a missing API key, most
+    // often. The unresolved URL then fails to load, which is the same outcome as
+    // before and leaves the rest of the sync pass alone.
+    return url;
+  }
+}
+
 function str(value: unknown): string | undefined {
   return typeof value === "string" && value ? value : undefined;
 }
 
 function firstTile(layer: GeoLibreLayer): string | undefined {
   const tiles = layer.source.tiles;
-  return Array.isArray(tiles) ? str(tiles[0]) : undefined;
+  const first = Array.isArray(tiles) ? str(tiles[0]) : undefined;
+  return first === undefined ? undefined : resolveTileUrl(first);
 }
 
 function tilesetUrl(layer: GeoLibreLayer): string | undefined {
@@ -186,11 +230,51 @@ function applyExtrusion(
   }
 }
 
+/** One raster source of a basemap style, as an imagery provider's inputs. */
+interface BasemapTiles {
+  url: string;
+  minzoom?: number;
+  maxzoom?: number;
+}
+
+/**
+ * Reads a basemap style's raster sources in draw order.
+ *
+ * Walks `style.layers`, not `style.sources`: a style may declare a source it
+ * never draws, and the order layers are drawn in is the order the globe has to
+ * stack them (a satellite basemap's labels overlay must stay on top of its
+ * imagery). An empty result means the style is not replayable as imagery.
+ *
+ * @param style - The basemap style.
+ * @returns The tile templates to stack, bottom first.
+ */
+export function rasterBasemapTiles(style: StyleSpecification): BasemapTiles[] {
+  const tiles: BasemapTiles[] = [];
+  for (const layer of style.layers ?? []) {
+    if (layer.type !== "raster" || !("source" in layer) || typeof layer.source !== "string") {
+      continue;
+    }
+    const source = style.sources?.[layer.source];
+    if (!source || source.type !== "raster") continue;
+    const url = Array.isArray(source.tiles) ? str(source.tiles[0]) : undefined;
+    if (!url) continue;
+    tiles.push({
+      url: resolveTileUrl(url),
+      minzoom: typeof source.minzoom === "number" ? source.minzoom : undefined,
+      maxzoom: typeof source.maxzoom === "number" ? source.maxzoom : undefined,
+    });
+  }
+  return tiles;
+}
 
 export class CesiumLayerSync {
   private readonly entries = new Map<string, LayerEntry>();
   /** Imagery id order last asserted on the globe, to skip redundant reorders. */
   private lastImageryOrder = "";
+  /** The basemap style replayed as imagery, bottom-most and below every layer. */
+  private basemapImagery: ImageryLayer[] = [];
+  /** The basemap tiles last applied, so an unrelated store change rebuilds nothing. */
+  private basemapSignature = "";
 
   constructor(
     private readonly Cesium: CesiumNs,
@@ -261,9 +345,80 @@ export class CesiumLayerSync {
     }
   }
 
+  /**
+   * Draws a raster basemap style as the globe's background imagery.
+   *
+   * The 2D map takes its background from a MapLibre style, which the globe
+   * cannot read: picking a basemap moved the map and left the globe on Ion (or
+   * OpenStreetMap) imagery, so the two panes showed different worlds. A raster
+   * style is just tiles with an order, which is exactly what an imagery layer
+   * is, so it is replayed onto the globe source by source.
+   *
+   * Only raster styles are replayed. A vector basemap has no tile images to
+   * hand Cesium, and half-drawing one would be worse than leaving the default
+   * imagery in place, so those fall back to it.
+   *
+   * The tiles sit directly above the viewer's own base imagery and below every
+   * store layer, which is where a background belongs.
+   *
+   * @param style - The basemap style, or null to restore the default imagery.
+   * @param options - The basemap's visibility and opacity, as the 2D map applies them.
+   */
+  syncBasemap(
+    style: StyleSpecification | null,
+    options: { visible: boolean; opacity: number },
+  ): void {
+    const tiles = style ? rasterBasemapTiles(style) : [];
+    const signature = JSON.stringify(tiles);
+    if (signature !== this.basemapSignature) {
+      this.basemapSignature = signature;
+      for (const imagery of this.basemapImagery) this.viewer.imageryLayers.remove(imagery, true);
+      this.basemapImagery = [];
+      // Index 1 and up: the viewer's own base imagery stays at 0 underneath, so
+      // a basemap with transparent gaps (or bounds narrower than the globe) has
+      // something behind it rather than black space.
+      tiles.forEach((tile, index) => {
+        try {
+          const provider = new this.Cesium.UrlTemplateImageryProvider({
+            url: tile.url,
+            minimumLevel: tile.minzoom,
+            maximumLevel: tile.maxzoom,
+          });
+          this.basemapImagery.push(
+            this.viewer.imageryLayers.addImageryProvider(provider, index + 1),
+          );
+        } catch {
+          // Mirror createImagery: a provider that throws must not abort the pass.
+        }
+      });
+      // Inserting below them does not move the store layers, but a *removal*
+      // shifts every index above it down; re-assert the stored order rather
+      // than reason about which case happened.
+      this.raiseStoreImagery();
+    }
+    for (const imagery of this.basemapImagery) {
+      imagery.show = options.visible;
+      imagery.alpha = options.opacity;
+    }
+  }
+
+  /** Puts every store imagery layer back above the basemap, in store order. */
+  private raiseStoreImagery(): void {
+    for (const entry of this.entries.values()) {
+      if (entry.kind === "imagery" && entry.handle) {
+        this.viewer.imageryLayers.raiseToTop(entry.handle as ImageryLayer);
+      }
+    }
+    // The pass above walks insertion order, not store order, so the next sync
+    // must redo it properly.
+    this.lastImageryOrder = "";
+  }
+
   destroy(): void {
     for (const entry of this.entries.values()) this.destroyEntry(entry);
     this.entries.clear();
+    for (const imagery of this.basemapImagery) this.viewer.imageryLayers.remove(imagery, true);
+    this.basemapImagery = [];
   }
 
   private createEntry(layer: GeoLibreLayer): void {
@@ -285,7 +440,7 @@ export class CesiumLayerSync {
         // (WmsSource.tsx), so a non-default style/format/version or an opaque
         // (transparent:false) overlay renders the same on the globe as on the map.
         provider = new Cesium.WebMapServiceImageryProvider({
-          url: String(layer.source.url),
+          url: resolveTileUrl(String(layer.source.url)),
           layers: String(layer.source.layers ?? ""),
           parameters: {
             transparent: layer.source.transparent !== false,
