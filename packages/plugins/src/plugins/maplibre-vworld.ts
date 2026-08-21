@@ -397,6 +397,11 @@ function setReverseActive(app: GeoLibreAppAPI, active: boolean): void {
  * added before it, and fighting that with layer ordering is fighting the wrong
  * thing — the background belongs at the bottom by construction.
  *
+ * An overlay that names this base map (Hybrid over Satellite) is drawn into the
+ * same style, above the imagery. Satellite alone is unlabelled and hard to read,
+ * and offering the annotation separately only let a user pick the half that is
+ * useless on its own — so the pair is one basemap.
+ *
  * Exported so the Change Basemap dialog offers the same maps as this plugin's
  * own menu, off one definition rather than two that can drift.
  *
@@ -405,10 +410,10 @@ function setReverseActive(app: GeoLibreAppAPI, active: boolean): void {
  */
 export async function registerVWorldBasemapStyle(id: string): Promise<string | null> {
   const map = VWORLD_BASE_MAPS.find((entry) => entry.id === id);
-  // An overlay is transparent labels and roads with nothing behind them. As a
-  // basemap it replaces the imagery it was drawn to annotate, leaving writing
-  // on an empty map; it belongs on top of one. See addVWorldOverlayLayer.
-  if (!map || map.overlay) return null;
+  // An overlay is not a basemap: as one it would replace the imagery it was
+  // drawn to annotate, leaving writing on an empty map.
+  if (!map || map.overlayFor) return null;
+  const overlays = VWORLD_BASE_MAPS.filter((entry) => entry.overlayFor === map.id);
 
   // Imported here, not at the top: `@geolibre/map` pulls MapLibre's stylesheet
   // into the module graph, and this file is reached from `plugin-menu-groups`,
@@ -418,20 +423,29 @@ export async function registerVWorldBasemapStyle(id: string): Promise<string | n
     version: 8,
     // No glyphs or sprite: this style draws raster tiles and nothing else, so
     // declaring them would only add two fetches that can fail.
-    sources: {
-      vworld: {
-        type: "raster",
-        // The key-free template: the protocol handler swaps the key in per
-        // request, so nothing is written into a project file.
-        tiles: [vworldTileTemplate(map)],
-        tileSize: 256,
-        attribution: VWORLD_ATTRIBUTION,
-        bounds: VWORLD_BOUNDS,
-        minzoom: map.minzoom,
-        maxzoom: map.maxzoom,
-      },
-    },
-    layers: [{ id: "vworld", type: "raster", source: "vworld" }],
+    sources: Object.fromEntries(
+      [map, ...overlays].map((entry) => [
+        `vworld-${entry.id}`,
+        {
+          type: "raster",
+          // The key-free template: the protocol handler swaps the key in per
+          // request, so nothing is written into a project file.
+          tiles: [vworldTileTemplate(entry)],
+          tileSize: 256,
+          attribution: VWORLD_ATTRIBUTION,
+          bounds: VWORLD_BOUNDS,
+          minzoom: entry.minzoom,
+          maxzoom: entry.maxzoom,
+        },
+      ]),
+    ),
+    // Order matters: the overlays follow the base map, so the annotation is
+    // drawn over the imagery rather than under it.
+    layers: [map, ...overlays].map((entry) => ({
+      id: `vworld-${entry.id}`,
+      type: "raster" as const,
+      source: `vworld-${entry.id}`,
+    })),
   });
   appliedSentinels.set(sentinel, map.id);
   return sentinel;
@@ -458,43 +472,10 @@ export function vworldBasemapIdFor(styleUrl: string | undefined): string | null 
   return (styleUrl && appliedSentinels.get(styleUrl)) || null;
 }
 
-/**
- * Adds a VWorld overlay (Hybrid: labels, roads and boundaries) above the map.
- *
- * A layer, not a basemap — it is transparent by design and carries no imagery,
- * so replacing the basemap with it leaves annotations floating over nothing.
- * Exported so the picker and this plugin's menu treat it the same way.
- *
- * @param id - The base map id from {@link VWORLD_BASE_MAPS}.
- * @returns The new layer's id, or null when the id is not an overlay.
- */
-export function addVWorldOverlayLayer(id: string): string | null {
-  const map = VWORLD_BASE_MAPS.find((entry) => entry.id === id);
-  if (!map?.overlay) return null;
-  return useAppStore.getState().addTileLayer(
-    labelFor(map.labelKey),
-    {
-      type: "wmts",
-      // The key-free template, as everywhere else: the protocol handler swaps
-      // the key in per request so none reaches a project file.
-      tiles: [vworldTileTemplate(map)],
-      url: vworldTileTemplate(map),
-      attribution: VWORLD_ATTRIBUTION,
-      bounds: VWORLD_BOUNDS,
-      minzoom: map.minzoom,
-      maxzoom: map.maxzoom,
-      tileSize: 256,
-    },
-    null,
-  );
-}
-
 /** Style-id prefix for a VWorld basemap, so the picker can tell which is active. */
 export const VWORLD_BASEMAP_STYLE_PREFIX = "vworld-";
 
 async function addBaseMapLayer(app: GeoLibreAppAPI, id: string): Promise<void> {
-  if (addVWorldOverlayLayer(id)) return;
-
   const sentinel = await registerVWorldBasemapStyle(id);
   if (!sentinel) return;
 
@@ -679,7 +660,9 @@ function buildToolbarMenu(app: GeoLibreAppAPI): void {
           type: "submenu",
           id: `${MENU_ID}-basemaps`,
           label: labels.basemaps,
-          items: VWORLD_BASE_MAPS.map((map) => ({
+          // Overlays are folded into the base map they annotate, so they are
+          // not offered on their own.
+          items: VWORLD_BASE_MAPS.filter((map) => !map.overlayFor).map((map) => ({
             id: `${MENU_ID}-basemap-${map.id}`,
             label: labelFor(map.labelKey),
             disabled: !ready,

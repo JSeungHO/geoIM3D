@@ -616,13 +616,18 @@ describe("vworldCoverageView", () => {
 });
 
 describe("VWorld base map kinds", () => {
-  it("marks only Hybrid as an overlay", () => {
+  it("marks Hybrid as an overlay of Satellite, and nothing else as an overlay", () => {
     // Hybrid is transparent annotation — labels, roads, boundaries — with no
-    // imagery of its own. Applied as a basemap it replaces the imagery it was
-    // drawn to annotate, leaving writing on an empty map, so the two are
-    // applied by different paths and this flag is what picks between them.
-    const overlays = VWORLD_BASE_MAPS.filter((map) => map.overlay).map((map) => map.id);
-    assert.deepEqual(overlays, ["Hybrid"]);
+    // imagery of its own, so it is drawn into Satellite's style rather than
+    // offered as a basemap. Marking any other entry would make that one
+    // unselectable; marking none would put unreadable annotation in the picker.
+    const overlays = VWORLD_BASE_MAPS.filter((map) => map.overlayFor).map((map) => [
+      map.id,
+      map.overlayFor,
+    ]);
+    assert.deepEqual(overlays, [["Hybrid", "Satellite"]]);
+    // And the base map it names exists, or it would be drawn into nothing.
+    assert.ok(VWORLD_BASE_MAPS.some((map) => map.id === "Satellite" && !map.overlayFor));
   });
 
   it("gives every base map a zoom range VWorld actually serves", () => {

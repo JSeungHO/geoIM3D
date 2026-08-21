@@ -57,10 +57,10 @@ export function VWorldBasemapSection({ activeStyleUrl, onSelect }: VWorldBasemap
   const setMapView = useAppStore((s) => s.setMapView);
   if (!configured) return null;
 
-  // Hybrid is transparent annotation, not imagery. It belongs on top of a
-  // basemap rather than in a list of them, so the VWorld menu adds it and this
-  // dialog does not offer it at all.
-  const basemaps = VWORLD_BASE_MAPS.filter((basemap) => !basemap.overlay);
+  // Hybrid is transparent annotation, not imagery, and is drawn into the
+  // Satellite basemap's own style. Listing it here would offer the half that is
+  // unreadable on its own.
+  const basemaps = VWORLD_BASE_MAPS.filter((basemap) => !basemap.overlayFor);
 
   // Asked of the plugin rather than parsed out of the URL: a sentinel only
   // resolves for the session that registered it, so a dead one left in the

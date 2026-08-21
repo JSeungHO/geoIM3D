@@ -696,7 +696,6 @@ export {
   VWORLD_PLUGIN_ID,
   setVWorldLabels,
   registerVWorldBasemapStyle,
-  addVWorldOverlayLayer,
   vworldBasemapIdFor,
   VWORLD_BASEMAP_STYLE_PREFIX,
   setVWorldBuildingLayerAdder,

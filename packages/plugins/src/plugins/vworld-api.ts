@@ -338,20 +338,26 @@ export interface VWorldBaseMap {
   extension: "png" | "jpeg";
   minzoom: number;
   maxzoom: number;
-  /** Hybrid is a transparent overlay meant to sit on top of Satellite. */
-  overlay: boolean;
+  /**
+   * The base map this entry annotates, when it is an overlay rather than a
+   * base map of its own.
+   *
+   * Hybrid is transparent labels, roads and boundaries with no imagery behind
+   * them, so it is never selectable on its own: it is drawn into the style of
+   * the base map named here, and the two are one basemap to the user.
+   */
+  overlayFor?: VWorldBaseMap["id"];
 }
 
 export const VWORLD_BASE_MAPS: readonly VWorldBaseMap[] = [
-  { id: "Base", labelKey: "base", extension: "png", minzoom: 6, maxzoom: 19, overlay: false },
-  { id: "white", labelKey: "white", extension: "png", minzoom: 6, maxzoom: 18, overlay: false },
+  { id: "Base", labelKey: "base", extension: "png", minzoom: 6, maxzoom: 19 },
+  { id: "white", labelKey: "white", extension: "png", minzoom: 6, maxzoom: 18 },
   {
     id: "midnight",
     labelKey: "midnight",
     extension: "png",
     minzoom: 6,
     maxzoom: 18,
-    overlay: false,
   },
   {
     id: "Satellite",
@@ -359,9 +365,15 @@ export const VWORLD_BASE_MAPS: readonly VWorldBaseMap[] = [
     extension: "jpeg",
     minzoom: 6,
     maxzoom: 19,
-    overlay: false,
   },
-  { id: "Hybrid", labelKey: "hybrid", extension: "png", minzoom: 6, maxzoom: 19, overlay: true },
+  {
+    id: "Hybrid",
+    labelKey: "hybrid",
+    extension: "png",
+    minzoom: 6,
+    maxzoom: 19,
+    overlayFor: "Satellite",
+  },
 ];
 
 /** Approximate bounds of VWorld's Korean coverage, `[west, south, east, north]`. */
