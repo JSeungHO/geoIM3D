@@ -27,7 +27,12 @@ import {
   type MapScaleUnit,
   type MapViewState,
   MAX_PROCESSING_HISTORY,
+  type ModelGraphEdge,
+  type ModelGraphNode,
+  type ModelGraphNodeKind,
+  type ModelToolProvider,
   type ProcessingModel,
+  type ProcessingModelGraph,
   type ProcessingRun,
   type ProcessingRunKind,
   type SecondaryMapView,
@@ -51,6 +56,13 @@ import {
 } from "./types";
 import { DEFAULT_LAYER_GROUP_OPACITY, normalizeGroupContiguity } from "./layer-groups";
 import { normalizeStyleLibraryEntries } from "./style-library";
+import {
+  createDefaultPrintLayout,
+  isDefaultPrintLayout,
+  normalizePrintLayoutConfig,
+  scrubPrintLayoutForLayers,
+  type PrintLayoutConfig,
+} from "./print-layout-config";
 import { getEllipsoid } from "./ellipsoids";
 import {
   scrubWidgetsForRemovedLayers,
@@ -357,6 +369,7 @@ export function parseProject(json: string): GeoLibreProject {
     preferences: normalizeProjectPreferences(data.preferences),
     plugins: normalizeProjectPlugins(data.plugins) ?? undefined,
     legend: normalizeLegendConfig(data.legend),
+    printLayout: normalizePrintLayoutConfig(data.printLayout) ?? undefined,
     storymap: normalizeStoryMap(data.storymap) ?? undefined,
     models: normalizeModels(data.models) ?? undefined,
     processingHistory: normalizeProcessingHistory(data.processingHistory) ?? undefined,
@@ -737,9 +750,87 @@ export function normalizeModels(value: unknown): ProcessingModel[] | null {
       });
     }
     seen.add(id);
-    models.push({ id, name: normalizeString(candidate.name), steps });
+    const graph = normalizeModelGraph((candidate as { graph?: unknown }).graph);
+    models.push({
+      id,
+      name: normalizeString(candidate.name),
+      steps,
+      ...(graph ? { graph } : {}),
+    });
   }
   return models.length > 0 ? models : null;
+}
+
+const MODEL_NODE_KINDS = new Set<ModelGraphNodeKind>(["input", "tool", "output"]);
+const MODEL_TOOL_PROVIDERS = new Set<ModelToolProvider>(["vector", "whitebox"]);
+
+/** Coerce an untrusted number to a finite canvas coordinate. */
+function normalizeCoordinate(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+/**
+ * Coerce an untrusted `graph` value into a {@link ProcessingModelGraph}. Drops
+ * nodes without a usable id or an unknown kind, de-duplicates node ids, and
+ * drops edges that do not connect two surviving nodes or that name an empty
+ * port. Self-edges are dropped too, since a node cannot feed itself.
+ *
+ * Structural validity beyond this (cycles, type mismatches, missing required
+ * inputs) is the runner's job — those depend on the tool registries, which the
+ * project layer deliberately does not import.
+ *
+ * @param value Raw `graph` value from the project JSON.
+ * @returns The normalized graph, or `null` when it has no usable nodes.
+ */
+export function normalizeModelGraph(value: unknown): ProcessingModelGraph | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Partial<ProcessingModelGraph>;
+  const nodes: ModelGraphNode[] = [];
+  const nodeIds = new Set<string>();
+  for (const entry of Array.isArray(raw.nodes) ? raw.nodes : []) {
+    if (!entry || typeof entry !== "object") continue;
+    const node = entry as Partial<ModelGraphNode>;
+    const nodeId = normalizeString(node.id).trim();
+    const kind = node.kind as ModelGraphNodeKind;
+    if (!nodeId || nodeIds.has(nodeId) || !MODEL_NODE_KINDS.has(kind)) continue;
+    nodeIds.add(nodeId);
+    const layerId = normalizeString(node.layerId).trim();
+    const toolId = normalizeString(node.toolId).trim();
+    const name = normalizeString(node.name).trim();
+    const provider = node.provider as ModelToolProvider;
+    nodes.push({
+      id: nodeId,
+      kind,
+      x: normalizeCoordinate(node.x),
+      y: normalizeCoordinate(node.y),
+      ...(layerId ? { layerId } : {}),
+      ...(toolId ? { toolId } : {}),
+      ...(MODEL_TOOL_PROVIDERS.has(provider) ? { provider } : {}),
+      ...(node.parameters && typeof node.parameters === "object" && !Array.isArray(node.parameters)
+        ? { parameters: node.parameters as Record<string, unknown> }
+        : {}),
+      ...(name ? { name } : {}),
+    });
+  }
+  if (nodes.length === 0) return null;
+
+  const edges: ModelGraphEdge[] = [];
+  const edgeIds = new Set<string>();
+  for (const entry of Array.isArray(raw.edges) ? raw.edges : []) {
+    if (!entry || typeof entry !== "object") continue;
+    const edge = entry as Partial<ModelGraphEdge>;
+    const edgeId = normalizeString(edge.id).trim();
+    const from = normalizeString(edge.from).trim();
+    const to = normalizeString(edge.to).trim();
+    const fromPort = normalizeString(edge.fromPort).trim();
+    const toPort = normalizeString(edge.toPort).trim();
+    if (!edgeId || edgeIds.has(edgeId)) continue;
+    if (!nodeIds.has(from) || !nodeIds.has(to) || from === to) continue;
+    if (!fromPort || !toPort) continue;
+    edgeIds.add(edgeId);
+    edges.push({ id: edgeId, from, fromPort, to, toPort });
+  }
+  return { nodes, edges };
 }
 
 const PROCESSING_RUN_KINDS = new Set<ProcessingRunKind>([
@@ -1505,6 +1596,7 @@ export function projectFromStore(state: {
   preferences: ProjectPreferences;
   plugins?: ProjectPluginState | null;
   legend?: LegendConfig | null;
+  printLayout?: PrintLayoutConfig | null;
   storymap?: StoryMap | null;
   models?: ProcessingModel[] | null;
   processingHistory?: ProcessingRun[] | null;
@@ -1524,6 +1616,9 @@ export function projectFromStore(state: {
   }
   const plugins = normalizeProjectPlugins(state.plugins);
   const legend = normalizeLegendConfig(state.legend);
+  // Persist the composer only once it differs from the defaults, so a project
+  // that never opened Print Layout keeps its previous byte-for-byte shape.
+  const printLayout = normalizePrintLayoutConfig(state.printLayout);
   const storymap = normalizeStoryMap(state.storymap);
   const models = normalizeModels(state.models);
   const processingHistory = normalizeProcessingHistory(state.processingHistory);
@@ -1572,6 +1667,7 @@ export function projectFromStore(state: {
     preferences: state.preferences,
     ...(plugins ? { plugins } : {}),
     ...(legend ? { legend } : {}),
+    ...(printLayout && !isDefaultPrintLayout(printLayout) ? { printLayout } : {}),
     ...(storymap ? { storymap } : {}),
     ...(models ? { models } : {}),
     ...(processingHistory ? { processingHistory } : {}),
@@ -1690,6 +1786,7 @@ export function applyProjectToStore(project: GeoLibreProject): {
   preferences: ProjectPreferences;
   projectPlugins: ProjectPluginState | null;
   legend: LegendConfig;
+  printLayout: PrintLayoutConfig;
   storymap: StoryMap | null;
   models: ProcessingModel[];
   processingHistory: ProcessingRun[];
@@ -1768,6 +1865,12 @@ export function applyProjectToStore(project: GeoLibreProject): {
     orphanIds.size > 0 ? scrubCommentsForRemovedLayers(comments, orphanIds) : comments;
   const scrubbedLegend =
     orphanIds.size > 0 ? scrubLegendForRemovedLayers(legend, orphanIds) : legend;
+  // The composer's data/atlas blocks name a layer directly rather than through
+  // `allReferencedIds`, so they are scrubbed against the surviving layer set.
+  const printLayout = scrubPrintLayoutForLayers(
+    normalizePrintLayoutConfig(project.printLayout) ?? createDefaultPrintLayout(),
+    existingLayerIds,
+  );
 
   return {
     projectName: project.name,
@@ -1780,6 +1883,7 @@ export function applyProjectToStore(project: GeoLibreProject): {
     preferences: normalizeProjectPreferences(project.preferences),
     projectPlugins: normalizeProjectPlugins(project.plugins),
     legend: scrubbedLegend,
+    printLayout,
     storymap: normalizeStoryMap(project.storymap),
     models: normalizeModels(project.models) ?? [],
     processingHistory: normalizeProcessingHistory(project.processingHistory) ?? [],

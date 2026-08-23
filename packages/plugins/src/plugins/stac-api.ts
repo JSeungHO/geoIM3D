@@ -1,6 +1,7 @@
 import type { BBox, Feature, Geometry } from "geojson";
 
 export const STAC_INDEX_CATALOGS_URL = "https://stacindex.org/api/catalogs";
+const USGS_ASTROGEOLOGY_API_URL = "https://stac.astrogeology.usgs.gov/api";
 // No item-search endpoint to ask, so a page is however much of the tree the walk covers.
 const STATIC_SEARCH_READS_PER_PAGE = 300;
 const STATIC_SEARCH_CONCURRENCY = 12;
@@ -24,6 +25,15 @@ export interface StacLink {
   body?: Record<string, unknown>;
 }
 
+/** The Azure account a catalog names beside an href, in either of the two spellings in use. */
+interface StorageOptions {
+  account_name?: string;
+}
+
+interface XarrayOpenKwargs {
+  storage_options?: StorageOptions;
+}
+
 export interface StacAsset {
   href: string;
   title?: string;
@@ -33,14 +43,27 @@ export interface StacAsset {
    * Table extension storage options. Catalogs that publish `abfs://` hrefs keep the Azure
    * account out of the URL and name it here — the href's first segment is the *container*.
    */
-  "table:storage_options"?: { account_name?: string };
+  "table:storage_options"?: StorageOptions;
+  /** Where a Zarr asset names that same account. */
+  "xarray:open_kwargs"?: XarrayOpenKwargs;
+  /** Present on an Icechunk store, which is a manifest rather than a Zarr hierarchy. */
+  "icechunk:branch"?: string;
+  /** Projection extension code, e.g. `EPSG:32632`, when the asset is not in WGS84. */
+  "proj:code"?: string;
+  "proj:epsg"?: number;
 }
 
 export interface StacItem extends Feature<Geometry | null> {
   id: string;
   bbox?: BBox;
   collection?: string;
-  properties: Record<string, unknown> & { datetime?: string; start_datetime?: string };
+  properties: Record<string, unknown> & {
+    datetime?: string;
+    start_datetime?: string;
+    "table:storage_options"?: StorageOptions;
+    "xarray:open_kwargs"?: XarrayOpenKwargs;
+    "icechunk:branch"?: string;
+  };
   assets: Record<string, StacAsset>;
   links?: StacLink[];
 }
@@ -137,8 +160,38 @@ function httpUrl(value: unknown): value is string {
   }
 }
 
+/**
+ * S3 website endpoints only support HTTP. Catalog indexes and older STAC documents still
+ * publish those URLs, which makes them mixed content in the web app. The equivalent REST
+ * S3 endpoint supports HTTPS and serves the same public object. A bucket whose name holds
+ * a dot has to go through the path-style endpoint: the wildcard on the virtual hosted-style
+ * certificate covers one label, so `a.b.s3.<region>.amazonaws.com` fails TLS validation.
+ */
+function browserCatalogHref(href: string): string {
+  const url = new URL(href);
+  // STAC Index still advertises this 2022 static catalog. Its planetary child buckets have
+  // since been removed, while USGS publishes the same data through its supported STAC API.
+  if (
+    url.hostname.toLowerCase() === "asc-stacbrowser.s3-website-us-west-2.amazonaws.com" &&
+    url.pathname === "/catalog.json"
+  ) {
+    return USGS_ASTROGEOLOGY_API_URL;
+  }
+  const website = url.hostname.match(/^(.+)\.s3-website[.-]([a-z0-9-]+)\.amazonaws\.com$/i);
+  if (!website) return url.href;
+  const [, bucket, region] = website;
+  url.protocol = "https:";
+  if (bucket.includes(".")) {
+    url.hostname = `s3.${region}.amazonaws.com`;
+    url.pathname = `/${bucket}${url.pathname}`;
+  } else {
+    url.hostname = `${bucket}.s3.${region}.amazonaws.com`;
+  }
+  return url.href;
+}
+
 function absoluteHref(href: string, base: string): string {
-  return new URL(href, base).href;
+  return browserCatalogHref(new URL(href, base).href);
 }
 
 /**
@@ -186,7 +239,7 @@ export function isAzureBlobHref(href: string): boolean {
 }
 
 async function fetchJson<T>(url: string, init: RequestInit, fetcher: FetchLike): Promise<T> {
-  const response = await fetcher(url, {
+  const response = await fetcher(browserCatalogHref(url), {
     ...init,
     headers: { Accept: "application/geo+json, application/json", ...init.headers },
   });
@@ -233,13 +286,16 @@ function isStacItem(value: unknown): value is StacItem {
 
 function normalizeItem(item: StacItem, base: string): StacItem {
   // The table extension allows the storage options to sit on the item instead of on each asset.
-  const itemAccount = (
-    item.properties?.["table:storage_options"] as { account_name?: string } | undefined
-  )?.account_name;
+  const itemAccount =
+    item.properties?.["table:storage_options"]?.account_name ??
+    item.properties?.["xarray:open_kwargs"]?.storage_options?.account_name;
   const assets = Object.fromEntries(
     Object.entries(item.assets ?? {}).flatMap(([key, asset]) => {
       if (!asset?.href) return [];
-      const account = asset["table:storage_options"]?.account_name ?? itemAccount;
+      const account =
+        asset["table:storage_options"]?.account_name ??
+        asset["xarray:open_kwargs"]?.storage_options?.account_name ??
+        itemAccount;
       try {
         return [[key, { ...asset, href: browserAssetHref(asset.href, base, account) }]];
       } catch {
@@ -327,7 +383,7 @@ export async function connectStac(
   signal?: AbortSignal,
 ): Promise<StacConnection> {
   if (!httpUrl(inputUrl)) throw new Error("Enter a valid HTTP or HTTPS STAC URL");
-  const url = new URL(inputUrl).href;
+  const url = browserCatalogHref(inputUrl);
   const root = await fetchJson<Record<string, unknown>>(url, { signal }, fetcher);
   if (typeof root !== "object" || root === null)
     throw new Error("The URL did not return a STAC document");
@@ -586,11 +642,82 @@ export async function searchStaticStac(
 }
 
 export function itemBbox(item: StacItem): [number, number, number, number] | undefined {
-  return horizontalBbox(item.bbox);
+  const advertised = horizontalBbox(item.bbox);
+  if (
+    advertised &&
+    advertised[0] >= -180 &&
+    advertised[0] <= 180 &&
+    advertised[2] >= -180 &&
+    advertised[2] <= 180 &&
+    advertised[1] >= -90 &&
+    advertised[1] <= 90 &&
+    advertised[3] >= -90 &&
+    advertised[3] <= 90 &&
+    advertised[1] <= advertised[3]
+  ) {
+    return advertised;
+  }
+
+  // Some planetary records (notably USGS Mars THEMIS mosaics) incorrectly put
+  // their projected metre extent in the STAC bbox while their required GeoJSON
+  // geometry is correctly expressed as lon/lat. Derive the camera extent from
+  // that geometry instead of handing MapLibre impossible million-degree values.
+  const positions: Array<[number, number]> = [];
+  const collect = (value: unknown): void => {
+    if (!Array.isArray(value)) return;
+    if (
+      value.length >= 2 &&
+      typeof value[0] === "number" &&
+      Number.isFinite(value[0]) &&
+      typeof value[1] === "number" &&
+      Number.isFinite(value[1])
+    ) {
+      positions.push([value[0], value[1]]);
+      return;
+    }
+    for (const child of value) collect(child);
+  };
+  // A GeometryCollection may hold another one, so walk rather than reading one level.
+  const collectGeometry = (geometry: Geometry | null | undefined): void => {
+    if (!geometry) return;
+    if (geometry.type === "GeometryCollection") {
+      for (const child of geometry.geometries) collectGeometry(child);
+      return;
+    }
+    collect(geometry.coordinates);
+  };
+  collectGeometry(item.geometry);
+  // Anything still here failed the lon/lat check above, so falling back to it
+  // would hand out the impossible values this whole branch exists to replace.
+  // Without a usable geometry the honest answer is that there is no extent.
+  if (!positions.length) return undefined;
+
+  const latitudes = positions.map(([, latitude]) => latitude);
+  if (latitudes.some((latitude) => latitude < -90 || latitude > 90)) return undefined;
+  // The wrap below would fold any magnitude into a plausible-looking angle, so
+  // a geometry carrying the same projected-metre bug as the bbox has to be
+  // rejected the way an impossible latitude is. The bound is 360 rather than
+  // 180 because planetary catalogs legitimately write 0-360 east longitude.
+  if (positions.some(([longitude]) => longitude < -360 || longitude > 360)) return undefined;
+  const longitudes = positions
+    .map(([longitude]) => ((longitude % 360) + 360) % 360)
+    .sort((a, b) => a - b);
+  let gapIndex = longitudes.length - 1;
+  let largestGap = longitudes[0] + 360 - longitudes.at(-1)!;
+  for (let index = 0; index < longitudes.length - 1; index += 1) {
+    const gap = longitudes[index + 1] - longitudes[index];
+    if (gap > largestGap) {
+      largestGap = gap;
+      gapIndex = index;
+    }
+  }
+  const start = longitudes[(gapIndex + 1) % longitudes.length];
+  const west = start >= 180 ? start - 360 : start;
+  return [west, Math.min(...latitudes), west + (360 - largestGap), Math.max(...latitudes)];
 }
 
 /** A format {@link assetFormat} recognizes, and {@link visualizeAsset} knows how to add. */
-export type StacAssetFormat = "pmtiles" | "geojson" | "cog" | "parquet";
+export type StacAssetFormat = "pmtiles" | "geojson" | "cog" | "parquet" | "zarr";
 export type StacAssetDisplayFormat = StacAssetFormat;
 
 interface AssetFormatRule {
@@ -607,6 +734,7 @@ const ASSET_FORMATS: readonly AssetFormatRule[] = [
   { format: "geojson", mediaType: "geo+json", extension: /\.geojson($|\?)/i },
   { format: "cog", mediaType: "geotiff", extension: /\.tiff?($|\?)/i },
   { format: "parquet", mediaType: "parquet", extension: /\.parquet($|\?)/i },
+  { format: "zarr", mediaType: "zarr", extension: /\.zarr(\/|$|\?)/i },
 ];
 
 export function assetDisplayFormat(asset: StacAsset): StacAssetDisplayFormat | null {
@@ -643,4 +771,367 @@ function isFetchableHref(href: string): boolean {
 
 export function isVisualizableAsset(asset: StacAsset): boolean {
   return assetFormat(asset) !== null;
+}
+
+/** One of the things inside an asset that can become a layer. */
+export interface AssetTarget {
+  /** What the reader is asked for: a Zarr variable today, a PMTiles source layer later. */
+  id: string;
+  label: string;
+}
+
+/** An object's own entries, or none when it is anything else — an array included. */
+function entriesOf(value: unknown): [string, Record<string, unknown>][] {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return [];
+  return Object.entries(value).map(([key, entry]) => [
+    key,
+    (typeof entry === "object" && entry !== null ? entry : {}) as Record<string, unknown>,
+  ]);
+}
+
+/**
+ * The arrays in a Zarr store that can be drawn: those spanning two of the item's spatial
+ * dimensions, which leaves out coordinate bounds and other one-dimensional companions.
+ */
+export function zarrTargets(item: StacItem, assetKey: string): AssetTarget[] {
+  const spatialDimensions = entriesOf(item.properties?.["cube:dimensions"]).filter(
+    ([, dimension]) => dimension.type === "spatial",
+  );
+  const spatial = new Set(spatialDimensions.map(([name]) => name));
+  // Only an axis the datacube extension defines counts as named; anything else — a spelling the
+  // spec does not use, a number — says nothing, and saying nothing is not the same as saying no.
+  const axisOf = new Map(
+    spatialDimensions.map(([name, dimension]) => {
+      const axis = String(dimension.axis ?? "").toLowerCase();
+      return [name, ["x", "y", "z"].includes(axis) ? axis : ""];
+    }),
+  );
+  const declared = entriesOf(item.properties?.["cube:variables"]);
+  const drawable = declared.filter(([, variable]) => {
+    const dimensions = variable.dimensions;
+    if (!Array.isArray(dimensions)) return false;
+    const across = dimensions.map(String).filter((name) => spatial.has(name));
+    if (across.length < 2) return false;
+    // The renderer draws a horizontal raster, so two spatial dimensions are not enough on their
+    // own — a vertical cross-section spans latitude and depth. Judge by the axes only when every
+    // one of them is named, since a partly labelled cube says less than it appears to.
+    const axes = across.map((name) => axisOf.get(name) ?? "");
+    if (axes.some((axis) => axis === "")) return true;
+    return axes.includes("x") && axes.includes("y");
+  });
+  // An asset keyed by a variable holds that one, not the whole store (Planetary Computer). A key
+  // that names a variable which cannot be drawn holds nothing — offering the item's other
+  // variables would name arrays that asset's own store may not contain.
+  const named = drawable.filter(([name]) => name === assetKey);
+  const keyed = declared.some(([name]) => name === assetKey);
+  return (named.length || keyed ? named : drawable).map(([name, variable]) => ({
+    id: name,
+    label: typeof variable.unit === "string" ? `${name} (${variable.unit})` : name,
+  }));
+}
+
+/**
+ * Where a Zarr asset's store begins, and the array inside it the href points at. Catalogs address
+ * either the whole store or one array within it (EOPF names a Sentinel band that way).
+ */
+export function zarrStorePath(href: string): { url: string; path?: string } {
+  let parsed: URL;
+  try {
+    parsed = new URL(href);
+  } catch {
+    // Not a URL to take apart — hand it back and let the reader fail on its own terms.
+    return { url: href };
+  }
+  const marker = /\.zarr\//i.exec(parsed.pathname);
+  if (!marker) return { url: href };
+  const cut = marker.index + ".zarr".length;
+  // Only the path names the array: a query string belongs to the request, not to the key.
+  const path = parsed.pathname.slice(cut + 1);
+  const root = new URL(parsed.href);
+  root.pathname = parsed.pathname.slice(0, cut);
+  return path ? { url: root.href, path } : { url: root.href };
+}
+
+/**
+ * Whether a store URL can have keys appended to it. A reader asks for `<store>/<key>`, so anything
+ * after the path — a SAS token, a presigned signature — would land in the middle of the request.
+ */
+export function zarrStoreTakesKeys(url: string): boolean {
+  try {
+    const { search, hash } = new URL(url);
+    return !search && !hash;
+  } catch {
+    return true;
+  }
+}
+
+/** What the Zarr renderer is asked for: the store, the array inside it, and how to colour it. */
+export interface ZarrLayerRequest {
+  url: string;
+  variable: string;
+  colormap?: string;
+  clim?: [number, number];
+  crs?: string;
+}
+
+/** An `EPSG:<code>` string from any of the spellings catalogs use, or undefined for none. */
+function epsgCode(value: unknown): string | undefined {
+  if (typeof value === "number" && Number.isInteger(value)) return `EPSG:${value}`;
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (/^epsg:\d+$/i.test(trimmed)) return trimmed.toUpperCase();
+  // The datacube extension also allows an OGC CRS URI, e.g. `…/def/crs/EPSG/0/32612`.
+  const uri = /\/def\/crs\/EPSG\/\d+\/(\d+)$/i.exec(trimmed);
+  if (uri) return `EPSG:${uri[1]}`;
+  return /^\d+$/.test(trimmed) ? `EPSG:${trimmed}` : undefined;
+}
+
+/**
+ * The CRS a Zarr store's coordinates are in. The renderer assumes WGS84, so a store on a projected
+ * grid lands in the wrong place unless it is told — EOPF publishes Sentinel scenes on UTM zones.
+ * The asset's own projection wins over the item's, and the datacube dimensions are the fallback.
+ */
+export function zarrCrs(item: StacItem, asset: StacAsset): string | undefined {
+  const spatial = entriesOf(item.properties?.["cube:dimensions"]).filter(
+    ([, dimension]) => dimension.type === "spatial",
+  );
+  return (
+    epsgCode(asset["proj:code"]) ??
+    epsgCode(asset["proj:epsg"]) ??
+    epsgCode(item.properties?.["proj:code"]) ??
+    epsgCode(item.properties?.["proj:epsg"]) ??
+    spatial.map(([, dimension]) => epsgCode(dimension.reference_system)).find(Boolean)
+  );
+}
+
+/**
+ * Turns an asset href and the panel's raster options into a Zarr layer request. The options are
+ * shared with COG, and without a range a store whose values sit outside the renderer's default
+ * paints as one flat wash.
+ */
+export function zarrLayerRequest(
+  href: string,
+  variable: string,
+  options: { colormap?: string; rescaleMin?: number; rescaleMax?: number; crs?: string } = {},
+): ZarrLayerRequest {
+  const { colormap, rescaleMin, rescaleMax, crs } = options;
+  return {
+    url: zarrStorePath(href).url,
+    variable,
+    // WGS84 is what the renderer already assumes, so saying it adds nothing.
+    ...(crs && crs !== "EPSG:4326" ? { crs } : {}),
+    ...(colormap ? { colormap } : {}),
+    // Half a range would leave the renderer to invent the other end, so both bounds or neither.
+    ...(rescaleMin !== undefined && rescaleMax !== undefined
+      ? { clim: [rescaleMin, rescaleMax] as [number, number] }
+      : {}),
+  };
+}
+
+/**
+ * A layer's metadata with the item's extent recorded on it. The Zarr renderer places data from the
+ * store's own coordinates and reports no extent, so without this Zoom to layer has nothing to fly
+ * to; a STAC bbox is WGS84, which is what the map wants.
+ */
+export function withItemBounds(
+  metadata: Record<string, unknown>,
+  item: StacItem,
+): Record<string, unknown> {
+  const bounds = itemBbox(item);
+  return bounds ? { ...metadata, bounds } : metadata;
+}
+
+/**
+ * The documents a node answers to: v3 says what it is in one file, while v2 splits the answer —
+ * `.zarray` for an array, `.zgroup` for a group.
+ */
+const ZARR_NODE_KEYS = ["zarr.json", ".zarray", ".zgroup"];
+
+/**
+ * What the store said about a variable. The failures need different words: a group is a real path
+ * that simply cannot be drawn, a refusal means credentials this build cannot supply, `missing` is a
+ * store that answered and does not hold the variable, and the rest is a store nothing can read.
+ *
+ * Only {@link zarrReaderTargetCheck} reports `missing`. Over HTTP the two are not separable — a
+ * gateway that omits CORS headers on its 404s throws for a key that is merely absent, so an absent
+ * variable and an unreachable store arrive identically.
+ */
+export type ZarrTargetCheck =
+  | "array"
+  | "group"
+  | "missing"
+  | "unauthorized"
+  | "unsupported-url"
+  | "unavailable";
+
+/** As much of a node's metadata as the verdict depends on. */
+interface Node {
+  node_type?: string;
+}
+
+/** Statuses an object store answers with when a token is missing rather than the object. */
+const UNAUTHORIZED_STATUSES = new Set([401, 403, 409]);
+
+/**
+ * What one metadata document says a node is. v2 splits the answer across two files; v3 says which
+ * it is, and says so explicitly. A body that is not metadata says nothing at all.
+ */
+function nodeVerdict(key: string, body: unknown): ZarrTargetCheck | null {
+  // An array parses and is `typeof "object"`, but no Zarr node is one, so it says nothing either.
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  if (key === ".zarray") return "array";
+  if (key === ".zgroup") return "group";
+  // A v3 node says which it is. One that says neither is not a node either, whatever else it holds.
+  const nodeType = (body as Node).node_type;
+  return nodeType === "array" || nodeType === "group" ? nodeType : null;
+}
+
+/**
+ * The same verdict, for a store that is read through its own reader rather than over HTTP — an
+ * Icechunk repository resolves a Zarr key through its manifest, so there is no URL to probe.
+ */
+export async function zarrReaderTargetCheck(
+  read: (key: `/${string}`, options?: { signal?: AbortSignal }) => Promise<Uint8Array | undefined>,
+  variable: string,
+  signal?: AbortSignal,
+): Promise<ZarrTargetCheck> {
+  // "No such key" is about the variable; a throw is about the store. The difference is the two
+  // verdicts below, so which happened is remembered rather than collapsed. `IcechunkStore.get`
+  // catches its own `NotFoundError` and resolves undefined, so an absent variable reports
+  // `missing`; a reader that threw would report `unavailable`, which is honest for one whose
+  // absences cannot be told from its failures.
+  let failed = false;
+  // Both Zarr versions are asked for, as over HTTP. An Icechunk repository answers only the v3
+  // name, and answers the other two from the snapshot it holds rather than by asking.
+  for (const key of ZARR_NODE_KEYS) {
+    signal?.throwIfAborted();
+    let bytes: Uint8Array | undefined;
+    try {
+      bytes = await read(`/${variable}/${key}`, { signal });
+    } catch (error) {
+      // One key failing is not the whole store, the same way it is not over HTTP: a manifest can
+      // refuse a key it does not carry. Keep asking, and report only once every key has been.
+      if (error instanceof DOMException && error.name === "AbortError") throw error;
+      failed = true;
+      continue;
+    }
+    if (!bytes) continue;
+    // Bytes that are not usable metadata — unparseable, or parsed into something that is not a
+    // node — are the store failing to answer rather than the variable being absent, however well
+    // formed they are.
+    try {
+      const verdict = nodeVerdict(key, JSON.parse(new TextDecoder().decode(bytes)) as unknown);
+      if (verdict) return verdict;
+      failed = true;
+    } catch {
+      failed = true;
+    }
+  }
+  return failed ? "unavailable" : "missing";
+}
+
+/**
+ * Whether a variable really is a drawable array in the store. Asking for the array's own metadata
+ * settles it in one request: the store is reachable, the path exists, and it is an array rather
+ * than a group — EOPF keys an asset to `.../r10m`, which holds four bands and draws nothing.
+ */
+export async function zarrTargetCheck(
+  store: string,
+  variable: string,
+  fetcher: FetchLike = fetch,
+  signal?: AbortSignal,
+): Promise<ZarrTargetCheck> {
+  // Asked here rather than by the caller, so one function owns the whole verdict.
+  if (!zarrStoreTakesKeys(store)) return "unsupported-url";
+  // Some gateways answer a refusal for a key that is merely absent (S3 without `ListBucket`), so a
+  // refusal is remembered and only reported once every key has been asked.
+  let refused = false;
+  for (const key of ZARR_NODE_KEYS) {
+    try {
+      const response = await fetcher(storeKeyUrl(store, `${variable}/${key}`), { signal });
+      if (UNAUTHORIZED_STATUSES.has(response.status)) {
+        refused = true;
+        continue;
+      }
+      if (!response.ok) continue;
+      // A host answering 200 for everything — a CDN catch-all, a dev proxy — says nothing about
+      // the store, so every key is believed only once its body parses as metadata.
+      const metadata = await response
+        .json()
+        .then((body: unknown) => (body && typeof body === "object" ? (body as Node) : null))
+        .catch(() => null);
+      const verdict = nodeVerdict(key, metadata);
+      if (verdict) return verdict;
+    } catch (error) {
+      // Not every failure is the whole host: a gateway that omits CORS headers on its 404s throws
+      // for a key that is merely absent, so keep asking rather than condemning a store that would
+      // have answered on the next one.
+      if (error instanceof DOMException && error.name === "AbortError") throw error;
+      continue;
+    }
+  }
+  return refused ? "unauthorized" : "unavailable";
+}
+
+/** `<store>/<key>`, with any query kept where it belongs rather than buried in the path. */
+function storeKeyUrl(store: string, key: string): string {
+  try {
+    const url = new URL(store);
+    url.pathname = `${url.pathname.replace(/\/$/, "")}/${key}`;
+    return url.href;
+  } catch {
+    return `${store.replace(/\/$/, "")}/${key}`;
+  }
+}
+
+/** What the panel would add from an asset, for the formats that hold more than one thing. */
+export function assetTargets(item: StacItem, key: string, asset: StacAsset): AssetTarget[] {
+  if (assetFormat(asset) !== "zarr") return [];
+  // An href reaching into the store already names its array; there is nothing left to choose. An
+  // Icechunk repository is no different: the reader gets the root, the path becomes the variable.
+  const path = zarrStorePath(asset.href).path;
+  if (path) return [{ id: path, label: asset.title || path.split("/").pop() || path }];
+  return zarrTargets(item, key);
+}
+
+/**
+ * Icechunk keeps its objects behind a manifest, so the URL-driven Zarr reader cannot open one.
+ * Read from the item as well as the asset, the way the storage options are: a catalog is free to
+ * say it once for every asset it publishes.
+ */
+export function isIcechunkAsset(asset: StacAsset, item?: StacItem): boolean {
+  // Presence, not usability: naming the field at all declares the format, and an empty or
+  // malformed value means no branch was named rather than that this is a plain store. Falling back
+  // to the URL reader would give 404s and "unavailable"; the default branch gives the layer.
+  return "icechunk:branch" in asset || "icechunk:branch" in (item?.properties ?? {});
+}
+
+/**
+ * The branch an Icechunk asset names, or undefined when it names none — the default is
+ * {@link openIcechunkStore}'s. Declared a string but arriving as catalog JSON, so it is checked
+ * here rather than trusted, and this is the only reading of it.
+ */
+export function icechunkBranch(asset: StacAsset, item?: StacItem): string | undefined {
+  for (const value of [asset["icechunk:branch"], item?.properties?.["icechunk:branch"]]) {
+    // Trimmed on the way out too: the name is interpolated into a request path, so accepting one
+    // form and sending another would ask for a branch the catalog did not name.
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+/** Whether a format is one whose assets are read one target at a time. */
+export function requiresTarget(asset: StacAsset): boolean {
+  return assetFormat(asset) === "zarr";
+}
+
+/** Whether Add can proceed: a format the panel draws, holding something it can draw. */
+export function canAddAsset(item: StacItem, key: string, asset: StacAsset): boolean {
+  if (!isVisualizableAsset(asset)) return false;
+  if (!requiresTarget(asset)) return true;
+  // Answerable without asking the host, so answer it here rather than enabling Add and refusing
+  // the click. It holds for an Icechunk repository too: the manifest reader still asks for
+  // `<store>/<key>` (`HttpStorage.getUrl` concatenates), so a token in the URL lands mid-request.
+  if (!zarrStoreTakesKeys(zarrStorePath(asset.href).url)) return false;
+  return assetTargets(item, key, asset).length > 0;
 }

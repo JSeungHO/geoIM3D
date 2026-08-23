@@ -82,6 +82,12 @@ export const DATA_SOURCE_CATALOG: readonly DataSourceCatalogEntry[] = [
   { id: "gdb", section: "files", labelKey: "toolbar.item.gdbLayer", tier: "intermediate" },
   { id: "photos", section: "files", labelKey: "toolbar.layerType.photos", tier: "intermediate" },
   { id: "gpx", section: "files", labelKey: "toolbar.layerType.gpx", tier: "intermediate" },
+  {
+    id: "polyline",
+    section: "files",
+    labelKey: "toolbar.layerType.polyline",
+    tier: "intermediate",
+  },
   { id: "mbtiles", section: "files", labelKey: "toolbar.layerType.mbtiles", tier: "basic" },
   { id: "osm-pbf", section: "files", labelKey: "toolbar.item.osmPbfLayer", tier: "advanced" },
   // Web services
@@ -158,6 +164,12 @@ export const DATA_SOURCE_CATALOG: readonly DataSourceCatalogEntry[] = [
     id: "postgres",
     section: "databases",
     labelKey: "toolbar.layerType.postgres",
+    tier: "advanced",
+  },
+  {
+    id: "iceberg",
+    section: "databases",
+    labelKey: "toolbar.layerType.iceberg",
     tier: "advanced",
   },
 ];
@@ -458,6 +470,12 @@ export const MENU_ITEM_CATALOG: readonly MenuItemCatalogEntry[] = [
     menuId: "processing",
     labelKey: "toolbar.item.geocode",
     tier: "intermediate",
+  },
+  {
+    id: "processing.batchTools",
+    menuId: "processing",
+    labelKey: "toolbar.item.batchTools",
+    tier: "advanced",
   },
   {
     id: "processing.modelBuilder",

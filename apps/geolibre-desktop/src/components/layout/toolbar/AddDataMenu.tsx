@@ -62,6 +62,7 @@ export function AddDataMenu({
     gdb: { onSelect: () => onSetAddDataKind("gdb") },
     photos: { onSelect: () => onSetAddDataKind("photos") },
     gpx: { onSelect: () => onSetAddDataKind("gpx") },
+    polyline: { onSelect: () => onSetAddDataKind("polyline") },
     mbtiles: { onSelect: () => onSetAddDataKind("mbtiles") },
     "osm-pbf": { onSelect: onOpenOsmPbfDialog, disabled: osmPbfBusy },
     xyz: { onSelect: () => onSetAddDataKind("xyz") },
@@ -90,6 +91,7 @@ export function AddDataMenu({
     "gltf-model": { onSelect: onAddGltfModel },
     duckdb: { onSelect: addLayer.duckdb },
     postgres: { onSelect: () => onSetAddDataKind("postgres") },
+    iceberg: { onSelect: () => onSetAddDataKind("iceberg") },
   };
 
   // Each rendered section is the catalog entries it owns, filtered by the UI

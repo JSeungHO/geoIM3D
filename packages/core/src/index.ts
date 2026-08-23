@@ -9,6 +9,7 @@ export * from "./geojson-z";
 export * from "./color-ramp";
 export * from "./paths";
 export * from "./routing";
+export * from "./polyline";
 export * from "./vector-color";
 export * from "./expressions";
 export * from "./external-native-paint";
@@ -26,6 +27,7 @@ export * from "./layer-library";
 export * from "./layer-defaults";
 export * from "./layer-style-clipboard";
 export * from "./layer-groups";
+export * from "./print-layout-config";
 export { createSampleStoryMap } from "./storymap-sample";
 export {
   scrubWidgetsForRemovedLayers,

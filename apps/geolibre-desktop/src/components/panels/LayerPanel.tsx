@@ -93,6 +93,7 @@ import {
   zoomToSelection,
 } from "../../lib/selection-actions";
 import { isMobile } from "../../lib/is-mobile";
+import { PLANET_SWITCHER_LABEL_KEYS } from "../../lib/planet-labels";
 import { masHidesDataSource } from "../../lib/mas-build";
 import {
   DATA_SOURCE_CATALOG,
@@ -188,8 +189,10 @@ import {
   refreshGeoJsonLayer,
   setLayerConnectionResult,
   setLayerRefreshConfig,
+  supportsAutoRefresh,
   supportsRefreshFailurePolicy,
 } from "../../lib/layer-refresh";
+import { isIcebergLayer, refreshIcebergLayer } from "../../lib/iceberg";
 import {
   getLayerWatchConfig,
   isLocalFileLayer,
@@ -216,6 +219,7 @@ import {
   exportVectorLayer,
   geojsonVectorSourceId,
   kmlExportErrorMessage,
+  layerSupportsPolylineExport,
   resolveLayerGeojson,
   sanitizeExportFileName,
   shapefileFieldWarnings,
@@ -318,22 +322,6 @@ const SYNC_CLOCK_TICK_MS = 60_000;
 const ADD_DATA_DIALOG_SOURCES = DATA_SOURCE_CATALOG.filter(
   (entry): entry is DataSourceCatalogEntry & { id: AddDataKind } => entry.id in KIND_I18N_KEY,
 );
-
-/** Menu labels for the planet switcher, keyed by celestial body. */
-const PLANET_SWITCHER_LABEL_KEYS: Record<EllipsoidId, ParseKeys> = {
-  earth: "planetSwitcher.earth",
-  mercury: "planetSwitcher.mercury",
-  venus: "planetSwitcher.venus",
-  moon: "planetSwitcher.moon",
-  mars: "planetSwitcher.mars",
-  io: "planetSwitcher.io",
-  europa: "planetSwitcher.europa",
-  ganymede: "planetSwitcher.ganymede",
-  callisto: "planetSwitcher.callisto",
-  titan: "planetSwitcher.titan",
-  pluto: "planetSwitcher.pluto",
-  charon: "planetSwitcher.charon",
-};
 
 type LayerRefreshStatus = {
   type: "refreshing" | "success" | "error" | "warning";
@@ -1396,6 +1384,47 @@ export function LayerPanel({
           scheduleStatusClear(layer.id);
           return;
         }
+        if (isIcebergLayer(layer)) {
+          // Iceberg layers re-run their stored, row-capped scan. This is the
+          // only path that re-reads the table: they are excluded from the
+          // interval scheduling below, so `automatic` is never true here.
+          const { geojson, featureCount, totalRows, truncated } = await refreshIcebergLayer(layer);
+          const latest = useAppStore
+            .getState()
+            .layers.find((candidate) => candidate.id === layer.id);
+          if (!latest) return;
+
+          updateLayer(layer.id, {
+            geojson,
+            ...setLayerConnectionResult(latest, {
+              syncedAt: new Date().toISOString(),
+              error: null,
+            }),
+            metadata: {
+              ...latest.metadata,
+              featureCount,
+              icebergTotalRows: totalRows,
+              icebergTruncated: truncated,
+            },
+          });
+
+          setRefreshStatuses((current) => ({
+            ...current,
+            [layer.id]: {
+              type: "success",
+              message: truncated
+                ? t("layers.refreshedTruncated", {
+                    shown: featureCount.toLocaleString(),
+                    total: totalRows.toLocaleString(),
+                  })
+                : t("layers.refreshedCount", {
+                    count: featureCount.toLocaleString(),
+                  }),
+            },
+          }));
+          scheduleStatusClear(layer.id);
+          return;
+        }
         if (isLocalFileLayer(layer)) {
           // Local-file vector layers re-read their features from disk (the same
           // conversion the import ran) rather than fetching a URL.
@@ -1550,7 +1579,7 @@ export function LayerPanel({
   );
 
   const handleExportLayer = useCallback(
-    async (layer: GeoLibreLayer, format: VectorExportFormat) => {
+    async (layer: GeoLibreLayer, format: VectorExportFormat, precision?: number) => {
       clearRefreshStatusTimer(layer.id);
       try {
         const geojson = await resolveLayerGeojson(
@@ -1575,11 +1604,17 @@ export function LayerPanel({
         const egressGeojson = layer.fieldVisibility
           ? excludeHiddenFieldsFromGeojson(geojson, layer.fieldVisibility)
           : geojson;
+        const polylinePrecision =
+          precision ??
+          (typeof layer.metadata?.polylinePrecision === "number"
+            ? layer.metadata.polylinePrecision
+            : 5);
         const savedPath = await exportVectorLayer(
           egressGeojson,
           format,
           sanitizeExportFileName(layer.name),
           layer.name,
+          polylinePrecision,
         );
         // A null path means the user cancelled the save dialog, so no note.
         if (savedPath !== null) {
@@ -2360,7 +2395,7 @@ export function LayerPanel({
 
     for (const layer of layers) {
       const config = getLayerRefreshConfig(layer);
-      if (!config.enabled || !isRefreshableLayer(layer)) continue;
+      if (!config.enabled || !isRefreshableLayer(layer) || !supportsAutoRefresh(layer)) continue;
 
       activeLayerIds.add(layer.id);
       const existing = refreshTimersRef.current.get(layer.id);
@@ -2374,6 +2409,7 @@ export function LayerPanel({
 
         const latestConfig = getLayerRefreshConfig(latest);
         if (!latestConfig.enabled || !isRefreshableLayer(latest)) return;
+        if (!supportsAutoRefresh(latest)) return;
         void handleRefreshLayerRef.current(latest, true);
       }, config.intervalMs);
 
@@ -2398,7 +2434,7 @@ export function LayerPanel({
       const now = Date.now();
       for (const layer of useAppStore.getState().layers) {
         const config = getLayerRefreshConfig(layer);
-        if (!config.enabled || !isRefreshableLayer(layer)) continue;
+        if (!config.enabled || !isRefreshableLayer(layer) || !supportsAutoRefresh(layer)) continue;
         const lastSynced = layer.connection?.lastSyncedAt
           ? new Date(layer.connection.lastSyncedAt).getTime()
           : 0;
@@ -2504,19 +2540,21 @@ export function LayerPanel({
 
   useEffect(() => {
     const watchers = watchUnsubsRef.current;
+    const refreshTimers = refreshTimersRef.current;
+    const refreshStatusTimers = refreshStatusTimersRef.current;
     return () => {
       for (const entry of watchers.values()) {
         entry.unwatch();
       }
       watchers.clear();
-      for (const entry of refreshTimersRef.current.values()) {
+      for (const entry of refreshTimers.values()) {
         window.clearInterval(entry.timer);
       }
-      refreshTimersRef.current.clear();
-      for (const timer of refreshStatusTimersRef.current.values()) {
+      refreshTimers.clear();
+      for (const timer of refreshStatusTimers.values()) {
         window.clearTimeout(timer);
       }
-      refreshStatusTimersRef.current.clear();
+      refreshStatusTimers.clear();
     };
   }, []);
 
@@ -3103,6 +3141,7 @@ export function LayerPanel({
             // Export writes the layer's GeoJSON features to disk; only
             // geojson-backed vector layers carry those features.
             const canExportLayer = layer.type === "geojson";
+            const canExportPolyline = canExportLayer && layerSupportsPolylineExport(layer);
             // Importing a style (Mapbox GL or SLD) only writes the layer's
             // vector symbology, so it applies to any vector-styled layer (local
             // GeoJSON and vector tiles), not just the export-capable GeoJSON
@@ -3153,6 +3192,10 @@ export function LayerPanel({
             // dismissed (and its on-map icon removed) when closed.
             const canEditRasterStyle = layer.metadata.sourceKind === RASTER_SOURCE_KIND;
             const canRefresh = isRefreshableLayer(layer);
+            // Iceberg layers refresh only on demand: scanning a table that
+            // large on a timer is never what the user meant, so the interval
+            // settings are unavailable even though Refresh is not.
+            const canAutoRefresh = canRefresh && supportsAutoRefresh(layer);
             const isLayerLocked =
               collaboration.isActive && (collaboration.lockedLayerIds ?? []).includes(layer.id);
             const layerEditable = canEditLayer(layer.id);
@@ -3916,6 +3959,24 @@ export function LayerPanel({
                                 >
                                   CSV (attributes only)
                                 </DropdownMenuItem>
+                                {canExportPolyline && (
+                                  <>
+                                    <DropdownMenuItem
+                                      onSelect={() => {
+                                        void handleExportLayer(layer, "polyline", 5);
+                                      }}
+                                    >
+                                      {t("layers.exportPolyline", { precision: 5 })}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onSelect={() => {
+                                        void handleExportLayer(layer, "polyline", 6);
+                                      }}
+                                    >
+                                      {t("layers.exportPolyline", { precision: 6 })}
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
                               </DropdownMenuSubContent>
                             </DropdownMenuSub>
                           )}
@@ -4154,7 +4215,7 @@ export function LayerPanel({
                                 {t("layers.refresh")}
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                disabled={!canRefresh}
+                                disabled={!canAutoRefresh}
                                 onSelect={() => {
                                   setRefreshSettingsLayerId(layer.id);
                                 }}

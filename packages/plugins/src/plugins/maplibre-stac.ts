@@ -2,15 +2,25 @@ import { DEFAULT_LAYER_STYLE, useAppStore } from "@geolibre/core";
 import { fillLayerId, lineLayerId } from "@geolibre/map";
 import type { FeatureCollection, Geometry } from "geojson";
 import type { GeoJSONSource, MapMouseEvent, Map as MapLibreMap } from "maplibre-gl";
-import type { GeoLibreAppAPI, GeoLibreCogLayerOptions, GeoLibrePlugin } from "../types";
+import type {
+  GeoLibreAppAPI,
+  GeoLibreCogLayerOptions,
+  GeoLibreCogRenderEngine,
+  GeoLibrePlugin,
+} from "../types";
 import { addPMTilesAsset } from "./stac-layers";
 import {
   assetDisplayFormat,
   assetFormat,
+  assetTargets,
+  canAddAsset,
   connectStac,
   horizontalBbox,
+  icechunkBranch,
   isAzureBlobHref,
+  isIcechunkAsset,
   isVisualizableAsset,
+  requiresTarget,
   itemBbox,
   loadStacIndex,
   openCatalogNode,
@@ -23,10 +33,26 @@ import {
   type StacNextPage,
   type StacSearchResult,
   type StacSearchCursor,
+  type ZarrTargetCheck,
+  withItemBounds,
+  zarrCrs,
+  zarrLayerRequest,
+  zarrReaderTargetCheck,
+  zarrTargetCheck,
+  zarrStorePath,
+  zarrStoreTakesKeys,
 } from "./stac-api";
 import { buildCatalogTree } from "./stac-catalog-tree";
 import { el, setDisabled } from "../panel-dom";
 import { addVectorLayerFromUrl } from "./maplibre-vector";
+import { addZarrRasterLayer } from "./maplibre-components";
+import {
+  icechunkLayerUrl,
+  icechunkTimeAttributesReader,
+  openIcechunkStore,
+  repositoryOpenError,
+  type ZarrKeyReader,
+} from "./stac-icechunk";
 
 export const STAC_PLUGIN_ID = "geolibre-stac-catalogs";
 const PANEL_ID = STAC_PLUGIN_ID;
@@ -43,6 +69,34 @@ const DRAW_LINE = "geolibre-stac-draw-bbox-line";
 const SELECT_SOURCE = "geolibre-stac-selected";
 const SELECT_FILL = "geolibre-stac-selected-fill";
 const SELECT_LINE = "geolibre-stac-selected-line";
+const COG_ENGINE_STORAGE_KEY = "geolibre:stac-default-cog-engine";
+// "auto" leaves the raster control on whatever engine it already holds. It is
+// the default because the engine is control-wide: naming one re-renders every
+// raster on the map, including layers another panel put there.
+const COG_ENGINES = ["auto", "cog-tiler-wasm", "maplibre-gl-raster", "titiler"] as const;
+type StacCogEngine = (typeof COG_ENGINES)[number];
+
+// Web Storage throws rather than returning null when the browser blocks it
+// (private mode, a third-party-storage policy), so neither read nor write may
+// be the only thing standing between the user and a working panel.
+function savedCogEngine(): StacCogEngine {
+  let saved: string | null = null;
+  try {
+    saved =
+      typeof localStorage === "undefined" ? null : localStorage.getItem(COG_ENGINE_STORAGE_KEY);
+  } catch {
+    return "auto";
+  }
+  return COG_ENGINES.includes(saved as StacCogEngine) ? (saved as StacCogEngine) : "auto";
+}
+
+function rememberCogEngine(engine: string): void {
+  try {
+    if (typeof localStorage !== "undefined") localStorage.setItem(COG_ENGINE_STORAGE_KEY, engine);
+  } catch {
+    // A blocked store just means the choice does not outlive the session.
+  }
+}
 
 /**
  * Colormaps the COG renderer knows by name (`ColormapName` in
@@ -129,6 +183,13 @@ export interface StacLabels {
   searchFailed: string;
   loadMore: string;
   renderOptions: string;
+  renderingEngine: string;
+  engineAuto: string;
+  engineGpu: string;
+  engineWasm: string;
+  engineTitiler: string;
+  engineHint: string;
+  resizeResults: string;
   bands: string;
   bandsPlaceholder: string;
   colormap: string;
@@ -150,7 +211,12 @@ export interface StacLabels {
   formatGeoJson: string;
   formatPmtiles: string;
   formatParquet: string;
+  formatZarr: string;
   formatUnknown: string;
+  addNoTarget: string;
+  addIcechunkFailed: string;
+  zarrProblem: (problem: Exclude<ZarrTargetCheck, "array">) => string;
+  chooseTarget: string;
   notAddable: string;
   showing: (count: number) => string;
   showingOfMatched: (count: number, matched: number) => string;
@@ -159,6 +225,15 @@ export interface StacLabels {
   drawnBbox: (bbox: string) => string;
   catalogInfo: (title: string, kind: string) => string;
 }
+
+/** Why a Zarr variable could not be added, in the panel's own words. */
+const ZARR_PROBLEMS: Record<Exclude<ZarrTargetCheck, "array">, string> = {
+  group: "This asset names a group of arrays, not one that can be drawn",
+  missing: "This store does not hold that variable",
+  unauthorized: "This Zarr store needs credentials GeoLibre cannot supply yet",
+  "unsupported-url": "This Zarr store's address cannot be read one key at a time",
+  unavailable: "This Zarr store could not be opened",
+};
 
 let labels: StacLabels = {
   title: "STAC Catalogs",
@@ -206,6 +281,15 @@ let labels: StacLabels = {
   searchFailed: "STAC search failed",
   loadMore: "Load more",
   renderOptions: "Raster rendering options",
+  renderingEngine: "COG rendering engine",
+  engineAuto: "Leave unchanged",
+  engineGpu: "GPU (deck.gl, Mercator only)",
+  engineWasm: "WebAssembly tiler (globe compatible)",
+  engineTitiler: "TiTiler server",
+  engineHint:
+    "Which renderer decodes the imagery. Unlike the settings above this is not per layer: " +
+    "it applies to every raster on the map, including ones already added.",
+  resizeResults: "Resize search results",
   bands: "Bands",
   bandsPlaceholder: "e.g. 1 or 1,2,3 (default: auto)",
   colormap: "Colormap (single-band only)",
@@ -222,7 +306,7 @@ let labels: StacLabels = {
   add: "Add",
   download: "Download",
   addUnsupported:
-    "Only GeoTIFF/COG, GeoJSON, GeoParquet, and PMTiles assets can be added to the map",
+    "Only GeoTIFF/COG, GeoJSON, GeoParquet, PMTiles, and Zarr assets can be added to the map",
   addFailed: "Could not add asset",
   addNoSourceLayers: "This archive lists no layers to draw",
   cogUnsupported: "This GeoLibre host cannot visualize remote GeoTIFF assets",
@@ -230,7 +314,12 @@ let labels: StacLabels = {
   formatGeoJson: "GeoJSON",
   formatPmtiles: "PMTiles",
   formatParquet: "Parquet",
+  formatZarr: "Zarr",
   formatUnknown: "Unknown format",
+  addNoTarget: "This asset lists nothing to draw",
+  addIcechunkFailed: "This Icechunk repository could not be opened",
+  zarrProblem: (problem) => ZARR_PROBLEMS[problem],
+  chooseTarget: "Choose what to add",
   notAddable: "not addable",
   showing: (count) => `Showing ${count} items.`,
   showingOfMatched: (count, matched) => `Showing ${count} of ${matched} items.`,
@@ -254,6 +343,13 @@ let unregisterPanel: (() => void) | null = null;
 let disposePanel: (() => void) | null = null;
 let panelContainer: HTMLElement | null = null;
 
+// The results pane and the controls above it each keep a floor so neither can
+// be dragged away entirely. splitterBounds() reserves the controls floor and
+// clamps to the results one, so both are declared here and interpolated into
+// the styles rather than written twice.
+const RESULTS_MIN_HEIGHT = 150;
+const CONTROLS_MIN_HEIGHT = 180;
+
 const style = {
   panel:
     "display:flex;flex-direction:column;gap:10px;height:100%;padding:10px;box-sizing:border-box;" +
@@ -274,11 +370,13 @@ const style = {
     "background:hsl(var(--primary));color:hsl(var(--primary-foreground));cursor:pointer;",
   status: "font-size:11px;line-height:1.4;color:hsl(var(--muted-foreground));",
   // The floor keeps a usable result list even with every filter section open;
-  // the controls above it scroll as a group rather than pushing it off-panel.
-  results:
-    "display:flex;flex:1 1 auto;min-height:150px;overflow:auto;flex-direction:column;gap:7px;",
-  controls:
-    "display:flex;flex-direction:column;gap:10px;flex:0 1 auto;min-height:180px;overflow:auto;",
+  // its flex basis gives the search controls most of the panel initially. A
+  // splitter between the two lets the user choose a different balance.
+  results: `display:flex;flex:0 0 40%;min-height:${RESULTS_MIN_HEIGHT}px;overflow:auto;flex-direction:column;gap:7px;`,
+  controls: `display:flex;flex-direction:column;gap:10px;flex:1 1 60%;min-height:${CONTROLS_MIN_HEIGHT}px;overflow:auto;`,
+  resultSplitter:
+    "height:8px;flex:0 0 8px;cursor:row-resize;border-radius:4px;touch-action:none;" +
+    "background:linear-gradient(transparent 3px,hsl(var(--border)) 3px,hsl(var(--border)) 5px,transparent 5px);",
   card:
     "display:flex;flex-direction:column;gap:5px;padding:8px;border:1px solid hsl(var(--border));" +
     "border-radius:7px;background:hsl(var(--muted));",
@@ -531,13 +629,25 @@ function assetFormatLabel(asset: StacAsset): string {
       return labels.formatPmtiles;
     case "parquet":
       return labels.formatParquet;
+    case "zarr":
+      return labels.formatZarr;
     case null:
       return labels.formatUnknown;
   }
 }
 
-function assetOptionLabel(key: string, asset: StacAsset): string {
-  const addability = isVisualizableAsset(asset) ? "" : ` (${labels.notAddable})`;
+/** The Add button's tooltip: what it would add, or why it will not. */
+function addReason(item: StacItem, key: string, asset: StacAsset): string {
+  if (canAddAsset(item, key, asset)) return asset.href;
+  if (!isVisualizableAsset(asset)) return labels.addUnsupported;
+  if (requiresTarget(asset) && !zarrStoreTakesKeys(zarrStorePath(asset.href).url)) {
+    return labels.zarrProblem("unsupported-url");
+  }
+  return labels.addNoTarget;
+}
+
+function assetOptionLabel(item: StacItem, key: string, asset: StacAsset): string {
+  const addability = canAddAsset(item, key, asset) ? "" : ` (${labels.notAddable})`;
   return `${assetLabel(key, asset)} — ${assetFormatLabel(asset)}${addability}`;
 }
 
@@ -582,12 +692,32 @@ async function readableHref(item: StacItem, href: string): Promise<string> {
   }
 }
 
+/**
+ * Open the repository an Icechunk asset names, on the branch its item or asset named. A spec
+ * version the reader cannot read fails here rather than inside the renderer, where it would arrive
+ * as a blank layer.
+ */
+async function openIcechunkAsset(
+  asset: StacAsset,
+  branch: string | undefined,
+  signal?: AbortSignal,
+): Promise<ZarrKeyReader> {
+  try {
+    return await openIcechunkStore(zarrStorePath(asset.href).url, branch, signal);
+  } catch (error) {
+    // An add the user abandoned is not a repository that refused, so it is not reported as one.
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    throw repositoryOpenError(error, labels.addIcechunkFailed);
+  }
+}
+
 async function visualizeAsset(
   item: StacItem,
   key: string,
   asset: StacAsset,
   cogOptions: GeoLibreCogLayerOptions,
   signal?: AbortSignal,
+  target?: string,
 ): Promise<void> {
   const name = `${item.id} — ${assetLabel(key, asset)}`;
   const format = assetFormat(asset);
@@ -614,6 +744,60 @@ async function visualizeAsset(
       if (!appRef) throw new Error(labels.addFailed);
       if (!(await addVectorLayerFromUrl(appRef, await readableHref(item, asset.href), { name }))) {
         throw new Error(labels.addFailed);
+      }
+      return;
+    }
+    case "zarr": {
+      if (!appRef) throw new Error(labels.addFailed);
+      const variable = target ?? assetTargets(item, key, asset)[0]?.id;
+      if (!variable) throw new Error(labels.addNoTarget);
+      // A repository is opened by its own reader and handed over as a store; a plain store is read
+      // from its URL. Unsigned either way — a token cannot survive being followed by a key, so a
+      // private container fails the check below and says so.
+      // Worked out once: the branch decides which snapshot is opened and, with it, which layer the
+      // control keys — two branches of one repository are two layers.
+      const isIcechunk = isIcechunkAsset(asset, item);
+      const branch = isIcechunk ? icechunkBranch(asset, item) : undefined;
+      const icechunk = isIcechunk ? await openIcechunkAsset(asset, branch, signal) : null;
+      const { url } = zarrStorePath(asset.href);
+      const checked = icechunk
+        ? await zarrReaderTargetCheck(
+            (key, options) => icechunk.get(key, options),
+            variable,
+            signal,
+          )
+        : await zarrTargetCheck(url, variable, fetch, signal);
+      if (checked !== "array") throw new Error(labels.zarrProblem(checked));
+
+      const crs = zarrCrs(item, asset);
+      const request = zarrLayerRequest(asset.href, variable, {
+        ...cogOptions,
+        ...(crs ? { crs } : {}),
+      });
+      const layerId = await addZarrRasterLayer(appRef, {
+        ...request,
+        name: `${name} — ${variable}`,
+        // The renderer's `store` takes `get(key: string)` where the reader wants a rooted key;
+        // method bivariance lets it through, and it holds because zarrita addresses keys absolutely.
+        // The url is only an identifier once a store is supplied, so it carries the branch: two
+        // branches of one repository are two layers, not one patching the other.
+        ...(icechunk
+          ? {
+              url: icechunkLayerUrl(request.url, branch),
+              store: icechunk,
+              readTimeAttributes: icechunkTimeAttributesReader(icechunk),
+            }
+          : {}),
+      });
+      // The renderer places the data from the store's own coordinates and records no extent, so
+      // Zoom to layer has nothing to fly to. The item's bbox is WGS84, which is what it wants.
+      // `addZarrRasterLayer` throws rather than resolving without an id, so the layer is either
+      // in the store or we never got here.
+      const layer = useAppStore.getState().layers.find((entry) => entry.id === layerId);
+      if (layer) {
+        useAppStore
+          .getState()
+          .updateLayer(layerId, { metadata: withItemBounds(layer.metadata, item) });
       }
       return;
     }
@@ -661,9 +845,9 @@ function buildPanel(container: HTMLElement): () => void {
   catalogInfo.style.cssText = "font-weight:600;";
   const collectionSelect = el("select");
   collectionSelect.multiple = true;
-  collectionSelect.size = 3;
+  collectionSelect.size = 8;
   // Catalogs can advertise hundreds of collections, so let the list be dragged taller.
-  collectionSelect.style.cssText = `${style.input}resize:vertical;overflow:auto;min-height:58px;`;
+  collectionSelect.style.cssText = `${style.input}resize:vertical;overflow:auto;min-height:150px;`;
   collectionSelect.title = labels.collectionsHint;
   // An API answers with a flat list of collections; a static catalog is a tree read as it opens.
   const tree = buildCatalogTree({
@@ -735,6 +919,29 @@ function buildPanel(container: HTMLElement): () => void {
   renderSection.hidden = true;
   const renderSummary = el("summary", labels.renderOptions);
   renderSummary.style.cssText = "cursor:pointer;font-weight:600;";
+  const engineWrap = el("label");
+  engineWrap.style.cssText = "display:flex;flex-direction:column;gap:2px;";
+  const engineCaption = el("span", labels.renderingEngine);
+  engineCaption.style.cssText = style.label;
+  const engineSelect = el("select");
+  engineSelect.style.cssText = style.input;
+  for (const [value, title] of [
+    ["auto", labels.engineAuto],
+    ["cog-tiler-wasm", labels.engineWasm],
+    ["maplibre-gl-raster", labels.engineGpu],
+    ["titiler", labels.engineTitiler],
+  ] as const) {
+    const option = el("option", title);
+    option.value = value;
+    engineSelect.append(option);
+  }
+  engineSelect.value = savedCogEngine();
+  engineSelect.addEventListener("change", () => {
+    rememberCogEngine(engineSelect.value);
+  });
+  const engineHint = el("span", labels.engineHint);
+  engineHint.style.cssText = style.status;
+  engineWrap.append(engineCaption, engineSelect, engineHint);
   const bandsField = field(labels.bands);
   bandsField.input.placeholder = labels.bandsPlaceholder;
   const colormapWrap = el("label");
@@ -761,6 +968,8 @@ function buildPanel(container: HTMLElement): () => void {
   nodataField.input.placeholder = labels.nodataPlaceholder;
   const renderHint = el("div", labels.renderHint);
   renderHint.style.cssText = style.status;
+  // The engine picker sits last, after the per-layer options: it is the one
+  // control-wide setting here, and its hint reads "unlike the settings above".
   renderSection.append(
     renderSummary,
     bandsField.wrap,
@@ -768,12 +977,20 @@ function buildPanel(container: HTMLElement): () => void {
     rescaleRow,
     nodataField.wrap,
     renderHint,
+    engineWrap,
   );
 
   const status = el("div", labels.initialStatus);
   status.style.cssText = style.status;
   const results = el("div");
   results.style.cssText = style.results;
+  const resultSplitter = el("div");
+  resultSplitter.style.cssText = style.resultSplitter;
+  resultSplitter.setAttribute("role", "separator");
+  resultSplitter.setAttribute("aria-orientation", "horizontal");
+  resultSplitter.setAttribute("aria-label", labels.resizeResults);
+  resultSplitter.setAttribute("aria-valuemin", String(RESULTS_MIN_HEIGHT));
+  resultSplitter.tabIndex = 0;
   const loadMore = el("button", labels.loadMore);
   loadMore.type = "button";
   loadMore.style.cssText = style.primary;
@@ -781,7 +998,71 @@ function buildPanel(container: HTMLElement): () => void {
   const controls = el("div");
   controls.style.cssText = style.controls;
   controls.append(catalogSection, searchSection, renderSection);
-  container.append(controls, status, results, loadMore);
+  container.append(controls, status, resultSplitter, results, loadMore);
+
+  // The results pane neither grows nor shrinks once its basis is set, so the
+  // ceiling has to be whatever the container has left after the siblings that
+  // keep their own size. Guessing a fixed reserve here let a drag to the
+  // reported maximum clip the tail of the list and the Load more button.
+  const splitterBounds = (): number => {
+    const reserved = [status, resultSplitter, loadMore].reduce(
+      (total, element) => total + (element.hidden ? 0 : element.getBoundingClientRect().height),
+      CONTROLS_MIN_HEIGHT,
+    );
+    const box = container.getBoundingClientRect();
+    const padding = window.getComputedStyle(container);
+    const gap = Number.parseFloat(padding.rowGap) || 0;
+    const inner =
+      box.height -
+      (Number.parseFloat(padding.paddingTop) || 0) -
+      (Number.parseFloat(padding.paddingBottom) || 0) -
+      // One gap per sibling boundary: controls, status, splitter, results, loadMore.
+      gap * 4;
+    return Math.max(RESULTS_MIN_HEIGHT, inner - reserved);
+  };
+
+  // Announcing the size only after the first drag would leave a screen reader
+  // with a valueless separator, so the values are also synced on focus -- which
+  // must not pin the percentage flex basis into pixels the way a resize does.
+  const announceResults = (height: number, maximum: number): void => {
+    resultSplitter.setAttribute("aria-valuenow", String(Math.round(height)));
+    resultSplitter.setAttribute("aria-valuemax", String(Math.round(maximum)));
+  };
+
+  const resizeResults = (height: number): void => {
+    const maximum = splitterBounds();
+    const next = Math.min(maximum, Math.max(RESULTS_MIN_HEIGHT, height));
+    results.style.flexBasis = `${next}px`;
+    announceResults(next, maximum);
+  };
+
+  resultSplitter.addEventListener("focus", () => {
+    announceResults(results.getBoundingClientRect().height, splitterBounds());
+  });
+
+  resultSplitter.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    const startY = event.clientY;
+    const startHeight = results.getBoundingClientRect().height;
+    resultSplitter.setPointerCapture(event.pointerId);
+    const move = (moveEvent: PointerEvent): void => {
+      resizeResults(startHeight - (moveEvent.clientY - startY));
+    };
+    const stop = (): void => {
+      resultSplitter.removeEventListener("pointermove", move);
+      resultSplitter.removeEventListener("pointerup", stop);
+      resultSplitter.removeEventListener("pointercancel", stop);
+    };
+    resultSplitter.addEventListener("pointermove", move);
+    resultSplitter.addEventListener("pointerup", stop);
+    resultSplitter.addEventListener("pointercancel", stop);
+  });
+  resultSplitter.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    event.preventDefault();
+    const delta = event.key === "ArrowUp" ? 30 : -30;
+    resizeResults(results.getBoundingClientRect().height + delta);
+  });
 
   let index: StacIndexCatalog[] = [];
   let filtered: StacIndexCatalog[] = [];
@@ -814,6 +1095,9 @@ function buildPanel(container: HTMLElement): () => void {
     const rescaleMax = numeric(vmaxField.input);
     const nodata = numeric(nodataField.input);
     return {
+      // "auto" is sent through as-is so the host leaves the control-wide engine
+      // alone rather than falling back to its own default.
+      engine: engineSelect.value as GeoLibreCogRenderEngine | "auto",
       ...(bands ? { bands } : {}),
       ...(colormap ? { colormap } : {}),
       ...(rescaleMin !== undefined ? { rescaleMin } : {}),
@@ -910,12 +1194,12 @@ function buildPanel(container: HTMLElement): () => void {
         const assetSelect = el("select");
         assetSelect.style.cssText = `${style.input}flex:1 1 140px;width:auto;`;
         for (const [key, asset] of assets) {
-          const option = el("option", assetOptionLabel(key, asset));
+          const option = el("option", assetOptionLabel(item, key, asset));
           option.value = key;
           assetSelect.append(option);
         }
         // Preselect something the user can actually add; assets often lead with metadata.
-        const firstAddable = assets.find(([, asset]) => isVisualizableAsset(asset));
+        const firstAddable = assets.find(([key, asset]) => canAddAsset(item, key, asset));
         if (firstAddable) assetSelect.value = firstAddable[0];
         const selected = (): [string, StacAsset] =>
           assets.find(([key]) => key === assetSelect.value) ?? assets[0];
@@ -925,25 +1209,43 @@ function buildPanel(container: HTMLElement): () => void {
         const download = el("button", labels.download);
         download.type = "button";
         download.style.cssText = style.button;
+        // Which part of the asset to draw, for the formats that hold more than one.
+        const targetSelect = el("select");
+        targetSelect.style.cssText = `${style.input}flex:1 1 140px;width:auto;`;
+        targetSelect.title = labels.chooseTarget;
         let adding = false;
 
         const syncAsset = (): void => {
-          const [, asset] = selected();
-          const addable = isVisualizableAsset(asset);
+          const [key, asset] = selected();
+          const addable = canAddAsset(item, key, asset);
+          const targets = assetTargets(item, key, asset);
+          // Rebuilt on every sync, including the one right after Add, so keep the user's pick.
+          const chosen = targetSelect.value;
+          targetSelect.innerHTML = "";
+          for (const target of targets) {
+            const option = el("option", target.label);
+            option.value = target.id;
+            targetSelect.append(option);
+          }
+          if (targets.some((target) => target.id === chosen)) targetSelect.value = chosen;
+          // One target is the asset itself; hide a choice the user does not have.
+          targetSelect.hidden = targets.length < 2 || !addable;
           assetSelect.title = asset.href;
           download.title = asset.href;
           setDisabled(add, adding || !addable);
-          add.title = addable ? asset.href : labels.addUnsupported;
+          add.title = addReason(item, key, asset);
         };
 
         assetSelect.addEventListener("change", syncAsset);
         add.addEventListener("click", async () => {
           const [key, asset] = selected();
+          // `visualizeAsset` falls back to the first target itself, so do not decide twice.
+          const target = targetSelect.value || undefined;
           adding = true;
           syncAsset();
           setStatus(labels.adding(assetLabel(key, asset)));
           try {
-            await visualizeAsset(item, key, asset, cogOptions(), controller.signal);
+            await visualizeAsset(item, key, asset, cogOptions(), controller.signal, target);
             setStatus(labels.added(assetLabel(key, asset)));
           } catch (error) {
             setStatus(error instanceof Error ? error.message : labels.addFailed, true);
@@ -954,7 +1256,7 @@ function buildPanel(container: HTMLElement): () => void {
         });
         download.addEventListener("click", () => appRef?.openExternalUrl?.(selected()[1].href));
         syncAsset();
-        actions.append(assetSelect, add, download);
+        actions.append(assetSelect, targetSelect, add, download);
       }
       card.append(title, subtitle, actions);
       results.append(card);

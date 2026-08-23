@@ -27,6 +27,7 @@ import {
   openVectorLayerPanel,
   setAnnotationLabels,
   setBasemapControlLabels,
+  setGeoEditorLabels,
   setGraticuleLabels,
   setH3Labels,
   setS2Labels,
@@ -85,6 +86,7 @@ import {
   Save,
   Sparkles,
   Sun,
+  Layers,
   Workflow,
   Wrench,
   ZoomIn,
@@ -108,6 +110,7 @@ import { useGlobalShortcuts } from "../../hooks/useGlobalShortcuts";
 import { useViewportHistory } from "../../hooks/useViewportHistory";
 import type { Command } from "../../lib/commands";
 import { IS_MAS_BUILD } from "../../lib/build-flags";
+import { pluginDisplayName } from "../../lib/plugin-display-name";
 import { masHidesDataSource } from "../../lib/mas-build";
 import { IS_STORE_BUILD } from "../../lib/updates";
 import { AddDataDialog, type AddDataKind } from "./AddDataDialog";
@@ -189,6 +192,15 @@ interface TopToolbarProps {
   onAddComment: () => void;
   viewer?: boolean;
 }
+
+/** Translation keys for the reasons a Zarr variable cannot be added. */
+const ZARR_PROBLEM_KEYS = {
+  group: "stacPlugin.zarrProblemGroup",
+  missing: "stacPlugin.zarrProblemMissing",
+  unauthorized: "stacPlugin.zarrProblemUnauthorized",
+  "unsupported-url": "stacPlugin.zarrProblemUnsupportedUrl",
+  unavailable: "stacPlugin.zarrProblemUnavailable",
+} as const;
 
 export function TopToolbar({
   compact = false,
@@ -581,6 +593,10 @@ export function TopToolbar({
       engineTitiler: t("huggingFace.engineTitiler"),
       resetDefaults: t("huggingFace.resetDefaults"),
     });
+    setGeoEditorLabels({
+      attributePanelTitle: t("geoEditorPlugin.attributePanelTitle"),
+      massingHeight: t("geoEditorPlugin.massingHeight"),
+    });
     setGraticuleLabels({
       title: t("graticule.title"),
       getTitle: () => i18n.t("graticule.title"),
@@ -913,6 +929,13 @@ export function TopToolbar({
       showingOfMatched: (count, matched) => t("stacPlugin.showingOfMatched", { count, matched }),
       loadMore: t("stacPlugin.loadMore"),
       renderOptions: t("stacPlugin.renderOptions"),
+      renderingEngine: t("stacPlugin.renderingEngine"),
+      engineAuto: t("stacPlugin.engineAuto"),
+      engineGpu: t("stacPlugin.engineGpu"),
+      engineWasm: t("stacPlugin.engineWasm"),
+      engineTitiler: t("stacPlugin.engineTitiler"),
+      engineHint: t("stacPlugin.engineHint"),
+      resizeResults: t("stacPlugin.resizeResults"),
       bands: t("stacPlugin.bands"),
       bandsPlaceholder: t("stacPlugin.bandsPlaceholder"),
       colormap: t("stacPlugin.colormap"),
@@ -937,7 +960,12 @@ export function TopToolbar({
       formatGeoJson: t("stacPlugin.formatGeoJson"),
       formatPmtiles: t("stacPlugin.formatPmtiles"),
       formatParquet: t("stacPlugin.formatParquet"),
+      formatZarr: t("stacPlugin.formatZarr"),
       formatUnknown: t("stacPlugin.formatUnknown"),
+      addNoTarget: t("stacPlugin.addNoTarget"),
+      addIcechunkFailed: t("stacPlugin.addIcechunkFailed"),
+      zarrProblem: (problem) => t(ZARR_PROBLEM_KEYS[problem]),
+      chooseTarget: t("stacPlugin.chooseTarget"),
       notAddable: t("stacPlugin.notAddable"),
     });
   }, [t]);
@@ -947,6 +975,7 @@ export function TopToolbar({
   const setVectorToolOpen = useAppStore((s) => s.setVectorToolOpen);
   const setGeocodeOpen = useAppStore((s) => s.setGeocodeOpen);
   const setModelBuilderOpen = useAppStore((s) => s.setModelBuilderOpen);
+  const setBatchToolsOpen = useAppStore((s) => s.setBatchToolsOpen);
   const setStyleManagerOpen = useAppStore((s) => s.setStyleManagerOpen);
   const setRasterToolOpen = useAppStore((s) => s.setRasterToolOpen);
   const setSegmentationOpen = useAppStore((s) => s.setSegmentationOpen);
@@ -1423,9 +1452,17 @@ export function TopToolbar({
       id: "proc.modelBuilder",
       title: t("toolbar.command.modelBuilder"),
       group: t("toolbar.commandGroup.processing"),
-      keywords: "batch model pipeline chain modeler workflow graphical",
+      keywords: "model builder pipeline chain modeler workflow graph canvas node",
       icon: Workflow,
       run: () => setModelBuilderOpen(true),
+    },
+    {
+      id: "proc.batchTools",
+      title: t("toolbar.command.batchTools"),
+      group: t("toolbar.commandGroup.processing"),
+      keywords: "batch bulk many layers repeat vector tool",
+      icon: Layers,
+      run: () => setBatchToolsOpen(true),
     },
     // The Mac App Store build omits AI Segmentation: it is sidecar-only (the
     // App Sandbox forbids the sidecar) and has no client-side fallback.
@@ -1746,7 +1783,7 @@ export function TopToolbar({
       )
       .map((plugin) => ({
         id: `plugin.${plugin.id}`,
-        title: t("toolbar.command.togglePlugin", { name: plugin.name }),
+        title: t("toolbar.command.togglePlugin", { name: pluginDisplayName(t, plugin) }),
         group: t("toolbar.commandGroup.plugins"),
         keywords: isActive(plugin.id) ? "plugin deactivate" : "plugin activate",
         run: () => toggle(plugin.id, appApi),
@@ -1999,7 +2036,11 @@ export function TopToolbar({
           mapControllerRef={mapControllerRef}
         />
       )}
+      {/* Remount on every project load so the composer starts from the opened
+          project's saved layout instead of keeping the previous project's
+          settings and captured map (GeoLibre discussion #1992). */}
       <PrintLayoutDialog
+        key={`print-layout-${projectGeneration}`}
         open={printLayoutOpen}
         onOpenChange={setPrintLayoutOpen}
         mapControllerRef={mapControllerRef}

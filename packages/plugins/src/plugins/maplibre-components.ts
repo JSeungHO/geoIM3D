@@ -2,7 +2,10 @@ import {
   clearExternalNativePaintBridge,
   DEFAULT_LAYER_STYLE,
   type GeoLibreLayer,
+  getActiveMeanRadiusMeters,
+  getEllipsoid,
   interpolateRampColors,
+  meanRadiusMeters,
   setExternalNativePaintBridge,
   useAppStore,
 } from "@geolibre/core";
@@ -90,7 +93,12 @@ import {
   registerTemporalLayer,
   unregisterTemporalLayer,
 } from "./temporal-layers";
-import { pickTimeDimension, resolveZarrTimeAxis, type ZarrTimeAttributes } from "./zarr-time-axis";
+import {
+  pickTimeDimension,
+  readCoordinateTimeAttributes,
+  resolveZarrTimeAxis,
+  type ZarrTimeAttributes,
+} from "./zarr-time-axis";
 import {
   ZarrDirectoryStore,
   createDirectoryZarrMetadataReader,
@@ -732,6 +740,10 @@ let searchControl: SearchControl | null = null;
 let spinGlobeControl: SpinGlobeControl | null = null;
 let measureControl: MeasureControl | null = null;
 let measureTerrainDetach: (() => void) | null = null;
+/** Drops the store subscription that follows the project's celestial body. */
+let measureRadiusUnsubscribe: (() => void) | null = null;
+/** The body the mounted Measure control's radius currently reflects. */
+let measureEllipsoidId: string | null = null;
 let bookmarkControl: BookmarkControl | null = null;
 let minimapControl: MinimapControl | null = null;
 let viewStateControl: ViewStateControl | null = null;
@@ -2342,7 +2354,7 @@ function applyZarrLayerBounds(layerId: string, bounds: [number, number, number, 
 
 /** Options for {@link addZarrRasterLayer}. */
 export interface ZarrRasterLayerOptions {
-  /** URL of the Zarr store (Zarr v2/v3, Icechunk over HTTP). */
+  /** URL of a plain Zarr store (v2/v3). Anything else is read through `store`. */
   url: string;
   /** Layer name shown in the Layers panel. Defaults to `<store> - <variable>`. */
   name?: string;
@@ -2739,22 +2751,7 @@ function localZarrTimeAttributesReader(url: string): ZarrTimeAttributesReader | 
   const reader = zarrLocalStoreReaders.get(url);
   if (!reader) return null;
   const read = createDirectoryZarrMetadataReader(reader);
-  return async (dimension: string) => {
-    for (const prefix of ["", "0/"]) {
-      for (const key of [`${prefix}${dimension}/.zattrs`, `${prefix}${dimension}/zarr.json`]) {
-        const document = await read(key);
-        const attributes = key.endsWith("zarr.json")
-          ? (document as { attributes?: unknown } | undefined)?.attributes
-          : document;
-        if (!attributes || typeof attributes !== "object") continue;
-        const record = attributes as Record<string, unknown>;
-        const units = typeof record.units === "string" ? record.units : undefined;
-        const calendar = typeof record.calendar === "string" ? record.calendar : undefined;
-        if (units !== undefined || calendar !== undefined) return { units, calendar };
-      }
-    }
-    return null;
-  };
+  return (dimension: string) => readCoordinateTimeAttributes(read, dimension);
 }
 
 /** Read a coordinate's `units`/`calendar` out of an inline kerchunk `.zattrs`. */
@@ -4020,7 +4017,28 @@ function createSearchControl(SearchControlClass: SearchControlConstructor): Sear
 }
 
 function createMeasureControl(MeasureControlClass: MeasureControlConstructor): MeasureControl {
-  const control = new MeasureControlClass(MEASURE_OPTIONS);
+  // The control derives distances and areas from lon/lat angles scaled by a
+  // radius that defaults to Earth's, so on a Moon/Mars project every readout
+  // would be wrong by that body's radius ratio (GeoLibre#1128). Seed it with the
+  // project's body and follow the planet switcher for the rest of the session.
+  const control = new MeasureControlClass({
+    ...MEASURE_OPTIONS,
+    radius: getActiveMeanRadiusMeters(),
+  });
+  // Seed from the store rather than at module load: the body may already have
+  // changed before the user first opens the panel, and a stale baseline would
+  // swallow the switch *back* to that body as a no-op.
+  measureEllipsoidId = useAppStore.getState().preferences.map.ellipsoidId;
+  measureRadiusUnsubscribe?.();
+  measureRadiusUnsubscribe = useAppStore.subscribe((state) => {
+    const id = state.preferences.map.ellipsoidId;
+    if (id === measureEllipsoidId) return;
+    measureEllipsoidId = id;
+    // Resolve the radius from the id in hand rather than the active-ellipsoid
+    // singleton, so this does not depend on the store's own mirroring
+    // subscription having run before ours.
+    control.setRadius(meanRadiusMeters(getEllipsoid(id)));
+  });
   return control;
 }
 
@@ -4425,6 +4443,8 @@ function setSearchPlacesPanelVisible(visible: boolean): void {
 function teardownMeasureControl(app: GeoLibreAppAPI): void {
   measureTerrainDetach?.();
   measureTerrainDetach = null;
+  measureRadiusUnsubscribe?.();
+  measureRadiusUnsubscribe = null;
   if (measureControl && measureControlMounted) {
     app.removeMapControl(measureControl);
   }

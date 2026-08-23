@@ -18,6 +18,12 @@ import {
 } from "./project";
 import { initialLayerStyle } from "./layer-defaults";
 import {
+  createDefaultPrintLayout,
+  printLayoutConfigsEqual,
+  scrubPrintLayoutForRemovedLayers,
+  type PrintLayoutConfig,
+} from "./print-layout-config";
+import {
   DEFAULT_LAYER_GROUP_OPACITY,
   normalizeGroupContiguity,
   reorderLayerGroupInPanel,
@@ -126,6 +132,8 @@ export type VectorToolKind =
   | "explode"
   | "aggregate"
   | "smooth"
+  | "extract-vertices"
+  | "points-along-geometry"
   | "grid"
   | "voronoi"
   | "cell-sectors"
@@ -135,6 +143,9 @@ export type VectorToolKind =
   | "trajectory-speed"
   | "detect-stops"
   | "space-time-proximity"
+  | "decode-polyline"
+  | "encode-polyline"
+  | "merge-layers"
   | "check-validity"
   | "fix-geometries"
   | "check-topology-rules"
@@ -208,6 +219,8 @@ export interface AppState {
   preferences: ProjectPreferences;
   projectPlugins: ProjectPluginState | null;
   legend: LegendConfig;
+  /** Print Layout composer settings for the open project (discussion #1992). */
+  printLayout: PrintLayoutConfig;
   storymap: StoryMap | null;
   /** Saved processing pipelines (batch/model chaining; issue #344). */
   models: ProcessingModel[];
@@ -330,7 +343,12 @@ export interface AppState {
     // Story Map dialog is hidden so the user can pan/zoom/tilt the real map and
     // save the resulting camera back into this chapter (issue #775).
     storymapComposingId: string | null;
+    /** The Batch tools dialog (run one tool across many layers). */
+    batchToolsOpen: boolean;
+    /** The Model Builder canvas panel (author a processing graph). */
     modelBuilderOpen: boolean;
+    /** One-shot request for Model Builder to load a saved model. */
+    modelBuilderRequestedModelId: string | null;
     /** Style Manager dialog visibility (issue #1294). */
     styleManagerOpen: boolean;
     /** Processing History panel visibility (#1292). */
@@ -413,6 +431,12 @@ export interface AppState {
   setBasemapOpacity: (opacity: number) => void;
   setPreferences: (preferences: ProjectPreferences) => void;
   setLegend: (legend: LegendConfig) => void;
+  /**
+   * Replace the Print Layout composer settings. A config equal to the current
+   * one is ignored, so re-opening the composer (or a project load seeding the
+   * dialog) never marks the project dirty.
+   */
+  setPrintLayout: (printLayout: PrintLayoutConfig) => void;
   setProjectPlugins: (projectPlugins: ProjectPluginState | null, shouldMarkDirty?: boolean) => void;
   selectLayer: (id: string | null) => void;
   selectFeature: (id: string | null) => void;
@@ -446,7 +470,9 @@ export interface AppState {
   setStorymapPanelOpen: (open: boolean) => void;
   setStorymapPresenting: (presenting: boolean, returnToEditor?: boolean) => void;
   setStorymapComposing: (chapterId: string | null) => void;
+  setBatchToolsOpen: (open: boolean) => void;
   setModelBuilderOpen: (open: boolean) => void;
+  setModelBuilderRequestedModelId: (id: string | null) => void;
   setProcessingHistoryOpen: (open: boolean) => void;
   /** Open/close Select by Expression, optionally preselecting a target layer. */
   setSelectByExpressionOpen: (open: boolean, layerId?: string | null) => void;
@@ -1011,6 +1037,7 @@ export const useAppStore = create<AppState>()(
       preferences: DEFAULT_PROJECT_PREFERENCES,
       projectPlugins: null,
       legend: { ...DEFAULT_LEGEND_CONFIG },
+      printLayout: createDefaultPrintLayout(),
       storymap: null,
       models: [],
       styleLibrary: [],
@@ -1062,7 +1089,9 @@ export const useAppStore = create<AppState>()(
         storymapPresenting: false,
         storymapReturnToEditor: false,
         storymapComposingId: null,
+        batchToolsOpen: false,
         modelBuilderOpen: false,
+        modelBuilderRequestedModelId: null,
         styleManagerOpen: false,
         processingHistoryOpen: false,
         selectByExpressionOpen: false,
@@ -1302,6 +1331,11 @@ export const useAppStore = create<AppState>()(
       setBasemapOpacity: (opacity) => set({ basemapOpacity: opacity, isDirty: true }),
       setPreferences: (preferences) => set({ preferences, isDirty: true }),
       setLegend: (legend) => set({ legend, isDirty: true }),
+
+      setPrintLayout: (printLayout) =>
+        set((s) =>
+          printLayoutConfigsEqual(s.printLayout, printLayout) ? s : { printLayout, isDirty: true },
+        ),
       // When shouldMarkDirty is false the existing dirty flag is preserved rather
       // than set; it cannot clear the flag (only markSaved() does that).
       setProjectPlugins: (projectPlugins, shouldMarkDirty = true) =>
@@ -1393,7 +1427,10 @@ export const useAppStore = create<AppState>()(
         })),
       setStorymapComposing: (chapterId) =>
         set((s) => ({ ui: { ...s.ui, storymapComposingId: chapterId } })),
+      setBatchToolsOpen: (open) => set((s) => ({ ui: { ...s.ui, batchToolsOpen: open } })),
       setModelBuilderOpen: (open) => set((s) => ({ ui: { ...s.ui, modelBuilderOpen: open } })),
+      setModelBuilderRequestedModelId: (id) =>
+        set((s) => ({ ui: { ...s.ui, modelBuilderRequestedModelId: id } })),
       setProcessingHistoryOpen: (open) =>
         set((s) => ({ ui: { ...s.ui, processingHistoryOpen: open } })),
       setProcessingRerun: (request) => set((s) => ({ ui: { ...s.ui, processingRerun: request } })),
@@ -1700,6 +1737,9 @@ export const useAppStore = create<AppState>()(
           widgets: scrubWidgetsForRemovedLayers(s.widgets, id),
           comments: scrubCommentsForRemovedLayers(s.comments, id),
           legend: scrubLegendForRemovedLayers(s.legend, id),
+          // Clear a Print Layout data/atlas block built on the removed layer,
+          // so a save that follows the delete cannot write a dangling id.
+          printLayout: scrubPrintLayoutForRemovedLayers(s.printLayout, id),
           selectedLayerId:
             s.selectedLayerId === id
               ? (s.layers.find((l) => l.id !== id)?.id ?? null)
@@ -2055,6 +2095,9 @@ export const useAppStore = create<AppState>()(
               ? scrubCommentsForRemovedLayers(s.comments, removedIds)
               : s.comments,
             legend: removeChildren ? scrubLegendForRemovedLayers(s.legend, removedIds) : s.legend,
+            printLayout: removeChildren
+              ? scrubPrintLayoutForRemovedLayers(s.printLayout, removedIds)
+              : s.printLayout,
             selectedLayerId: selectionRemoved
               ? (layers[layers.length - 1]?.id ?? null)
               : s.selectedLayerId,
@@ -2233,6 +2276,9 @@ export const useAppStore = create<AppState>()(
             selectByLocationLayerId: null,
             loadEditorFeaturesOpen: false,
             loadEditorFeaturesLayerId: null,
+            // A pending assistant-requested Model Builder load names a model in
+            // the previous project's `savedModels`.
+            modelBuilderRequestedModelId: null,
           },
         }));
         clearHistory();
@@ -2293,6 +2339,9 @@ export const useAppStore = create<AppState>()(
             selectByLocationLayerId: null,
             loadEditorFeaturesOpen: false,
             loadEditorFeaturesLayerId: null,
+            // A pending assistant-requested Model Builder load names a model in
+            // the previous project's `savedModels`.
+            modelBuilderRequestedModelId: null,
           },
         }));
         clearHistory();

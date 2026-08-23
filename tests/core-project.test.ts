@@ -5,8 +5,10 @@ import {
   DEFAULT_MAP_CENTER,
   DEFAULT_LAYER_STYLE,
   DEFAULT_STORY_MAP,
+  createDefaultPrintLayout,
   createEmptyProject,
   createSampleStoryMap,
+  normalizeModelGraph,
   parseProject,
   parseStoryMapCsv,
   parseStoryMapJson,
@@ -1473,5 +1475,183 @@ describe("primary mapView normalization", () => {
     assert.equal(applied.mapView.zoom, 0);
     assert.equal(applied.mapView.pitch, 85);
     assert.equal(applied.mapView.bearing, 270);
+  });
+});
+
+describe("normalizeModelGraph", () => {
+  it("supplies an empty edge list when the key is missing entirely", () => {
+    // A hand-edited file without `edges` used to reach the canvas as
+    // `edges: undefined`, and the renderer's `graph.edges.map(...)` then threw
+    // out of render — past the importer's try/catch — into the error boundary,
+    // instead of showing the friendly "not a model" message.
+    const graph = normalizeModelGraph({
+      nodes: [{ id: "a", kind: "input", x: 10, y: 20, layerId: "roads" }],
+    });
+    assert.deepEqual(graph?.edges, []);
+    assert.equal(graph?.nodes.length, 1);
+  });
+
+  it("drops edges that do not connect two surviving nodes", () => {
+    const graph = normalizeModelGraph({
+      nodes: [
+        { id: "a", kind: "input", x: 0, y: 0 },
+        { id: "b", kind: "output", x: 0, y: 0 },
+        { id: "", kind: "tool", x: 0, y: 0 },
+      ],
+      edges: [
+        { id: "e1", from: "a", fromPort: "out", to: "b", toPort: "in" },
+        { id: "e2", from: "a", fromPort: "out", to: "ghost", toPort: "in" },
+        { id: "e3", from: "a", fromPort: "out", to: "a", toPort: "in" },
+      ],
+    });
+    assert.deepEqual(
+      graph?.edges.map((edge) => edge.id),
+      ["e1"],
+    );
+  });
+
+  it("rejects a node with an unknown kind rather than passing it to the runner", () => {
+    const graph = normalizeModelGraph({
+      nodes: [
+        { id: "a", kind: "wat", x: 0, y: 0 },
+        { id: "b", kind: "output", x: 0, y: 0 },
+      ],
+      edges: [],
+    });
+    assert.deepEqual(
+      graph?.nodes.map((node) => node.id),
+      ["b"],
+    );
+  });
+
+  it("returns null for a value carrying no usable nodes", () => {
+    assert.equal(normalizeModelGraph(null), null);
+    assert.equal(normalizeModelGraph({ nodes: [] }), null);
+    assert.equal(normalizeModelGraph({ nodes: "nope" }), null);
+  });
+
+  it("coerces a non-finite coordinate instead of laying the node out at NaN", () => {
+    const graph = normalizeModelGraph({
+      nodes: [{ id: "a", kind: "input", x: "left", y: Number.NaN }],
+    });
+    assert.deepEqual([graph?.nodes[0].x, graph?.nodes[0].y], [0, 0]);
+  });
+});
+
+describe("print layout persistence", () => {
+  beforeEach(() => {
+    useAppStore.getState().newProject({ name: "Layout Project" });
+  });
+
+  it("omits an untouched composer so the saved file is unchanged by this feature", () => {
+    const project = projectFromStore({
+      ...useAppStore.getState(),
+      metadata: {},
+    });
+    assert.equal(project.printLayout, undefined);
+  });
+
+  it("saves the composer settings once they differ from the defaults", () => {
+    useAppStore.getState().setPrintLayout({
+      ...createDefaultPrintLayout(),
+      title: "Filière dentaire par régions",
+      paperSize: "a3",
+      orientation: "portrait",
+    });
+    const saved = parseProject(
+      serializeProject(projectFromStore({ ...useAppStore.getState(), metadata: {} })),
+    );
+    assert.equal(saved.printLayout?.title, "Filière dentaire par régions");
+    assert.equal(saved.printLayout?.paperSize, "a3");
+    assert.equal(saved.printLayout?.orientation, "portrait");
+  });
+
+  it("restores the saved composer settings when the project is loaded", () => {
+    const project = {
+      ...createEmptyProject("Saved layout"),
+      printLayout: {
+        ...createDefaultPrintLayout(),
+        title: "Saved title",
+        orientation: "portrait" as const,
+        showNorthArrow: false,
+      },
+    };
+    useAppStore.getState().loadProject(project);
+    const restored = useAppStore.getState().printLayout;
+    assert.equal(restored.title, "Saved title");
+    assert.equal(restored.orientation, "portrait");
+    assert.equal(restored.showNorthArrow, false);
+  });
+
+  it("resets to the defaults for a project saved without a layout", () => {
+    useAppStore.getState().setPrintLayout({
+      ...createDefaultPrintLayout(),
+      title: "Previous project",
+      paperSize: "a3",
+    });
+    // The bug behind discussion #1992: opening another project must not leave
+    // the previous project's composer settings in place.
+    useAppStore.getState().loadProject(createEmptyProject("Next"));
+    assert.deepEqual(useAppStore.getState().printLayout, createDefaultPrintLayout());
+
+    useAppStore.getState().setPrintLayout({
+      ...createDefaultPrintLayout(),
+      title: "Previous project",
+    });
+    useAppStore.getState().newProject({ name: "Fresh" });
+    assert.deepEqual(useAppStore.getState().printLayout, createDefaultPrintLayout());
+  });
+
+  it("clears composer blocks that name a layer the loaded project does not carry", () => {
+    const layer = geojsonLayer({ id: "kept" });
+    const applied = applyProjectToStore({
+      ...createEmptyProject("Orphans"),
+      layers: [layer],
+      printLayout: {
+        ...createDefaultPrintLayout(),
+        showDataTable: true,
+        tableLayerId: "deleted",
+        showDataChart: true,
+        chartLayerId: "kept",
+      },
+    });
+    assert.equal(applied.printLayout.tableLayerId, "");
+    assert.equal(applied.printLayout.showDataTable, false);
+    assert.equal(applied.printLayout.chartLayerId, "kept");
+  });
+
+  it("clears a composer block when its layer is deleted from the open project", () => {
+    const store = useAppStore.getState();
+    const kept = store.addGeoJsonLayer("Kept", { type: "FeatureCollection", features: [] });
+    const doomed = useAppStore
+      .getState()
+      .addGeoJsonLayer("Doomed", { type: "FeatureCollection", features: [] });
+    useAppStore.getState().setPrintLayout({
+      ...createDefaultPrintLayout(),
+      showDataTable: true,
+      tableLayerId: doomed,
+      showDataChart: true,
+      chartLayerId: kept,
+    });
+
+    useAppStore.getState().removeLayer(doomed);
+
+    // Otherwise a save taken before the composer is next opened would write a
+    // block pointing at a layer the file no longer carries.
+    const after = useAppStore.getState().printLayout;
+    assert.equal(after.tableLayerId, "");
+    assert.equal(after.showDataTable, false);
+    assert.equal(after.chartLayerId, kept);
+    assert.equal(after.showDataChart, true);
+  });
+
+  it("ignores a write that changes nothing, so opening the composer is not an edit", () => {
+    assert.equal(useAppStore.getState().isDirty, false);
+    // The dialog replays its seeded values into the store on mount.
+    useAppStore.getState().setPrintLayout(createDefaultPrintLayout());
+    assert.equal(useAppStore.getState().isDirty, false);
+
+    useAppStore.getState().setPrintLayout({ ...createDefaultPrintLayout(), title: "Edited" });
+    assert.equal(useAppStore.getState().isDirty, true);
   });
 });

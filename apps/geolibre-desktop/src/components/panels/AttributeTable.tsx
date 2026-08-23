@@ -111,7 +111,7 @@ import {
   type CalcOutputType,
 } from "../../lib/attribute-expression";
 import { attributeFormErrorMessage } from "../../lib/attribute-form-messages";
-import { coerceNumericStringRows } from "../../lib/attribute-charts";
+import { coerceNumericStringRows, pickAnalysisRows } from "../../lib/attribute-charts";
 import { computeRowSelection } from "../../lib/attribute-selection";
 import { RESERVED_PROPERTY_KEYS } from "../../lib/field-collection";
 import {
@@ -129,6 +129,7 @@ import {
   formatAttributeValue,
   geojsonVectorSourceId,
   kmlExportErrorMessage,
+  layerSupportsPolylineExport,
   sanitizeExportFileName,
   shapefileFieldWarnings,
   type VectorExportFormat,
@@ -450,7 +451,6 @@ export function AttributeTable({ mapControllerRef }: AttributeTableProps) {
   const calcExpressionRef = useRef<HTMLTextAreaElement>(null);
 
   const layer = layers.find((l) => l.id === selectedLayerId);
-  const coerceNumericStrings = layer?.metadata.sourceKind === "delimited-text";
   const hasLayer = Boolean(layer);
   // Columns materialized by persistent joins are derived data: every save
   // re-derives them from the join table, so an edit, rename, or delete here
@@ -661,22 +661,25 @@ export function AttributeTable({ mapControllerRef }: AttributeTableProps) {
       return featureId.includes(filterLower) || props.includes(filterLower);
     });
   }, [attributeFilter, attributeRows, featureView, selectedIdSet]);
-  // Delimited-text imports preserve every cell as a string. Adapt only the rows
-  // sent to analysis dialogs, leaving the table and exported source data intact.
-  const adaptAnalysisRows = coerceNumericStrings && (chartOpen || statsOpen || explorerOpen);
+  // String-oriented sources can encode measurements as text. Adapt only the
+  // rows sent to analysis dialogs, leaving the table and source data intact.
+  const adaptAnalysisRows = chartOpen || statsOpen || explorerOpen;
   const analysisRows = useMemo(
     () => (adaptAnalysisRows ? coerceNumericStringRows(attributeRows) : attributeRows),
     [adaptAnalysisRows, attributeRows],
   );
-  const analysisFilteredRows = useMemo(
-    () =>
-      adaptAnalysisRows
-        ? filtered.length === attributeRows.length
-          ? analysisRows
-          : coerceNumericStringRows(filtered)
-        : filtered,
-    [adaptAnalysisRows, analysisRows, attributeRows.length, filtered],
-  );
+  // Both subsets are picked out of the already-adapted full-layer rows so a field
+  // keeps the same numeric/text inference whichever statistics scope is showing.
+  const analysisFilteredRows = useMemo(() => {
+    if (!adaptAnalysisRows) return filtered;
+    if (filtered.length === attributeRows.length) return analysisRows;
+    const filteredIds = new Set(filtered.map(({ featureId }) => featureId));
+    return pickAnalysisRows(analysisRows, attributeRows, filteredIds);
+  }, [adaptAnalysisRows, analysisRows, attributeRows, filtered]);
+  const analysisSelectedRows = useMemo(() => {
+    if (!adaptAnalysisRows || selectedIdSet.size === 0) return [];
+    return pickAnalysisRows(analysisRows, attributeRows, selectedIdSet);
+  }, [adaptAnalysisRows, analysisRows, attributeRows, selectedIdSet]);
   const sorted = [...filtered].sort((a, b) => {
     const aValue = sort.key === "__featureId" ? a.featureId : a.properties[sort.key];
     const bValue = sort.key === "__featureId" ? b.featureId : b.properties[sort.key];
@@ -995,7 +998,7 @@ export function AttributeTable({ mapControllerRef }: AttributeTableProps) {
     };
   };
 
-  const exportLayer = async (format: VectorExportFormat) => {
+  const exportLayer = async (format: VectorExportFormat, precision?: number) => {
     if (!layer?.geojson) return;
 
     try {
@@ -1008,7 +1011,18 @@ export function AttributeTable({ mapControllerRef }: AttributeTableProps) {
       }
 
       const baseName = sanitizeExportFileName(layer.name);
-      const savedPath = await exportVectorLayer(exportGeojson, format, baseName, layer.name);
+      const polylinePrecision =
+        precision ??
+        (typeof layer.metadata?.polylinePrecision === "number"
+          ? layer.metadata.polylinePrecision
+          : 5);
+      const savedPath = await exportVectorLayer(
+        exportGeojson,
+        format,
+        baseName,
+        layer.name,
+        polylinePrecision,
+      );
       // Surface Shapefile field-name limitations (10-char truncation and any
       // resulting collisions) only when a file was actually written; a null
       // path means the user cancelled the save dialog.
@@ -1771,6 +1785,16 @@ export function AttributeTable({ mapControllerRef }: AttributeTableProps) {
             <DropdownMenuItem onSelect={() => void exportLayer("csv")}>
               CSV (attributes only)
             </DropdownMenuItem>
+            {layer && layerSupportsPolylineExport(layer) && (
+              <>
+                <DropdownMenuItem onSelect={() => void exportLayer("polyline", 5)}>
+                  {t("layers.exportPolyline", { precision: 5 })}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void exportLayer("polyline", 6)}>
+                  {t("layers.exportPolyline", { precision: 6 })}
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
         {isEditing ? (
@@ -2403,6 +2427,7 @@ export function AttributeTable({ mapControllerRef }: AttributeTableProps) {
         onOpenChange={setStatsOpen}
         rows={analysisRows}
         filteredRows={analysisFilteredRows}
+        selectedRows={analysisSelectedRows}
         columns={discoveredColumns}
         layerName={layer?.name ?? ""}
       />

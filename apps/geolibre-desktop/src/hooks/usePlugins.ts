@@ -107,6 +107,7 @@ import type {
   GeoLibreZarrQueryOptions,
   GeoLibreZarrQuerySelector,
 } from "@geolibre/plugins";
+import { cogEngineDefaults } from "../lib/cog-render-engine";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readDir, readFile } from "@tauri-apps/plugin-fs";
@@ -136,6 +137,8 @@ import {
   vectorDownloadFileName,
 } from "../lib/vector-url-fetch";
 import { partitionProjectPluginManifestUrls } from "../lib/plugin-trust";
+import i18n from "../i18n";
+import { createPluginLocaleApi } from "../lib/plugin-locale";
 import { setTimeSliderOpenedByBinding, shouldCloseTimeSliderDock } from "../lib/time-slider-dock";
 import { createWmsTileUrl, normalizeWmsVersion } from "../components/layout/add-data/helpers";
 import { createExternalNativeStoreLayer } from "../lib/external-native-layer";
@@ -951,11 +954,8 @@ export function createAppAPI(mapControllerRef?: RefObject<MapController | null>)
           : undefined;
       return addRasterToMap(api, url, {
         name,
-        // STAC assets are already COGs with an HTTP(S) range-readable URL.
-        // Render them directly through the GPU COG engine; the WASM tiler is
-        // intended for local files and can leave remote programmatic layers
-        // registered without producing pixels.
-        defaults: { engine: "maplibre-gl-raster" },
+        // Control-wide, not per layer: see cogEngineDefaults.
+        defaults: cogEngineDefaults(options?.engine),
         state: {
           ...(bands?.length ? { bands, mode: bands.length >= 3 ? "rgb" : "single" } : {}),
           ...(options?.colormap !== undefined ? { colormap: options.colormap } : {}),
@@ -1264,6 +1264,7 @@ export function createAppAPI(mapControllerRef?: RefObject<MapController | null>)
     getActiveRightPanel,
     setActiveRightPanelDock,
     getActiveRightPanelDock,
+    ...createPluginLocaleApi(i18n),
     registerToolbarMenu,
     unregisterToolbarMenu,
     registerFloatingPanel,
