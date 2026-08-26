@@ -41,6 +41,7 @@ import {
   upsertPreset,
   type ObjectPreset,
 } from "./geoim3d-object-presets";
+import { disposeLoadedObject, placeLoadedObject } from "./geoim3d-object-scene";
 import { openThreeDTilesLayerPanel } from "./maplibre-3d-tiles";
 import {
   acquireMercatorProjectionLock,
@@ -773,6 +774,27 @@ function syncSplatCameraOnPitch(map: {
 }
 
 /**
+ * Waits until the map style has finished loading.
+ *
+ * `@dvt3d/maplibre-three-plugin` adds its scene layer straight from the map's
+ * render handler with no check of its own — `getLayer(id) || addLayer(...)` —
+ * and MapLibre throws `Style is not done loading` when that lands while a style
+ * is still coming up. The throw leaves the scene layer unadded, so an object
+ * loaded during a basemap change draws nothing at all.
+ *
+ * @param map - The MapLibre map, if there is one.
+ * @returns A promise that settles once the style is up.
+ */
+function whenStyleReady(map: unknown): Promise<void> {
+  const target = map as
+    | { isStyleLoaded?: () => boolean; once?: (event: string, handler: () => void) => void }
+    | null
+    | undefined;
+  if (!target?.once || target.isStyleLoaded?.() !== false) return Promise.resolve();
+  return new Promise((resolve) => target.once?.("idle", () => resolve()));
+}
+
+/**
  * Resolves the renderer, loading it on first use.
  *
  * Imported dynamically and added collapsed: this panel is the interface, and
@@ -858,6 +880,8 @@ async function loadObject(
     // screen. The menu is withdrawn while the globe is up, but the panel can
     // still be open from before the switch, so refuse here too.
     if (primaryViewBridge?.isGlobeActive()) throw new Error("globe-active");
+
+    await whenStyleReady(app.getMap?.());
 
     // Start where the user is looking. Without this an object with no
     // coordinates of its own lands at (0, 0), in the Atlantic.
@@ -961,6 +985,9 @@ function removeObject(object: LoadedObject, options?: { alreadyRemovedFromStore?
 function removeFromRenderer(object: LoadedObject): void {
   const control = state.control;
   if (!control) return;
+  // The library's remove detaches the group and disposes nothing, so the
+  // buffers behind a 68 MB splat outlive it. Free them first.
+  disposeLoadedObject(control, object.loaderId);
   if (object.kind === "model") control.removeModel(object.loaderId);
   else control.removeSplat(object.loaderId);
 }
@@ -968,10 +995,17 @@ function removeFromRenderer(object: LoadedObject): void {
 /**
  * Re-places an object with an edited transform.
  *
- * The renderer has no way to move something it has already loaded — only
- * `load` and `remove` — so this drops it and loads it again. The readable URL
- * is reused rather than re-fetched, which matters for an http object that
- * would otherwise cross the network on every nudge.
+ * The control's public surface cannot move what it has loaded, so this used to
+ * remove and load again on every Apply. That re-unpacked the whole file each
+ * time and — since the library disposes nothing it drops — ended in
+ * `RangeError: Array buffer allocation failed` in the SOG unpack worker after a
+ * few dozen nudges, with the object silently gone. The object in the scene is
+ * an ordinary three.js group, so the placement is written straight onto it.
+ *
+ * The reload is kept as the fallback for when the scene graph cannot be
+ * reached (a rename upstream): the readable URL is reused rather than
+ * re-fetched, which matters for an http object that would otherwise cross the
+ * network on every nudge.
  *
  * @param object - The object being edited.
  * @param transform - The values from the form.
@@ -984,16 +1018,22 @@ async function applyTransform(object: LoadedObject, transform: ObjectTransform):
   setStatus("");
   rerenderPanel();
   try {
-    removeFromRenderer(object);
-    // The loader mints a new id per load; keeping the old one would leave the
-    // next remove pointing at something that is no longer there.
-    object.loaderId = await control.load(object.readableUrl, {
-      longitude: transform.longitude,
-      latitude: transform.latitude,
-      altitude: transform.altitude,
-      rotation: transform.rotation,
-      scale: transform.scale,
-    });
+    if (placeLoadedObject(control, object.loaderId, object.kind, transform)) {
+      // The scene redraws with the map, and an edit made while it sits still
+      // would not appear until the next pan.
+      state.app?.getMap?.()?.triggerRepaint();
+    } else {
+      removeFromRenderer(object);
+      // The loader mints a new id per load; keeping the old one would leave the
+      // next remove pointing at something that is no longer there.
+      object.loaderId = await control.load(object.readableUrl, {
+        longitude: transform.longitude,
+        latitude: transform.latitude,
+        altitude: transform.altitude,
+        rotation: transform.rotation,
+        scale: transform.scale,
+      });
+    }
     object.transform = transform;
     // The zoom button reads the layer's bounds, so a moved object needs its
     // box moved too or the button keeps going where it used to be.
@@ -1008,7 +1048,8 @@ async function applyTransform(object: LoadedObject, transform: ObjectTransform):
       });
     }
     // A reload starts visible and opaque, so a hidden or faded layer would
-    // silently come back at full strength on every Apply.
+    // silently come back at full strength on every Apply. Re-applied on the
+    // in-place path too: it writes the values the layer already has.
     const layer = useAppStore.getState().layers.find((entry) => entry.id === object.layerId);
     if (layer) {
       state.adapter?.setVisibility(object.loaderId, layer.visible);

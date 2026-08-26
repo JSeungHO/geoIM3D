@@ -130,6 +130,14 @@ git push                                      # gitlab/dev
 - **`Cargo.lock`** — `Cargo.toml`에 의존성을 추가했으면 `cargo check`를 한 번
   돌려 잠금 파일에 반영합니다. 실제로 `keyring`이 몇 달간 빠져 있었고, cargo를
   한 번도 못 돌린 게 원인이었습니다.
+- **`maplibre-gl-splat` 버전이 바뀌었으면** `npm run test:frontend`가
+  `tests/geoim3d-object-scene.test.ts`로 잡아줍니다. 3D 객체의 위치 변경은
+  라이브러리의 **비공개 필드**(`_splatLayers` / `_modelLayers`)를 통해 씬 그래프에
+  직접 씁니다 — 그래야 매번 파일을 다시 언팩하지 않고, 그 재언팩이 실제로
+  `RangeError: Array buffer allocation failed`를 냈습니다. 이름이 바뀌면 예전
+  재로드 경로로 자동 폴백하므로 **기능은 살아 있지만 그 버그가 돌아옵니다**.
+  같은 파일의 `scenePosition`은 `@dvt3d/maplibre-three-plugin`의
+  `lngLatToVector3`를 옮겨온 거울값이고, 테스트가 실물과 대조합니다.
 - **`backend/geolibre_server/uv.lock`** — 그 `pyproject.toml`을 건드렸다면
   `uv lock --project backend/geolibre_server`. 어긋나면 데스크톱 설치본에서
   사이드카가 exit 2로 죽습니다.
