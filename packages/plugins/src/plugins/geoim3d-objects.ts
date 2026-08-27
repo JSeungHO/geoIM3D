@@ -1034,7 +1034,11 @@ async function loadObject(
     // centre read below would be that hidden map's rather than the view on
     // screen. The menu is withdrawn while the globe is up, but the panel can
     // still be open from before the switch, so refuse here too.
-    if (primaryViewBridge?.isGlobeActive()) throw new Error("globe-active");
+    // A splat loaded while the globe is up is loaded correctly and completely
+    // invisible, which reads as "the file did not load" — unless a tileset of
+    // the same site is going up beside it, in which case something is on screen
+    // and the splat is simply waiting for a switch back to the 2D map.
+    if (!tilesetLayerId && primaryViewBridge?.isGlobeActive()) throw new Error("globe-active");
 
     await whenStyleReady(app.getMap?.());
 
@@ -1390,15 +1394,10 @@ function deletePreset(id: string): void {
  */
 async function loadPreset(app: GeoLibreAppAPI, preset: ObjectPreset): Promise<void> {
   // The globe cannot draw a splat, but it can draw this site's tileset — so a
-  // preset that has one shows there instead of reporting that the view is
-  // wrong. On the 2D map both are added: the splat draws, and the tileset sits
-  // ready for a switch to the globe (2D ignores a layer of that type).
+  // preset that has one is opened in either view: the tileset draws on the
+  // globe, the splat on the 2D map, and both are listed either way so switching
+  // views does not need the preset opened again.
   const hasTileset = ensureTilesetLayer(preset);
-  if (hasTileset && primaryViewBridge?.isGlobeActive()) {
-    setStatus("");
-    rerenderPanel();
-    return;
-  }
 
   // A recorded path is a file, not a URL: it has to be reauthorized and turned
   // into something the webview can read before the loader sees it.
