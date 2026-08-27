@@ -582,8 +582,12 @@ export class CesiumLayerSync {
         this.applyTilesetAltitude(tileset, Number(layer.source.altitudeOffset));
       }
       this.applyAppearance(entry);
-    } catch {
-      // A tileset that fails to load should not break the whole sync.
+    } catch (error) {
+      // A tileset that fails to load must not break the whole sync — but it
+      // must not vanish silently either: a globe that simply shows nothing,
+      // with no way to tell a bad URL from an unsupported payload, is the
+      // hardest thing here to diagnose. Reported, not thrown.
+      console.error("[GeoLibre] 3D Tiles failed to load", url, error);
     }
   }
 

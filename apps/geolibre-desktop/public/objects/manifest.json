@@ -37,11 +37,11 @@
         297,
         0
       ],
-      "tileset": "KICT/tileset.json",
+      "tileset": "kict/tileset.json",
       "tilesetTransform": {
         "longitude": 126.7379,
         "latitude": 37.668635,
-        "altitude": 2,
+        "altitude": -10,
         "scale": 2.1,
         "rotation": [
           -90,
@@ -64,9 +64,9 @@
       ],
       "tileset": "crbase/tileset.json",
       "tilesetTransform": {
-        "longitude": 126.6185,
-        "latitude": 37.5491,
-        "altitude": 0,
+        "longitude": 126.612968,
+        "latitude": 37.5486,
+        "altitude": -60,
         "scale": 1.8,
         "rotation": [
           270,

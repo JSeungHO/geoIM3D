@@ -1,7 +1,7 @@
 import { getCesiumIonToken } from "@geolibre/core";
 import { CesiumCanvas } from "@geolibre/map";
 import { cn } from "@geolibre/ui";
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { setPrimaryCesiumViewer } from "../../lib/map-click-bridge";
 import { openSettingsSection } from "./SettingsDialog";
@@ -138,6 +138,30 @@ export function PrimaryGlobeSwitch({ children }: PrimaryGlobeSwitchProps) {
   // That is upstream's call and left alone.)
   const showGlobe = view === "cesium";
 
+  // Built on first use and kept from then on. Creating a Cesium viewer for a
+  // tab nobody opens would cost every session; tearing it down on the way out
+  // costs every switch, which is worse — the viewer refetches and re-decodes
+  // its tilesets, and a Gaussian-splat tileset is tens of megabytes of SPZ to
+  // unpack. So: mount late, then never unmount.
+  const [globeBuilt, setGlobeBuilt] = useState(false);
+  if (showGlobe && !globeBuilt) setGlobeBuilt(true);
+
+  // Cesium drives its own render loop, which would keep drawing an invisible
+  // canvas at full rate. Paused while the 2D map is up; the scene it has
+  // already loaded stays in memory, which is the point.
+  const viewerRef = useRef<{ useDefaultRenderLoop: boolean; isDestroyed: () => boolean } | null>(
+    null,
+  );
+  const handleViewerChange = useCallback((viewer: unknown, namespace: unknown) => {
+    viewerRef.current = viewer as typeof viewerRef.current;
+    setPrimaryCesiumViewer(viewer, namespace);
+  }, []);
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || viewer.isDestroyed()) return;
+    viewer.useDefaultRenderLoop = showGlobe;
+  }, [showGlobe, globeBuilt]);
+
   return (
     <div className="relative h-full w-full">
       {/*
@@ -151,17 +175,19 @@ export function PrimaryGlobeSwitch({ children }: PrimaryGlobeSwitchProps) {
         {children}
       </div>
 
-      {showGlobe ? (
+      {globeBuilt ? (
+        // Hidden the same way the 2D subtree is, and for the same reason: see
+        // the note above on why this never unmounts.
         // Keyed on the token so a token corrected in Settings remounts the
         // viewer: Cesium applies `Ion.defaultAccessToken` once, at creation.
-        <div className="absolute inset-0">
+        <div className={cn("absolute inset-0", !showGlobe && "invisible pointer-events-none")}>
           <CesiumCanvas
             key={token}
             viewId={PRIMARY_GLOBE_VIEW_ID}
             ionToken={token}
             // Lets plugin "click the map" tools reach the globe; without it
             // they attach to the hidden 2D map and never fire here.
-            onViewerChange={setPrimaryCesiumViewer}
+            onViewerChange={handleViewerChange}
           />
         </div>
       ) : null}
