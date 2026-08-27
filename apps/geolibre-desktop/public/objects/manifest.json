@@ -11,7 +11,19 @@
         -90,
         296,
         0
-      ]
+      ],
+      "tileset": "gogiri/tileset.json",
+      "tilesetTransform": {
+        "longitude": 127.070265,
+        "latitude": 37.357145,
+        "altitude": 5,
+        "scale": 2.53,
+        "rotation": [
+          -90,
+          -117,
+          0
+        ]
+      }
     },
     {
       "file": "kict_future.sog",
@@ -24,7 +36,19 @@
         -90,
         297,
         0
-      ]
+      ],
+      "tileset": "KICT/tileset.json",
+      "tilesetTransform": {
+        "longitude": 126.7379,
+        "latitude": 37.668635,
+        "altitude": 2,
+        "scale": 2.1,
+        "rotation": [
+          -90,
+          -117,
+          0
+        ]
+      }
     },
     {
       "file": "crbase-20260817.sog",
@@ -37,7 +61,19 @@
         270,
         220.5,
         0
-      ]
+      ],
+      "tileset": "crbase/tileset.json",
+      "tilesetTransform": {
+        "longitude": 126.6185,
+        "latitude": 37.5491,
+        "altitude": 0,
+        "scale": 1.8,
+        "rotation": [
+          270,
+          -40,
+          0
+        ]
+      }
     }
   ]
 }

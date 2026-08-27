@@ -233,16 +233,7 @@
     "stations": "관측지점",
     "missingValue": "자료 없음",
     "wind": "바람(m/s)",
-    "compass": [
-      "북",
-      "북동",
-      "동",
-      "남동",
-      "남",
-      "남서",
-      "서",
-      "북서"
-    ],
+    "compass": ["북", "북동", "동", "남동", "남", "남서", "서", "북서"],
     "airQuality": "대기질(에어코리아)",
     "openPanelFloating": "날씨 조회 (창으로)…"
   },
@@ -288,6 +279,8 @@
     "errorPresetMissing": "저장된 파일을 열지 못했습니다. 옮겨졌거나 삭제된 것 같습니다.",
     "hideBasemapBuildings": "배경지도의 3D 건물 숨기기",
     "errorEmptyFile": "빈 파일입니다.",
-    "errorTooLarge": "이 파일은 앱에서 열기에 너무 큽니다. 스플랫 개수를 줄이거나 훨씬 작은 .sog로 내보내세요."
+    "errorTooLarge": "이 파일은 앱에서 열기에 너무 큽니다. 스플랫 개수를 줄이거나 훨씬 작은 .sog로 내보내세요.",
+    "tilesetBadge": "3D 타일",
+    "tilesetHint": "이 값은 스플랫이 아니라 3D 타일의 배치를 바꿉니다."
   }
 }

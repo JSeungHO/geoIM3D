@@ -1,6 +1,7 @@
 import { resolveThreeDTilesRequestHeaders, type GeoLibreLayer } from "@geolibre/core";
 import type { Cesium3DTileset, DataSource, ImageryLayer, Viewer } from "cesium";
 import type { StyleSpecification } from "maplibre-gl";
+import { readTilesetPlacement, tilesetPlacementMatrix } from "./geoim3d-tileset-placement";
 
 // Reconciles the store's `GeoLibreLayer[]` onto a Cesium globe, mirroring what
 // MapController.syncLayers does for MapLibre. M3 covers the layer kinds where
@@ -28,7 +29,7 @@ interface LayerEntry {
   handle: ImageryLayer | DataSource | Cesium3DTileset | null;
   /** Set when the entry is removed mid-load so the resolved handle is discarded. */
   cancelled: boolean;
-  /** Last opacity key applied in place to a geojson entry (skips redundant restyles). */
+  /** Last opacity key applied in place (geojson entities, tileset style) — skips redundant restyles. */
   appliedAlpha?: string;
 }
 
@@ -230,11 +231,32 @@ function applyExtrusion(
   }
 }
 
+/**
+ * The 3D Tiles style expression that fades a tileset, or undefined to leave it
+ * unstyled.
+ *
+ * Fully opaque returns nothing on purpose: a style costs a shader variant per
+ * tile, and `color('#ffffff', 1)` buys none of it back. Values outside 0..1 are
+ * clamped rather than passed through, since the expression language has no
+ * opinion about them and a negative alpha renders as garbage.
+ *
+ * @param opacity - The layer's opacity.
+ * @returns The expression, or undefined when the tileset should not be styled.
+ */
+export function tilesetOpacityExpression(opacity: number): string | undefined {
+  if (!Number.isFinite(opacity)) return undefined;
+  const alpha = Math.min(Math.max(opacity, 0), 1);
+  if (alpha >= 1) return undefined;
+  return `color('#ffffff', ${alpha})`;
+}
+
 /** One raster source of a basemap style, as an imagery provider's inputs. */
 interface BasemapTiles {
   url: string;
   minzoom?: number;
   maxzoom?: number;
+  /** `[west, south, east, north]` in degrees, when the source declares coverage. */
+  bounds?: [number, number, number, number];
 }
 
 /**
@@ -248,6 +270,17 @@ interface BasemapTiles {
  * @param style - The basemap style.
  * @returns The tile templates to stack, bottom first.
  */
+function readBounds(value: unknown): [number, number, number, number] | undefined {
+  if (!Array.isArray(value) || value.length !== 4) return undefined;
+  if (!value.every((entry) => typeof entry === "number" && Number.isFinite(entry)))
+    return undefined;
+  const [west, south, east, north] = value as number[];
+  // A degenerate box would ask Cesium for an empty rectangle, which draws
+  // nothing at all — worse than the unbounded default.
+  if (west >= east || south >= north) return undefined;
+  return [west, south, east, north];
+}
+
 export function rasterBasemapTiles(style: StyleSpecification): BasemapTiles[] {
   const tiles: BasemapTiles[] = [];
   for (const layer of style.layers ?? []) {
@@ -258,10 +291,14 @@ export function rasterBasemapTiles(style: StyleSpecification): BasemapTiles[] {
     if (!source || source.type !== "raster") continue;
     const url = Array.isArray(source.tiles) ? str(source.tiles[0]) : undefined;
     if (!url) continue;
+    const bounds = readBounds(source.bounds);
     tiles.push({
       url: resolveTileUrl(url),
       minzoom: typeof source.minzoom === "number" ? source.minzoom : undefined,
       maxzoom: typeof source.maxzoom === "number" ? source.maxzoom : undefined,
+      // Spread rather than a plain `undefined`: a source with no coverage keeps
+      // the shape it had before this field existed.
+      ...(bounds ? { bounds } : {}),
     });
   }
   return tiles;
@@ -383,6 +420,13 @@ export class CesiumLayerSync {
             url: tile.url,
             minimumLevel: tile.minzoom,
             maximumLevel: tile.maxzoom,
+            // Without the source's own coverage a regional basemap is treated
+            // as global: Cesium requests its `minimumLevel` across the whole
+            // globe, the service errors on everything outside its area, and the
+            // provider fails as a whole — the globe keeps its default imagery
+            // and the basemap looks like it did not apply at all (VWorld:
+            // minzoom 6, Korea only).
+            rectangle: tile.bounds ? this.Cesium.Rectangle.fromDegrees(...tile.bounds) : undefined,
           });
           this.basemapImagery.push(
             this.viewer.imageryLayers.addImageryProvider(provider, index + 1),
@@ -533,8 +577,10 @@ export class CesiumLayerSync {
         return;
       }
       viewer.scene.primitives.add(tileset);
-      this.applyTilesetAltitude(tileset, Number(layer.source.altitudeOffset));
       entry.handle = tileset;
+      if (!this.applyTilesetPlacement(entry)) {
+        this.applyTilesetAltitude(tileset, Number(layer.source.altitudeOffset));
+      }
       this.applyAppearance(entry);
     } catch {
       // A tileset that fails to load should not break the whole sync.
@@ -552,6 +598,33 @@ export class CesiumLayerSync {
     tileset.modelMatrix = Cesium.Matrix4.fromTranslation(translation);
   }
 
+  /**
+   * Move, turn and resize a tileset whose layer overrides its placement.
+   *
+   * A tileset built from a scan that was never georeferenced comes out at the
+   * tiler's default origin, and re-tiling to move it is minutes of work for a
+   * number still being found by eye. `modelMatrix` is a live property, so this
+   * runs on every appearance pass rather than through a rebuild. The tileset's
+   * own `root.transform` is divided out, so the placement is absolute rather
+   * than relative to wherever the tiler put it.
+   *
+   * Applied instead of {@link applyTilesetAltitude}, not on top of it: both
+   * write `modelMatrix`.
+   */
+  private applyTilesetPlacement(entry: LayerEntry): boolean {
+    const tileset = entry.handle as Cesium3DTileset | null;
+    if (!tileset) return false;
+    const placement = readTilesetPlacement(entry.layer.source as Record<string, unknown>);
+    if (!placement) return false;
+    const { Cesium } = this;
+    const root = tileset.root?.transform;
+    if (!root) return false;
+    const desired = Cesium.Matrix4.fromColumnMajorArray(tilesetPlacementMatrix(placement));
+    const inverseRoot = Cesium.Matrix4.inverse(root, new Cesium.Matrix4());
+    tileset.modelMatrix = Cesium.Matrix4.multiply(desired, inverseRoot, new Cesium.Matrix4());
+    return true;
+  }
+
   private applyAppearance(entry: LayerEntry): void {
     const { handle, layer } = entry;
     if (!handle) return;
@@ -564,6 +637,9 @@ export class CesiumLayerSync {
       this.applyGeoJsonStyle(entry);
     } else {
       (handle as Cesium3DTileset).show = layer.visible;
+      // Live: dragging a placement field re-writes modelMatrix, no reload.
+      this.applyTilesetPlacement(entry);
+      this.applyTilesetOpacity(entry);
     }
   }
 
@@ -576,6 +652,27 @@ export class CesiumLayerSync {
    * change still rebuilds; the `appliedAlpha` guard makes a no-op call cheap on
    * unrelated syncs.
    */
+  /**
+   * Fade a tileset to the layer's opacity.
+   *
+   * A tileset has no `alpha` of its own the way an imagery layer does; the
+   * documented way to fade one is a style that multiplies every tile's colour,
+   * so the layer panel's slider is replayed as one. Rebuilt only when the value
+   * actually changes — the slider fires on every tick of a drag, and compiling
+   * a style per tick for a tileset of millions of points is not free.
+   */
+  private applyTilesetOpacity(entry: LayerEntry): void {
+    const tileset = entry.handle as Cesium3DTileset | null;
+    if (!tileset) return;
+    const expression = tilesetOpacityExpression(entry.layer.opacity);
+    const key = `alpha:${expression ?? "opaque"}`;
+    if (entry.appliedAlpha === key) return;
+    entry.appliedAlpha = key;
+    tileset.style = expression
+      ? new this.Cesium.Cesium3DTileStyle({ color: expression })
+      : undefined;
+  }
+
   private applyGeoJsonStyle(entry: LayerEntry): void {
     const dataSource = entry.handle as DataSource | null;
     if (!dataSource) return;

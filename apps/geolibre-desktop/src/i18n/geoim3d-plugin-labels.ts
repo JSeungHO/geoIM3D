@@ -112,6 +112,8 @@ function pushLabels(t: Translate): void {
     altitude: t("objects.altitude"),
     scale: t("objects.scale"),
     rotation: t("objects.rotation"),
+    tilesetBadge: t("objects.tilesetBadge"),
+    tilesetHint: t("objects.tilesetHint"),
     apply: t("objects.apply"),
     remove: t("objects.remove"),
     hideBasemapBuildings: t("objects.hideBasemapBuildings"),

@@ -233,16 +233,7 @@
     "stations": "Observation networks",
     "missingValue": "No data",
     "wind": "Wind (m/s)",
-    "compass": [
-      "N",
-      "NE",
-      "E",
-      "SE",
-      "S",
-      "SW",
-      "W",
-      "NW"
-    ],
+    "compass": ["N", "NE", "E", "SE", "S", "SW", "W", "NW"],
     "airQuality": "Air quality (AirKorea)",
     "openPanelFloating": "Weather lookup (detached)…"
   },
@@ -288,6 +279,8 @@
     "errorPresetMissing": "The saved file could not be opened. It may have been moved or deleted.",
     "hideBasemapBuildings": "Hide the basemap’s 3D buildings",
     "errorEmptyFile": "That file is empty.",
-    "errorTooLarge": "That file is too large to open in the app. Reduce the splat count or export it as .sog, which is far smaller."
+    "errorTooLarge": "That file is too large to open in the app. Reduce the splat count or export it as .sog, which is far smaller.",
+    "tilesetBadge": "3D Tiles",
+    "tilesetHint": "These values place the 3D Tiles version, not the splat."
   }
 }

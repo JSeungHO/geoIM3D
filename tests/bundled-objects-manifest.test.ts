@@ -41,12 +41,31 @@ describe("the shipped object manifest", () => {
     }
   });
 
+  it("names a tileset that exists, wherever it is present", () => {
+    // A `tileset` is what the globe shows for a preset the splat renderer can
+    // only draw on the 2D map. Same rule as `file`: gitignored, so only
+    // checked where it is actually there.
+    const entries = (JSON.parse(raw) as { objects: { tileset?: string }[] }).objects;
+    for (const entry of entries) {
+      if (!entry.tileset) continue;
+      const folder = entry.tileset.split("/")[0] ?? "";
+      if (!existsSync(new URL(`${folder}/`, DIR))) continue;
+      assert.ok(
+        existsSync(new URL(entry.tileset, DIR)),
+        `manifest names tileset "${entry.tileset}", which is not in public/objects/`,
+      );
+    }
+  });
+
   it("has an entry for every object file present", () => {
     // The other direction: a file copied in but never listed ships its bytes
-    // in the installer and is reachable from nowhere.
-    const listed = new Set(
-      (JSON.parse(raw) as { objects: { file?: string }[] }).objects.map((entry) => entry.file),
-    );
+    // in the installer and is reachable from nowhere. A tileset is reachable
+    // through its own field, so its folder counts as listed.
+    const objects = (JSON.parse(raw) as { objects: { file?: string; tileset?: string }[] }).objects;
+    const listed = new Set<string | undefined>(objects.map((entry) => entry.file));
+    for (const entry of objects) {
+      if (entry.tileset) listed.add(entry.tileset.split("/")[0]);
+    }
     const present = readdirSync(DIR).filter((name) => !/\.(md|json)$/i.test(name));
     for (const file of present) {
       assert.ok(listed.has(file), `public/objects/${file} is not listed in manifest.json`);

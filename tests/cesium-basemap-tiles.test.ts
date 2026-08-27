@@ -6,6 +6,7 @@ import type { StyleSpecification } from "maplibre-gl";
 // test runner. This file imports only types from Cesium and MapLibre.
 import {
   rasterBasemapTiles,
+  tilesetOpacityExpression,
   setCesiumTileUrlResolver,
 } from "../packages/map/src/cesium-layer-sync";
 
@@ -133,5 +134,62 @@ describe("rasterBasemapTiles", () => {
     } finally {
       setCesiumTileUrlResolver(null);
     }
+  });
+
+  it("carries a source's bounds through, so a regional basemap stays regional", () => {
+    // VWorld covers Korea from zoom 6. Dropped bounds made Cesium request that
+    // level across the whole globe, the service errored outside Korea and the
+    // provider failed as a whole — the basemap looked like it never applied.
+    const [tile] = rasterBasemapTiles(
+      style({
+        sources: {
+          v: {
+            type: "raster",
+            tiles: ["https://example/{z}/{y}/{x}.png"],
+            bounds: [124.5, 33, 132, 38.7],
+            minzoom: 6,
+          },
+        },
+        layers: [{ id: "v", type: "raster", source: "v" }],
+      }),
+    );
+    assert.deepEqual(tile?.bounds, [124.5, 33, 132, 38.7]);
+    assert.equal(tile?.minzoom, 6);
+  });
+
+  it("drops bounds that are missing, malformed or empty", () => {
+    // An empty rectangle draws nothing at all, which is worse than the
+    // unbounded default the globe had before.
+    const boundsOf = (bounds: unknown) =>
+      rasterBasemapTiles(
+        style({
+          sources: { v: { type: "raster", tiles: ["https://example/{z}/{y}/{x}.png"], bounds } },
+          layers: [{ id: "v", type: "raster", source: "v" }],
+        }),
+      )[0]?.bounds;
+
+    assert.equal(boundsOf(undefined), undefined);
+    assert.equal(boundsOf([1, 2, 3]), undefined);
+    assert.equal(boundsOf([1, 2, "3", 4]), undefined);
+    assert.equal(boundsOf([132, 33, 124.5, 38.7]), undefined);
+    assert.equal(boundsOf([124.5, 38.7, 132, 33]), undefined);
+  });
+});
+
+describe("tilesetOpacityExpression", () => {
+  it("leaves a fully opaque tileset unstyled", () => {
+    // A style costs a shader variant per tile and buys nothing at alpha 1.
+    assert.equal(tilesetOpacityExpression(1), undefined);
+    assert.equal(tilesetOpacityExpression(Number.NaN), undefined);
+  });
+
+  it("fades to the layer's opacity", () => {
+    assert.equal(tilesetOpacityExpression(0.4), "color('#ffffff', 0.4)");
+    assert.equal(tilesetOpacityExpression(0), "color('#ffffff', 0)");
+  });
+
+  it("clamps out-of-range values instead of passing them to the shader", () => {
+    assert.equal(tilesetOpacityExpression(-0.5), "color('#ffffff', 0)");
+    assert.equal(tilesetOpacityExpression(2), undefined);
   });
 });

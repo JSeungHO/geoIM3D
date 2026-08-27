@@ -28,7 +28,7 @@
  */
 
 import { DEFAULT_LAYER_STYLE, useAppStore, type GeoLibreLayer } from "@geolibre/core";
-import type { GeoLibreAppAPI, GeoLibrePlugin } from "../types";
+import type { GeoLibreAppAPI, GeoLibrePlugin, GeoLibreToolbarMenuItem } from "../types";
 import {
   basemapExtrusionLayerIds,
   BUNDLED_OBJECTS_MANIFEST,
@@ -292,6 +292,8 @@ export interface Geoim3dObjectLabels {
   altitude: string;
   scale: string;
   rotation: string;
+  tilesetBadge: string;
+  tilesetHint: string;
   apply: string;
   remove: string;
   hideBasemapBuildings: string;
@@ -332,6 +334,8 @@ let labels: Geoim3dObjectLabels = {
   altitude: "Altitude (m)",
   scale: "Scale",
   rotation: "Rotation (°)",
+  tilesetBadge: "3D Tiles",
+  tilesetHint: "These values place the 3D Tiles version, not the splat.",
   apply: "Apply",
   remove: "Remove",
   hideBasemapBuildings: "Hide the basemap’s 3D buildings",
@@ -395,6 +399,14 @@ interface LoadedObject {
   loaderId: string;
   name: string;
   kind: ObjectKind;
+  /** The paired 3D Tiles layer, when the object came from a preset that has one. */
+  tilesetLayerId?: string;
+  /**
+   * The tileset's own placement, edited by the same panel fields while the
+   * globe is up. Separate from `transform` because the two assets do not share
+   * an origin, a unit or a height datum.
+   */
+  tilesetTransform?: ObjectTransform;
   /** What the loader is actually reading: the original URL, or a blob of it. */
   readableUrl: string;
   /** The URL or path the user gave, kept for the layer record and for reloads. */
@@ -506,6 +518,147 @@ function createObjectStoreLayer(object: LoadedObject): GeoLibreLayer {
 
 /** Marks the layers this plugin owns, so the store watcher ignores everyone else's. */
 const GEOIM3D_OBJECT_SOURCE_KIND = "geoim3d-object";
+
+/**
+ * Marks a preset's 3D Tiles companion.
+ *
+ * Deliberately not {@link GEOIM3D_OBJECT_SOURCE_KIND}: this layer has no loaded
+ * object behind it, so the store watcher — which maps a layer back to a splat
+ * in the renderer — must skip it.
+ */
+const GEOIM3D_TILESET_SOURCE_KIND = "geoim3d-object-tileset";
+
+/**
+ * The layer record for a preset's 3D Tiles companion.
+ *
+ * Only what the globe reads: `type` and `source.url` are what
+ * `cesium-layer-sync` needs to build a tileset. It carries none of the 3D Tiles
+ * *plugin's* metadata on purpose, so that plugin's own control does not adopt
+ * it — the 2D map already shows this site as a splat, and two renderings of one
+ * building is worse than one.
+ *
+ * @param preset - The preset that names a tileset.
+ * @returns The layer to add.
+ */
+/**
+ * The placement a tileset takes from the panel's transform, field for field.
+ *
+ * Absolute, not relative: what the panel shows is what the globe applies. The
+ * splat renderer reads the same fields in its own units, so a site that has
+ * both needs its numbers chosen for one of them — see the panel's altitude and
+ * scale, which mean metres and a direct multiplier here.
+ *
+ * @param transform - The panel's current values.
+ * @returns The placement to store on the tileset layer.
+ */
+function tilesetPlacementFor(transform: ObjectTransform): Record<string, unknown> {
+  return {
+    longitude: transform.longitude,
+    latitude: transform.latitude,
+    height: transform.altitude,
+    rotation: [...transform.rotation],
+    scale: transform.scale,
+  };
+}
+
+/**
+ * The tileset's starting placement.
+ *
+ * The manifest's own value when it has one. Otherwise the splat's coordinates
+ * with the numbers that mean "as built" to a tileset — scale 1 and a height at
+ * the ground rather than the splat's eyeballed altitude — which is a place to
+ * start editing from, not a guess at the right answer.
+ *
+ * @param preset - The preset being opened.
+ * @returns The transform the tileset layer starts at.
+ */
+function initialTilesetTransform(preset: ObjectPreset): ObjectTransform {
+  return (
+    preset.tilesetTransform ?? {
+      longitude: preset.transform.longitude,
+      latitude: preset.transform.latitude,
+      altitude: 0,
+      scale: 1,
+      rotation: [0, preset.transform.rotation[1], 0],
+    }
+  );
+}
+
+/**
+ * Writes a placement onto the object's tileset layer.
+ *
+ * The Cesium sync turns this into a `modelMatrix` on its next pass, so the
+ * globe follows without reloading a tile.
+ *
+ * @param object - The object whose tileset is being moved.
+ * @param transform - The values to apply.
+ */
+function applyTilesetTransform(object: LoadedObject, transform: ObjectTransform): void {
+  const { tilesetLayerId } = object;
+  if (!tilesetLayerId) return;
+  const store = useAppStore.getState();
+  const layer = store.layers.find((entry) => entry.id === tilesetLayerId);
+  if (!layer) return;
+  store.updateLayer(tilesetLayerId, {
+    source: {
+      ...layer.source,
+      // The zoom button reads these, so a moved tileset needs its box moved too.
+      bounds: placementBounds(transform.longitude, transform.latitude),
+      placement: tilesetPlacementFor(transform),
+    },
+  });
+}
+
+function createTilesetStoreLayer(preset: ObjectPreset): GeoLibreLayer {
+  const id = `${preset.id}-tileset`;
+  const url = preset.tileset ?? "";
+  return {
+    id,
+    name: preset.name,
+    type: "3d-tiles",
+    source: {
+      bounds: placementBounds(preset.transform.longitude, preset.transform.latitude),
+      // Follows the panel, like the splat: a tileset built from a scan that was
+      // never georeferenced sits wherever the tiler's default origin was.
+      placement: tilesetPlacementFor(initialTilesetTransform(preset)),
+      sourceId: id,
+      type: "3d-tiles",
+      url,
+    },
+    visible: true,
+    opacity: 1,
+    style: { ...DEFAULT_LAYER_STYLE },
+    metadata: {
+      customLayerType: "3d-tiles",
+      externalNativeLayer: true,
+      identifiable: false,
+      sourceId: id,
+      sourceKind: GEOIM3D_TILESET_SOURCE_KIND,
+    },
+    sourcePath: url,
+  };
+}
+
+/**
+ * Adds a preset's tileset to the layer list once.
+ *
+ * @param preset - The preset being opened.
+ * @returns True when the preset has a tileset, whether or not this call added it.
+ */
+function ensureTilesetLayer(preset: ObjectPreset): boolean {
+  if (!preset.tileset) return false;
+  const store = useAppStore.getState();
+  const id = `${preset.id}-tileset`;
+  if (!store.layers.some((layer) => layer.id === id)) {
+    store.addLayer(createTilesetStoreLayer(preset));
+  }
+  return true;
+}
+
+/** True when the panel's fields are pointed at the tileset rather than the splat. */
+function isEditingTileset(object: LoadedObject): boolean {
+  return Boolean(object.tilesetLayerId) && Boolean(primaryViewBridge?.isGlobeActive());
+}
 
 function isObjectLayer(layer: GeoLibreLayer): boolean {
   return layer.metadata.sourceKind === GEOIM3D_OBJECT_SOURCE_KIND;
@@ -855,6 +1008,8 @@ async function loadObject(
   name: string,
   prepared?: { url: string; revocable: boolean },
   placement?: ObjectTransform,
+  tilesetLayerId?: string,
+  tilesetTransform?: ObjectTransform,
 ): Promise<void> {
   const kind = objectKind(source);
   if (!kind) {
@@ -909,6 +1064,8 @@ async function loadObject(
       readableUrl: readable.url,
       revocable: readable.revocable,
       transform,
+      tilesetLayerId,
+      tilesetTransform,
     };
     state.objects.push(object);
     acquireMercatorProjectionLock(PROJECTION_LOCK_KEY, app, app.getMap?.());
@@ -1014,6 +1171,16 @@ async function applyTransform(object: LoadedObject, transform: ObjectTransform):
   const control = state.control;
   if (!control) return;
 
+  // On the globe the panel's fields are the tileset's, so an Apply moves that
+  // and leaves the splat's own numbers alone. Nothing else here runs: the splat
+  // is not on screen, and reloading it to place it would cost the file again.
+  if (isEditingTileset(object)) {
+    object.tilesetTransform = transform;
+    applyTilesetTransform(object, transform);
+    rerenderPanel();
+    return;
+  }
+
   state.busy = true;
   setStatus("");
   rerenderPanel();
@@ -1047,6 +1214,7 @@ async function applyTransform(object: LoadedObject, transform: ObjectTransform):
         },
       });
     }
+
     // A reload starts visible and opaque, so a hidden or faded layer would
     // silently come back at full strength on every Apply. Re-applied on the
     // in-place path too: it writes the values the layer already has.
@@ -1191,6 +1359,11 @@ function savePreset(object: LoadedObject): void {
     source: object.source,
     kind: object.kind,
     transform: { ...object.transform, rotation: [...object.transform.rotation] },
+    // Saved alongside, so reopening the preset restores the globe's placement
+    // too rather than starting from the defaults again.
+    tilesetTransform: object.tilesetTransform
+      ? { ...object.tilesetTransform, rotation: [...object.tilesetTransform.rotation] }
+      : undefined,
   };
   savePresets(upsertPreset(loadUserPresets(), preset));
   if (state.app) buildToolbarMenu(state.app);
@@ -1216,6 +1389,17 @@ function deletePreset(id: string): void {
  * @param preset - The preset to load.
  */
 async function loadPreset(app: GeoLibreAppAPI, preset: ObjectPreset): Promise<void> {
+  // The globe cannot draw a splat, but it can draw this site's tileset — so a
+  // preset that has one shows there instead of reporting that the view is
+  // wrong. On the 2D map both are added: the splat draws, and the tileset sits
+  // ready for a switch to the globe (2D ignores a layer of that type).
+  const hasTileset = ensureTilesetLayer(preset);
+  if (hasTileset && primaryViewBridge?.isGlobeActive()) {
+    setStatus("");
+    rerenderPanel();
+    return;
+  }
+
   // A recorded path is a file, not a URL: it has to be reauthorized and turned
   // into something the webview can read before the loader sees it.
   let prepared: { url: string; revocable: boolean } | undefined;
@@ -1233,7 +1417,15 @@ async function loadPreset(app: GeoLibreAppAPI, preset: ObjectPreset): Promise<vo
     }
     prepared = { url: picked.url, revocable: picked.revocable };
   }
-  await loadObject(app, preset.source, preset.name, prepared, preset.transform);
+  await loadObject(
+    app,
+    preset.source,
+    preset.name,
+    prepared,
+    preset.transform,
+    hasTileset ? `${preset.id}-tileset` : undefined,
+    hasTileset ? initialTilesetTransform(preset) : undefined,
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1288,7 +1480,17 @@ function objectBlock(object: LoadedObject): HTMLElement {
   const wrapper = element("div", "geoim3d-object");
   wrapper.appendChild(element("p", "geoim3d-object__name", object.name));
 
-  const { transform } = object;
+  // The same fields drive two assets, so say which one they are pointed at:
+  // the numbers change under the user when the view does, and without this the
+  // panel looks like it forgot what was typed.
+  const editingTileset = isEditingTileset(object);
+  if (editingTileset) {
+    wrapper.appendChild(element("span", "geoim3d-object__badge", labels.tilesetBadge));
+    wrapper.appendChild(element("p", "geoim3d-object__hint", labels.tilesetHint));
+  }
+
+  const transform =
+    editingTileset && object.tilesetTransform ? object.tilesetTransform : object.transform;
   const lon = numberField(labels.longitude, transform.longitude, 0.0001);
   const lat = numberField(labels.latitude, transform.latitude, 0.0001);
   const alt = numberField(labels.altitude, transform.altitude, 1);
@@ -1527,16 +1729,16 @@ let unregisterMenu: (() => void) | null = null;
 function buildToolbarMenu(app: GeoLibreAppAPI): void {
   unregisterMenu?.();
   unregisterMenu = null;
-  const presets = allPresets();
-  // Nothing here can be seen while the globe is up — the renderer is a MapLibre
-  // control and that map is hidden — so the menu is withdrawn rather than left
-  // offering actions whose result is invisible.
-  if (primaryViewBridge?.isGlobeActive()) return;
-  unregisterMenu =
-    app.registerToolbarMenu?.({
-      id: MENU_ID,
-      label: labels.menuLabel,
-      items: [
+  const onGlobe = Boolean(primaryViewBridge?.isGlobeActive());
+  // A splat is drawn by a MapLibre control, so nothing loaded as one can be seen
+  // while the globe is up. A preset that also ships a tileset can: that is the
+  // one form the globe renders. So the menu stays, carrying only what works
+  // there, rather than being withdrawn and taking the tilesets with it.
+  const presets = allPresets().filter((preset) => !onGlobe || preset.tileset);
+  if (onGlobe && presets.length === 0) return;
+  const uploadItems: GeoLibreToolbarMenuItem[] = onGlobe
+    ? []
+    : [
         {
           id: `${MENU_ID}-url`,
           label: labels.addFromUrl,
@@ -1551,6 +1753,13 @@ function buildToolbarMenu(app: GeoLibreAppAPI): void {
             void pickAndLoad(app);
           },
         },
+      ];
+  unregisterMenu =
+    app.registerToolbarMenu?.({
+      id: MENU_ID,
+      label: labels.menuLabel,
+      items: [
+        ...uploadItems,
         {
           type: "submenu",
           id: `${MENU_ID}-presets`,

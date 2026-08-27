@@ -26,6 +26,22 @@ export interface ObjectPreset {
   source: string;
   kind: ObjectKind;
   transform: ObjectTransform;
+  /**
+   * A 3D Tiles `tileset.json` showing the same site, if one was built.
+   *
+   * The splat renderer draws into the 2D map only, so the Cesium globe shows
+   * nothing for a splat preset. A tileset is the one 3D form that globe can
+   * render, and this is where a preset says it has one.
+   */
+  tileset?: string;
+  /**
+   * Where the tileset sits, when it needs different numbers from the splat.
+   *
+   * It does: a splat's origin is wherever the scan started and its scale is in
+   * arbitrary units, while a tileset is centred on its own bounding box and
+   * built in metres. One set of numbers cannot place both.
+   */
+  tilesetTransform?: ObjectTransform;
 }
 
 /**
@@ -60,6 +76,31 @@ export function parsePresets(raw: string | null): ObjectPreset[] {
   }
   if (!Array.isArray(parsed)) return [];
   return parsed.filter(isPreset);
+}
+
+/**
+ * Reads an optional transform out of manifest JSON.
+ *
+ * @param value - The raw entry.
+ * @returns The transform, or undefined when it is absent or incomplete.
+ */
+function readTransform(value: unknown): ObjectTransform | undefined {
+  const raw = value as Partial<ObjectTransform> | null;
+  if (!raw) return undefined;
+  const numbers = [raw.longitude, raw.latitude, raw.altitude, raw.scale];
+  if (!numbers.every((entry) => typeof entry === "number" && Number.isFinite(entry))) {
+    return undefined;
+  }
+  const rotation = raw.rotation;
+  if (!Array.isArray(rotation) || rotation.length !== 3) return undefined;
+  if (!rotation.every((angle) => typeof angle === "number")) return undefined;
+  return {
+    longitude: raw.longitude as number,
+    latitude: raw.latitude as number,
+    altitude: raw.altitude as number,
+    scale: raw.scale as number,
+    rotation: [rotation[0], rotation[1], rotation[2]],
+  };
 }
 
 function isPreset(value: unknown): value is ObjectPreset {
@@ -196,6 +237,13 @@ export function parseBundledManifest(raw: string, baseUrl: string): ObjectPreset
         scale: item?.scale ?? 1,
         rotation: item?.rotation,
       },
+      // Resolved like `file`, so the manifest names a path beside itself
+      // rather than repeating the deployment base.
+      tileset:
+        typeof item?.tileset === "string" && item.tileset.trim()
+          ? new URL(`objects/${item.tileset.trim()}`, baseUrl).href
+          : undefined,
+      tilesetTransform: readTransform(item?.tilesetTransform),
     };
     if (isPreset(candidate)) presets.push(candidate);
   }
