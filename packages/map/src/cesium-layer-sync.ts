@@ -640,7 +640,11 @@ export class CesiumLayerSync {
       (handle as DataSource).show = layer.visible;
       this.applyGeoJsonStyle(entry);
     } else {
-      (handle as Cesium3DTileset).show = layer.visible;
+      // Zero opacity hides it. A Gaussian splat tileset ignores the style set
+      // below — `GaussianSplat3DTileContent.applyStyle` is empty in Cesium —
+      // so without this the slider does nothing at all for the one kind of
+      // tileset this app ships most of, not even at the end of its travel.
+      (handle as Cesium3DTileset).show = layer.visible && layer.opacity > 0;
       // Live: dragging a placement field re-writes modelMatrix, no reload.
       this.applyTilesetPlacement(entry);
       this.applyTilesetOpacity(entry);
@@ -664,6 +668,11 @@ export class CesiumLayerSync {
    * so the layer panel's slider is replayed as one. Rebuilt only when the value
    * actually changes — the slider fires on every tick of a drag, and compiling
    * a style per tick for a tileset of millions of points is not free.
+   *
+   * Fades mesh and point-cloud tilesets only. Cesium's Gaussian splat content
+   * implements `applyStyle` as an empty method, so a splat tileset is opaque at
+   * every value above zero; the caller hides it at zero so the slider at least
+   * reaches off. Revisit when Cesium styles splat content.
    */
   private applyTilesetOpacity(entry: LayerEntry): void {
     const tileset = entry.handle as Cesium3DTileset | null;

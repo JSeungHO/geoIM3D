@@ -14,13 +14,13 @@
       ],
       "tileset": "gogiri/tileset.json",
       "tilesetTransform": {
-        "longitude": 127.070265,
-        "latitude": 37.357145,
-        "altitude": 5,
-        "scale": 2.53,
+        "longitude": 127.07029,
+        "latitude": 37.35711,
+        "altitude": 0,
+        "scale": 2.7,
         "rotation": [
           -90,
-          -117,
+          -119,
           0
         ]
       }
@@ -39,8 +39,8 @@
       ],
       "tileset": "kict/tileset.json",
       "tilesetTransform": {
-        "longitude": 126.7379,
-        "latitude": 37.668635,
+        "longitude": 126.73792,
+        "latitude": 37.66868,
         "altitude": -10,
         "scale": 2.1,
         "rotation": [
