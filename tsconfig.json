@@ -1,0 +1,17 @@
+{
+  // Nothing owned playwright.config.ts, so the editor typechecked it against an
+  // inferred config with no @types/node and reported `process` as undefined
+  // (ts2591) — while `npm run ci`, which builds only apps and packages, stayed
+  // green. This project exists to give that file a home.
+  //
+  // e2e/**/*.ts is deliberately out: those specs carry a pre-existing
+  // axe-core/Playwright selector-type mismatch, and pulling them in would put
+  // two errors in the editor that no CI step checks. tests/**/*.ts is out for a
+  // bigger reason — the suites import app source, which needs Vite's ambient
+  // types and the app's paths, and including them raises 244 errors here.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["playwright.config.ts"]
+}
