@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  isTilesetSource,
   OBJECT_EXTENSIONS,
   defaultRotation,
   needsNativeFetch,
@@ -108,5 +109,23 @@ describe("objectName", () => {
   it("falls back to the source when there is no segment", () => {
     assert.equal(objectName("scene.glb"), "scene.glb");
     assert.equal(objectName(""), "");
+  });
+});
+
+describe("isTilesetSource", () => {
+  it("recognises a tileset by its .json path, query or fragment aside", () => {
+    // The panel's one URL box takes both a splat and a tileset, and the wrong
+    // branch either refuses a tileset or hands a splat loader a JSON file.
+    assert.equal(isTilesetSource("https://example.com/files/tileset.json"), true);
+    assert.equal(isTilesetSource("https://example.com/a/b/scene.json?token=1"), true);
+    assert.equal(isTilesetSource("http://host:45673/files/tileset.json#frag"), true);
+  });
+
+  it("leaves splats and models to the loader", () => {
+    assert.equal(isTilesetSource("https://example.com/scan.sog"), false);
+    assert.equal(isTilesetSource("https://example.com/model.glb"), false);
+    assert.equal(isTilesetSource("C:\scans\park.ply"), false);
+    // A signed URL that merely mentions json in a parameter is not a tileset.
+    assert.equal(isTilesetSource("https://example.com/scan.sog?type=json"), false);
   });
 });

@@ -401,6 +401,8 @@ interface LoadedObject {
   kind: ObjectKind;
   /** The paired 3D Tiles layer, when the object came from a preset that has one. */
   tilesetLayerId?: string;
+  /** Set when there is no splat behind this entry — a tileset added on its own. */
+  tilesetOnly?: boolean;
   /**
    * The tileset's own placement, edited by the same panel fields while the
    * globe is up. Separate from `transform` because the two assets do not share
@@ -609,18 +611,21 @@ function applyTilesetTransform(object: LoadedObject, transform: ObjectTransform)
   });
 }
 
-function createTilesetStoreLayer(preset: ObjectPreset): GeoLibreLayer {
-  const id = `${preset.id}-tileset`;
-  const url = preset.tileset ?? "";
+function createTilesetStoreLayer(
+  id: string,
+  name: string,
+  url: string,
+  transform: ObjectTransform,
+): GeoLibreLayer {
   return {
     id,
-    name: preset.name,
+    name,
     type: "3d-tiles",
     source: {
-      bounds: placementBounds(preset.transform.longitude, preset.transform.latitude),
+      bounds: placementBounds(transform.longitude, transform.latitude),
       // Follows the panel, like the splat: a tileset built from a scan that was
       // never georeferenced sits wherever the tiler's default origin was.
-      placement: tilesetPlacementFor(initialTilesetTransform(preset)),
+      placement: tilesetPlacementFor(transform),
       sourceId: id,
       type: "3d-tiles",
       url,
@@ -650,13 +655,87 @@ function ensureTilesetLayer(preset: ObjectPreset): boolean {
   const store = useAppStore.getState();
   const id = `${preset.id}-tileset`;
   if (!store.layers.some((layer) => layer.id === id)) {
-    store.addLayer(createTilesetStoreLayer(preset));
+    store.addLayer(
+      createTilesetStoreLayer(id, preset.name, preset.tileset, initialTilesetTransform(preset)),
+    );
   }
   return true;
 }
 
+/** Whether a source names a 3D Tiles tileset rather than a splat or a model. */
+export function isTilesetSource(source: string): boolean {
+  return /(^|\/)[^/?#]*\.json(?:[?#]|$)/i.test(source.split(/[?#]/, 1)[0] ?? source);
+}
+
+/**
+ * Puts a tileset on the map from its `tileset.json`, and lists it here.
+ *
+ * The 3D Tiles panel can already add one, but the layer it makes belongs to
+ * that plugin: it rewrites the layer's `source` from its own state on every
+ * sync, so a placement written there is wiped on the next pass. A tileset added
+ * here is ours, and so gets the same five fields every other object has.
+ *
+ * Placed at the map's centre to begin with — a tileset that carries its own
+ * georeferencing ignores where it is told to sit only in the sense that the
+ * user will not need to move it far.
+ *
+ * @param app - The host API.
+ * @param url - The tileset's URL.
+ * @param name - What to call it.
+ */
+function loadTileset(app: GeoLibreAppAPI, url: string, name: string): void {
+  const center = app.getMap?.()?.getCenter();
+  const transform: ObjectTransform = {
+    longitude: center?.lng ?? 0,
+    latitude: center?.lat ?? 0,
+    altitude: 0,
+    scale: 1,
+    rotation: [0, 0, 0],
+  };
+  const layerId = `${GEOIM3D_TILESET_SOURCE_KIND}-${nextObjectSequence++}`;
+  useAppStore.getState().addLayer(createTilesetStoreLayer(layerId, name, url, transform));
+  state.objects.push({
+    layerId,
+    loaderId: "",
+    name,
+    kind: "splat",
+    source: url,
+    readableUrl: url,
+    revocable: false,
+    transform,
+    tilesetLayerId: layerId,
+    tilesetTransform: transform,
+    tilesetOnly: true,
+  });
+  state.urlDraft = "";
+  setStatus("");
+  rerenderPanel();
+}
+
+/**
+ * The one object the panel edits.
+ *
+ * Listing every loaded object made the panel a wall of near-identical number
+ * blocks, and the fields being edited were rarely the ones on screen. The
+ * layer list is already the place things are picked, so this follows its
+ * selection — by either of the object's layers, since a preset owns two — and
+ * falls back to the most recent load when nothing relevant is selected.
+ *
+ * @returns The object to render, or null when none is loaded.
+ */
+function panelObject(): LoadedObject | null {
+  const { selectedLayerId } = useAppStore.getState();
+  const selected = selectedLayerId
+    ? state.objects.find(
+        (object) => object.layerId === selectedLayerId || object.tilesetLayerId === selectedLayerId,
+      )
+    : undefined;
+  return selected ?? state.objects.at(-1) ?? null;
+}
+
 /** True when the panel's fields are pointed at the tileset rather than the splat. */
 function isEditingTileset(object: LoadedObject): boolean {
+  if (object.tilesetOnly) return true;
   return Boolean(object.tilesetLayerId) && Boolean(primaryViewBridge?.isGlobeActive());
 }
 
@@ -853,6 +932,9 @@ function watchLayerList(): void {
     if (state.objects.length > 0 && layerIdsChanged(previous.layers, store.layers)) {
       raiseSplatScene();
     }
+
+    // Which object the panel edits follows the layer list's selection.
+    if (store.selectedLayerId !== previous.selectedLayerId) rerenderPanel();
 
     const currentById = new Map(store.layers.map((layer) => [layer.id, layer]));
     for (const before of previous.layers) {
@@ -1140,12 +1222,18 @@ function removeObject(object: LoadedObject, options?: { alreadyRemovedFromStore?
     releaseMercatorProjectionLock(PROJECTION_LOCK_KEY, state.app);
   }
   if (!options?.alreadyRemovedFromStore) useAppStore.getState().removeLayer(object.layerId);
+  // The tileset was added with the object and is listed under the same name, so
+  // it goes with it. Left behind it became unreachable: the panel entry that
+  // placed it is gone, so the layer sits in the list with nothing to edit it.
+  if (object.tilesetLayerId) useAppStore.getState().removeLayer(object.tilesetLayerId);
   rerenderPanel();
 }
 
 function removeFromRenderer(object: LoadedObject): void {
   const control = state.control;
-  if (!control) return;
+  // A tileset added on its own was never handed to the splat renderer, and its
+  // empty loader id would remove whatever happens to answer to it.
+  if (!control || object.tilesetOnly) return;
   // The library's remove detaches the group and disposes nothing, so the
   // buffers behind a 68 MB splat outlive it. Free them first.
   disposeLoadedObject(control, object.loaderId);
@@ -1597,7 +1685,9 @@ function renderPanel(container: HTMLElement): void {
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     const source = state.urlDraft.trim();
-    if (source) void loadObject(app, source, objectName(source));
+    if (!source) return;
+    if (isTilesetSource(source)) loadTileset(app, source, objectName(source));
+    else void loadObject(app, source, objectName(source));
   });
   container.appendChild(form);
 
@@ -1622,7 +1712,8 @@ function renderPanel(container: HTMLElement): void {
     container.appendChild(element("p", "geolibre-plugin-panel__status", labels.empty));
     return;
   }
-  for (const object of state.objects) container.appendChild(objectBlock(object));
+  const shown = panelObject();
+  if (shown) container.appendChild(objectBlock(shown));
 
   buildingToggle(container);
   presetSection(app, container);

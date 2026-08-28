@@ -171,7 +171,13 @@ export function PrimaryGlobeSwitch({ children }: PrimaryGlobeSwitchProps) {
         and `display:none` gives the canvas a zero size that MapLibre restores
         badly. This keeps switching instant and the map's state intact.
       */}
-      <div className={cn("absolute inset-0", showGlobe && "invisible pointer-events-none")}>
+      <div
+        // Marked so a control inside this subtree can opt back into being seen
+        // while the globe is up — `visibility` and `pointer-events` both let a
+        // descendant override them. The 3D Tiles panel does; see geoim3d.css.
+        data-globe-active={showGlobe ? "true" : undefined}
+        className={cn("absolute inset-0", showGlobe && "invisible pointer-events-none")}
+      >
         {children}
       </div>
 

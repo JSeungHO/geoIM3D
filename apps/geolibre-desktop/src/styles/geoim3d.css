@@ -298,6 +298,27 @@
   overflow-wrap: anywhere;
 }
 
+/* The 3D Tiles panel is a MapLibre control, so it lives inside the 2D map
+   subtree that PrimaryGlobeSwitch hides while the globe is up — and it was the
+   only way to add or edit a tileset, which the globe is the one renderer for.
+   `visibility` and `pointer-events` are both overridable by a descendant, so
+   the panel opts back in rather than being moved out of that subtree.
+
+   Everything it does goes through the store (add, remove, altitude), so the
+   globe follows even though the map it is attached to is not on screen.
+
+   Two selectors because the panel is not inside the control: the library
+   appends `.three-d-tiles-control-panel` to the map container beside it, so
+   the control's own class only covers the collapsed icon. That class name is
+   `maplibre-gl-3d-tiles`' own and is not exported — re-check it when that
+   package is bumped, or the panel goes back to being invisible on the globe
+   with no build error. */
+[data-globe-active="true"] .geolibre-3d-tiles-control,
+[data-globe-active="true"] .three-d-tiles-control-panel {
+  pointer-events: auto;
+  visibility: visible;
+}
+
 /* Says which asset the fields below are pointed at: the same boxes drive the
    splat on the 2D map and the tileset on the globe. */
 .geoim3d-object__badge {
