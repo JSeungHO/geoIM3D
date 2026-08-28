@@ -1260,18 +1260,22 @@ function removeFromRenderer(object: LoadedObject): void {
  * @param transform - The values from the form.
  */
 async function applyTransform(object: LoadedObject, transform: ObjectTransform): Promise<void> {
-  const control = state.control;
-  if (!control) return;
-
   // On the globe the panel's fields are the tileset's, so an Apply moves that
   // and leaves the splat's own numbers alone. Nothing else here runs: the splat
   // is not on screen, and reloading it to place it would cost the file again.
+  //
+  // Checked before the renderer, not after: a tileset added on its own never
+  // loaded the splat renderer, so a `state.control` guard above this returned
+  // early and Apply did nothing at all.
   if (isEditingTileset(object)) {
     object.tilesetTransform = transform;
     applyTilesetTransform(object, transform);
     rerenderPanel();
     return;
   }
+
+  const control = state.control;
+  if (!control) return;
 
   state.busy = true;
   setStatus("");
