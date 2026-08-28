@@ -47,12 +47,18 @@ import {
 } from "./geojson-loader";
 import {
   mbtilesStyleLayerIds,
+  externalSourceIdsFor,
   removeLayerFromMap,
   styleValuesEqual,
   syncLayer,
   vectorTileStyleLayerIds,
 } from "./layer-sync";
 import { globeSafeMaxZoom } from "./globe-fit-bounds";
+import {
+  blendModeSignature,
+  installLayerBlendModes,
+  syncLayerBlendModes,
+} from "./layer-blend-modes";
 import { ensureGeneratedImageHandler } from "./generated-images";
 import { installGlobePopupOcclusion } from "./globe-popup-occlusion";
 import { isMapboxStyleUrl, loadMapboxStyle, redactMapboxStyleUrl } from "./mapbox-style";
@@ -510,6 +516,8 @@ export class MapController {
   private basemapOriginalPaintValues = new Map<string, Map<string, unknown>>();
   private syncedLayers: GeoLibreLayer[] = [];
   private layerIds: string[] = [];
+  /** This pane's last blend-mode fingerprint; see `blendModeSignature`. */
+  private blendSignature = "";
   private styleReady = false;
   private controlVisibility: Record<BuiltInMapControl, boolean> = {
     ...DEFAULT_BUILT_IN_CONTROL_VISIBILITY,
@@ -575,12 +583,22 @@ export class MapController {
     });
     ensureGeneratedImageHandler(this.map);
     installGlobePopupOcclusion(maplibregl);
+    // Per-layer blend modes wrap MapLibre's render loop, so they have to be in
+    // place before the first frame. Feature-detected: an unsupported build
+    // leaves the map untouched and the Style panel hides the control.
+    installLayerBlendModes(this.map);
     // The constructor options above already apply the static constraints.
     // The transform constraint is installed by the MapCanvas effect that
     // fires on mount, so calling applyMapPreferences here would only add a
     // redundant jumpTo that can interrupt the initial camera.
     const handleStyleReady = () => {
       this.styleReady = true;
+      // Retried here because the constructor call above is a no-op if the
+      // painter does not exist yet: it leaves support undecided rather than
+      // declaring blending unavailable, and this is the "next call" that
+      // resolves it. Idempotent (the wrappers live on shared prototypes and
+      // are installed once), so the repeat costs a feature probe.
+      if (this.map) installLayerBlendModes(this.map);
       this.enforceProjection();
       this.addTerrainSource();
       // If the Terrain control was switched on before the style finished
@@ -1228,9 +1246,11 @@ export class MapController {
     const nextIds = layers.map((l) => l.id);
     const nextIdSet = new Set(nextIds);
     const previousLayers = new Map(this.syncedLayers.map((layer) => [layer.id, layer]));
+    // Built once for the whole pass: every removal below asks the same question of the same list.
+    const survivingSourceIds = externalSourceIdsFor(layers);
     for (const id of this.layerIds) {
       if (!nextIdSet.has(id)) {
-        removeLayerFromMap(map, id, previousLayers.get(id));
+        removeLayerFromMap(map, id, previousLayers.get(id), survivingSourceIds);
       }
     }
 
@@ -1250,6 +1270,19 @@ export class MapController {
     }
     this.layerIds = nextIds;
     this.syncedLayers = layers;
+    // Blend modes are read inside the render loop rather than from a paint
+    // property, so a mode that changed without any other paint change still
+    // needs a frame asking for it. The repaint is gated on THIS controller's
+    // own view of the modes, not on whether the shared registry changed: the
+    // registry is module-level, so in a split view the first pane to sync would
+    // otherwise win the diff and leave the other panes on the previous mode
+    // until an unrelated event forced them to redraw.
+    syncLayerBlendModes(layers);
+    const blendSignature = blendModeSignature(layers);
+    if (blendSignature !== this.blendSignature) {
+      this.blendSignature = blendSignature;
+      map.triggerRepaint();
+    }
     this.applyBasemapVisibility();
     this.applyBasemapOpacity();
     this.publishLayerDisplayNames(layers);

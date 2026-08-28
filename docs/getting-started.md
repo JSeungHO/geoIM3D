@@ -92,7 +92,12 @@ See [iOS](ios.md) for what runs on mobile and for build details.
 
 - [GeoLibre 1.0: A Free, Open-Source Cloud-Native GIS That Runs Anywhere (Browser, Desktop & Jupyter)](https://youtu.be/87Cm0QagtxI)
 - [Geoprocessing in the Browser: 700+ Free GIS Tools in GeoLibre, Zero Install](https://youtu.be/W32bIQO_nG8)
+- [Access Free High-Resolution Disaster Satellite Imagery in Your Browser](https://youtu.be/QQ9i5CTNh84)
+- [Regularize Building Footprints in the Browser with GeoLibre](https://youtu.be/xjfPYxgEEEc)
 - [GeoLibre + GeoLens: A Modern GIS Stack for Self-Hosting Geospatial Data](https://youtu.be/kQqgrxXGd4o)
+- [Create Reusable GIS Workflows with GeoLibre Model Builder and AI Assistant](https://youtu.be/dzjNKM6slgs)
+
+All of them, with chapters and summaries, are on [Video Tutorials](tutorials/videos.md).
 
 ## Run from source
 
@@ -596,6 +601,7 @@ Where to find the output:
 | `GEOLIBRE_STORE_BUILD` | unset | Set `1` for Microsoft Store MSIX builds (removes in-app updater). |
 | `GEOLIBRE_MAS_BUILD` | unset | Set `1` for Mac App Store builds (removes sidecar/server features). |
 | `GEOLIBRE_EMBED` | unset | Set `1` for the Jupyter embed wheel build. |
+| `VITE_GEOLIBRE_GA_MEASUREMENT_ID` | unset | Set a GA4 measurement ID (`G-…`) to load Google Analytics in the **web** build. Unset ships no analytics code at all, which is the default for every build; the desktop and Jupyter embed builds ignore it entirely. Used only by the hosted geolibre.app and web.geolibre.app deploys; see [Privacy Policy](privacy.md#website-analytics). |
 
 Example — build with no external CDN dependencies:
 
@@ -773,3 +779,51 @@ conversions), the dialog falls back to it automatically when the sidecar or its
 extra is unavailable. See [Processing Tools](user-guide/processing.md) for what
 each engine does, and [AI Segmentation](user-guide/segmentation.md) for the
 separate `samgeo-api` model server.
+
+## Linux desktop troubleshooting
+
+### A blank window on a CPU without AVX
+
+On x86-64 CPUs with no AVX (Intel Celeron and Pentium N-series, Atom, and
+anything older than Sandy Bridge), WebKitGTK can kill its own renderer as soon
+as GeoLibre puts WebAssembly to work, leaving a window that never paints.
+The crash is a `SIGILL` in `WebKitWebProcess`: JavaScriptCore's WebAssembly
+tier-up runs a hand-written trampoline that spills the XMM registers with AVX
+instructions without checking whether the CPU has them
+([issue 2087](https://github.com/opengeos/GeoLibre/issues/2087)).
+
+The desktop app works around this on its own. On Linux it checks for AVX at
+startup, and on a CPU without it pins two JavaScriptCore options off before the
+web process starts:
+
+```bash
+JSC_useWasmOSR=false
+JSC_useBBQTierUpChecks=false
+```
+
+Both are needed; together they keep WebAssembly off the tier-up path that runs
+that trampoline. WebAssembly still runs and is still baseline compiled, so the
+cost is bounded: on WebKitGTK 2.52.6 a DuckDB-WASM query took about 2x longer,
+against 34x with the WebAssembly JIT disabled outright.
+
+The two options only work as a pair, so GeoLibre treats them as one decision.
+Turning either one back on is the opt-out and leaves both alone:
+
+```bash
+JSC_useWasmOSR=true geolibre
+```
+
+Setting one of them to `false` yourself is not an opt-out: GeoLibre keeps your
+value and still applies the other half, since half the workaround costs
+WebAssembly performance without keeping the renderer alive.
+
+Or, if a renderer crash persists, fall back to disabling the WebAssembly JIT
+entirely:
+
+```bash
+JSC_useBBQJIT=false geolibre
+```
+
+The check is a runtime CPU feature test, not a model or release-date list, so
+machines that do have AVX are untouched, as are arm64 machines, which never
+reach that code.

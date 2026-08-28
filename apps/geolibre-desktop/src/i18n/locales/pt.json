@@ -699,7 +699,7 @@
       "errorConnectFirst": "Conecte-se ao PostgreSQL primeiro.",
       "errorNoVectorLayers": "A fonte Martin selecionada não tem camadas vetoriais.",
       "errorSelectSource": "Selecione uma fonte Martin para adicionar.",
-      "desktopOnlyNotice": "As camadas PostgreSQL estão disponíveis apenas no GeoLibre Desktop. Este recurso executa um servidor de tiles Martin local, que o aplicativo web não pode iniciar.",
+      "desktopOnlyNotice": "As camadas PostgreSQL estão disponíveis apenas no GeoLibre Desktop. Este recurso executa um servidor de tiles Martin local, que os aplicativos web e móveis não podem iniciar.",
       "savedConnection": "Conexão salva",
       "selectSavedConnection": "Selecionar conexão salva",
       "connectionString": "String de conexão PostgreSQL",
@@ -1900,6 +1900,7 @@
     "description": "Configure as preferências do projeto e as configurações de execução.",
     "saveButton": "Salvar configurações",
     "section": {
+      "language": "Idioma",
       "map": "Mapa",
       "layout": "Layout",
       "appearance": "Aparência",
@@ -1923,6 +1924,39 @@
       "managePlugins": "Gerenciar plugins",
       "styleManager": "Gerenciador de estilos",
       "urlOverrideNote": "Os parâmetros de layout da URL substituem as configurações salvas."
+    },
+    "languagePack": {
+      "title": "Pacotes de idioma",
+      "description": "Adicione traduções opcionais para nomes de ferramentas, parâmetros e textos de ajuda do Whitebox sem aumentar todas as instalações do GeoLibre.",
+      "manage": "Gerenciar pacotes de idioma",
+      "interfaceLanguage": "Idioma da interface",
+      "installed": "Pacote de idioma do Whitebox instalado",
+      "notInstalled": "Nenhum pacote de idioma do Whitebox instalado",
+      "installedDetail": "{{source}} · instalado em {{date}}",
+      "installedDetailNoDate": "{{source}} · instalado",
+      "notInstalledDetail": "Os metadados de processamento do Whitebox permanecem em inglês até você baixar ou importar um pacote.",
+      "downloadsDisabled": "Os downloads oficiais estão desativados nesta compilação. Importe um arquivo de pacote de idioma em vez disso.",
+      "englishFallback": "O Whitebox fornece seus metadados em inglês diretamente, portanto não é necessário um pacote adicional.",
+      "sourceOfficial": "Download oficial",
+      "sourceFile": "Arquivo importado",
+      "download": "Baixar pacote",
+      "importFile": "Importar arquivo",
+      "remove": "Remover pacote",
+      "downloaded": "Pacote de idioma baixado e aplicado.",
+      "imported": "Pacote de idioma para {{locale}} importado e aplicado.",
+      "removed": "Pacote de idioma removido. Os metadados do Whitebox voltam a usar inglês.",
+      "privacy": "Os pacotes são armazenados apenas neste dispositivo. Baixar um pacote envia o código do idioma para {{host}}, mas nenhum dado do projeto.",
+      "privacyLocalOnly": "Os pacotes são armazenados apenas neste dispositivo. Esta compilação não baixa nada: importe um arquivo de pacote de idioma em vez disso.",
+      "browse": "Explorar pacotes de idioma",
+      "errorInvalidJson": "Esse arquivo não é JSON válido.",
+      "errorInvalidFormat": "Esse arquivo não é um pacote de idioma do Whitebox para GeoLibre válido.",
+      "errorUnsupportedVersion": "Esta versão de pacote de idioma não é compatível com esta versão do GeoLibre.",
+      "errorInvalidLocale": "O pacote de idioma tem uma localidade inválida ou inesperada.",
+      "errorUnsupportedLocale": "O GeoLibre não inclui o idioma base de interface exigido por este pacote.",
+      "errorTooLarge": "O pacote de idioma excede o limite de segurança de 5 MB.",
+      "errorNotFound": "Ainda não há um pacote de idioma oficial do Whitebox para este idioma.",
+      "errorDownload": "Não foi possível baixar o pacote de idioma. Verifique sua conexão ou importe um arquivo local.",
+      "errorGeneric": "Não foi possível instalar o pacote de idioma."
     },
     "updates": {
       "title": "Atualizações de software",
@@ -1953,6 +1987,13 @@
       "noProjectSelected": "Nenhum projeto selecionado",
       "globeByDefault": "Ativar o globo 3D por padrão",
       "globeByDefaultHint": "Usado para o espaço de trabalho sem título quando nenhum projeto de inicialização ou link de projeto é fornecido.",
+      "defaultView": "Vista padrão do mapa",
+      "defaultViewHint": "Defina o centro e o zoom do espaço de trabalho sem título.",
+      "longitude": "Longitude do centro",
+      "latitude": "Latitude do centro",
+      "zoom": "Nível de zoom",
+      "useCurrentView": "Usar a vista atual",
+      "viewUnavailable": "A vista atual do mapa não está disponível.",
       "selectError": "Não foi possível ler o projeto selecionado.",
       "restoring": "Abrindo o seu projeto de inicialização…",
       "loadWarning": "O projeto de inicialização não está disponível. O GeoLibre abriu o espaço de trabalho padrão."
@@ -2099,6 +2140,10 @@
       "osEnvNote": "O aplicativo desktop também lê chaves de API correspondentes das variáveis de ambiente do seu sistema. Elas são usadas automaticamente e nunca são salvas no arquivo do projeto — deixe um campo em branco para continuar usando o valor do ambiente.",
       "osEnvField": "Lido da variável de ambiente do sistema {{name}}.",
       "osEnvPlaceholder": "Definido no ambiente do seu sistema",
+      "refreshModels": "Atualizar a lista de modelos",
+      "modelsFailedToLoad": "Não foi possível carregar os modelos: {{message}}",
+      "ollamaNetworkFailure": "Não foi possível acessar o servidor Ollama. Verifique se ele está em execução neste endereço e se OLLAMA_ORIGINS permite a origem deste aplicativo, além de quaisquer regras de firewall ou proxy.",
+      "ollamaTimedOut": "A solicitação ao servidor Ollama expirou. O host pode estar lento, inacessível ou bloqueado por um firewall ou proxy.",
       "newProfile": "Novo perfil",
       "cancel": "Cancelar",
       "addProfile": "Adicionar perfil",
@@ -2506,7 +2551,8 @@
       "getisOrd": "Pontos quentes Getis-Ord Gi*",
       "averageNearestNeighbor": "Vizinho mais próximo médio",
       "kernelDensity": "Densidade de kernel (mapa de calor)",
-      "emergingHotSpot": "Pontos quentes emergentes (cubo espaço-tempo)"
+      "emergingHotSpot": "Pontos quentes emergentes (cubo espaço-tempo)",
+      "compositeScore": "Pontuação composta (índice de aptidão)"
     },
     "rasterTool": {
       "hillshade": "Sombreamento de relevo",
@@ -2780,6 +2826,7 @@
       "embedVectorTitle": "Incorporar dados vetoriais locais?",
       "embedVectorDesc": "Este projeto tem {{count}} camada(s) vetorial(is) local(is) carregada(s) do seu computador. O navegador não pode relê-las quando o projeto é reaberto, então seus dados precisam ser incorporados no arquivo do projeto para serem restaurados. A incorporação adiciona cerca de {{size}} ao arquivo.",
       "embedVectorDescDesktop": "Este projeto tem {{count}} camada(s) vetorial(is) local(is) carregada(s) do seu computador. Incorpore seus dados para tornar o projeto autocontido (adiciona cerca de {{size}}), ou salve referências de arquivo que recarregam do disco quando o projeto é reaberto. As referências mantêm o arquivo pequeno, mas quebram se um arquivo de origem for movido ou excluído posteriormente.",
+      "embedVectorDescMas": "Este projeto tem {{count}} camada(s) vetorial(is) local(is) carregada(s) do seu computador. A sandbox da Mac App Store não consegue manter o acesso a esses arquivos depois que o GeoLibre é fechado, portanto os dados precisam ser incorporados ao arquivo do projeto para serem restaurados. A incorporação adiciona cerca de {{size}} ao arquivo.",
       "embedVectorLargeWarning": "Incorporar cerca de {{size}} gera um arquivo de projeto muito grande. Reabri-lo pode ser lento ou falhar completamente, porque todas as feições precisam ser lidas e mantidas na memória de uma só vez. Para dados desse tamanho, converta as camadas para PMTiles ou FlatGeobuf e adicione-as como camadas remotas em vez de incorporá-las.",
       "embedVectorEmbedButton": "Incorporar dados",
       "embedVectorReferenceButton": "Salvar referências de arquivo",
@@ -4217,6 +4264,8 @@
       "removeConnection": "Remover ligação",
       "removeNode": "Remover nó",
       "resizePanel": "Redimensionar painel",
+      "maximizePanel": "Maximizar painel",
+      "restorePanelSize": "Restaurar tamanho anterior",
       "minimizePanel": "Minimizar painel",
       "restorePanel": "Restaurar painel",
       "resizePalette": "Redimensionar a paleta de ferramentas",
@@ -4253,9 +4302,31 @@
     "parameterField": {
       "selectLayer": "Selecionar uma camada...",
       "selectField": "Selecionar um campo...",
+      "selectOption": "Selecione uma opção...",
       "selectLayerFirst": "Selecione uma camada primeiro",
       "layersSelected_one": "{{count}} camada selecionada",
       "layersSelected_other": "{{count}} camadas selecionadas"
+    },
+    "fieldWeights": {
+      "columnField": "Campo",
+      "columnNormalization": "Normalizar",
+      "columnWeight": "Peso",
+      "columnDirection": "Direção",
+      "addField": "Adicionar campo",
+      "removeAria": "Remover {{field}}",
+      "empty": "Ainda não há campos. Adicione pelo menos dois para montar uma pontuação.",
+      "shares": "Pesos: {{shares}}",
+      "noWeight": "Dê a pelo menos um campo um peso acima de zero.",
+      "normalization": {
+        "minMax": "Mín-máx",
+        "zScore": "Escore Z",
+        "rank": "Posto",
+        "quantile": "Quantil"
+      },
+      "direction": {
+        "higher": "Quanto maior, melhor",
+        "lower": "Quanto menor, melhor"
+      }
     },
     "whitebox": {
       "run": "Executar",
@@ -4307,6 +4378,25 @@
       "auto": "Automático",
       "chooseOutputPath": "Escolher o caminho de saída",
       "chooseInputPath": "Escolher o caminho de entrada",
+      "startServer": "Iniciar servidor",
+      "stopServer": "Parar servidor",
+      "loadingTools": "Carregando…",
+      "lockedPrefix": "[Bloqueado] ",
+      "missingRequiredParameter": "Parâmetro obrigatório ausente: {{label}}",
+      "sidecarCannotReadBrowserFiles": "O sidecar não consegue ler arquivos selecionados no navegador para {{label}}. Execute a ferramenta localmente (WASM) ou informe caminhos do sistema de arquivos acessíveis ao sidecar.",
+      "selectedLayersMissing": "Uma ou mais camadas selecionadas para {{label}} não existem mais.",
+      "layerMissingGeoJson": "A camada “{{layer}}” não tem GeoJSON em memória para {{label}}.",
+      "layerNotFetchable": "A camada “{{layer}}” não pode ser obtida para {{label}}.",
+      "layerMissingPath": "A camada “{{layer}}” não tem um caminho no sistema de arquivos para {{label}}.",
+      "importOutputFailed": "Não foi possível importar a saída do Whitebox.",
+      "showingSnapshotOnly": "Exibindo apenas o catálogo do GitHub.",
+      "liveCatalogEmpty": "O catálogo ao vivo está vazio. Exibindo apenas o catálogo do GitHub.",
+      "jobStatus": {
+        "pending": "Pendente",
+        "running": "Em execução",
+        "succeeded": "Concluído",
+        "failed": "Falhou"
+      },
       "categoryGeneral": "Geral",
       "categoryAll": "Todas ({{total}})",
       "errorLoadSnapshot": "Não foi possível carregar o snapshot do catálogo do Whitebox.",
@@ -5520,6 +5610,50 @@
               }
             }
           }
+        },
+        "composite-score": {
+          "name": "Pontuação composta (índice de aptidão)",
+          "description": "Normalize, pondere e combine vários campos numéricos em um único índice de 0 a 100 e, em seguida, estilize a camada por ele.",
+          "params": {
+            "layer": {
+              "label": "Camada"
+            },
+            "fields": {
+              "label": "Campos e pesos",
+              "description": "Dois ou mais campos numéricos. Cada um recebe uma normalização, um peso relativo e o extremo do seu intervalo que pontua bem."
+            },
+            "aggregation": {
+              "label": "Agregação",
+              "description": "A média geométrica deixa um campo fraco puxar a pontuação para baixo: um campo forte não consegue compensá-lo por completo.",
+              "options": {
+                "weighted-mean": "Média aritmética ponderada",
+                "geometric-mean": "Média geométrica ponderada"
+              }
+            },
+            "nullHandling": {
+              "label": "Feições sem valor",
+              "description": "Não há um padrão seguro: descartar e renormalizar produzem mapas diferentes, então escolha o que este índice significa.",
+              "options": {
+                "drop": "Descartar a feição do resultado",
+                "renormalize": "Renormalizar os pesos sobre os campos que ela tem"
+              }
+            },
+            "scoreField": {
+              "label": "Nome do campo de pontuação",
+              "description": "Nome da coluna numérica em que a pontuação é gravada."
+            },
+            "scoreRange": {
+              "label": "Intervalo da pontuação",
+              "options": {
+                "0-100": "0 a 100",
+                "0-1": "0 a 1"
+              }
+            },
+            "keepComponents": {
+              "label": "Manter os componentes normalizados",
+              "description": "Grava o valor normalizado de cada campo em uma coluna própria, para que a pontuação possa ser auditada em vez de aceita sem verificação."
+            }
+          }
         }
       },
       "raster": {
@@ -6004,6 +6138,7 @@
     "editValues": "Editar valores de atributos",
     "editTitleFinishGeometry": "Termine a edição de geometria para editar atributos",
     "editTitleReadOnly": "A edição não está disponível para camadas do tipo Adicionar camada vetorial",
+    "editTitleCapabilityDisabled": "A edição está desativada para esta camada",
     "editTitleUseSaveCancel": "Use Salvar ou Cancelar para terminar a edição",
     "exitEditMode": "Sair do modo de edição",
     "editTitleDuckdb": "Editar os atributos de consulta DuckDB exibidos na memória",
@@ -6029,6 +6164,7 @@
     "dashboard": "Dashboard",
     "exportSelectedLayer": "Exportar camada selecionada",
     "exportTitleDisabled": "A exportação requer uma camada baseada em GeoJSON",
+    "exportTitleCapabilityDisabled": "A exportação está desativada para esta camada",
     "cancelEdits": "Cancelar edições de atributos",
     "searchPlaceholder": "Pesquisar atributos...",
     "searchAria": "Pesquisar atributos",
@@ -6200,6 +6336,15 @@
     "addClass": "Adicionar classe",
     "removeClass": "Remover classe",
     "beforeIdSavedUnavailable": "Salvo (indisponível)",
+    "blendMode": "Mesclagem",
+    "blendModeFor": "Modo de mesclagem de {{name}}",
+    "blendModes": {
+      "normal": "Normal",
+      "multiply": "Multiplicar",
+      "screen": "Tela",
+      "lighten": "Clarear",
+      "add": "Adicionar"
+    },
     "raster": {
       "greyscale": "Escala de cinza",
       "greyscaleHint": "Alternar um mapa base em escala de cinza (leva a saturação ao mínimo)",
@@ -6679,6 +6824,60 @@
       "noFields": "A camada não tem campos de atributos para configurar.",
       "minMaxInvalid": "O mínimo deve ser menor ou igual ao máximo."
     },
+    "popup": {
+      "heading": "Popup",
+      "showOnClick": "Mostrar o popup ao clicar (Identificar)",
+      "showOnHover": "Mostrar a dica ao passar o cursor",
+      "hoverHint": "A dica mostra o título e os campos que você marcar como “Na dica”.",
+      "titleField": "Campo do título",
+      "titleFieldDefault": "Nome da camada",
+      "titleExpression": "Expressão do título",
+      "titleExpressionPlaceholder": "[\"get\", \"name\"]",
+      "bodyExpression": "Expressão do corpo",
+      "bodyExpressionPlaceholder": "[\"concat\", [\"get\", \"name\"], \" has \", [\"to-string\", [\"get\", \"pop_max\"]], \" residents\"]",
+      "bodyExpressionHint": "Uma expressão de corpo substitui as linhas de campos pelo seu próprio texto.",
+      "bodyReplacesRows": "Enquanto houver uma expressão de corpo, ela substitui as linhas de campos e a linha do id.",
+      "invalidExpression": "Expressão inválida",
+      "openBuilder": "Abrir o construtor de expressões",
+      "showFeatureId": "Mostrar a linha do id da feição",
+      "fields": "Campos",
+      "allFields": "Nenhum campo escolhido, então todos os campos visíveis são mostrados, na ordem dos próprios dados.",
+      "addField": "Adicionar um campo…",
+      "noFieldsLeft": "Todos os campos já estão listados",
+      "chooseFields": "Escolher campos",
+      "resetFields": "Mostrar todos os campos",
+      "removeField": "Remover campo",
+      "moveUp": "Mover o campo para cima",
+      "moveDown": "Mover o campo para baixo",
+      "dragToReorder": "Arraste para reordenar",
+      "dragNamedToReorder": "Arraste {{name}} para reordenar",
+      "label": "Rótulo",
+      "kind": "Tipo de valor",
+      "kinds": {
+        "auto": "Automático",
+        "text": "Texto",
+        "number": "Número",
+        "date": "Data",
+        "link": "Link",
+        "image": "Imagem"
+      },
+      "decimals": "Casas decimais",
+      "thousands": "Agrupar os milhares",
+      "dateFormat": "Formato de data",
+      "dateFormats": {
+        "date": "Data",
+        "datetime": "Data e hora",
+        "time": "Hora",
+        "iso": "ISO 8601",
+        "year": "Ano"
+      },
+      "linkLabel": "Texto do link",
+      "linkLabelPlaceholder": "A própria URL",
+      "prefix": "Prefixo",
+      "suffix": "Sufixo",
+      "inHover": "Na dica",
+      "imageNotInHover": "Campos de imagem ficam no popup de clique; uma dica não tem espaço para uma imagem."
+    },
     "editorTracking": {
       "heading": "Rastreamento de edição",
       "description": "Registre quem criou cada feição e quem a alterou por último. Os campos abaixo são preenchidos automaticamente quando feições são desenhadas, editadas, calculadas ou coletadas.",
@@ -6694,6 +6893,51 @@
       "duplicateName": "Cada campo de rastreamento precisa de um nome diferente.",
       "columnTaken": "“{{name}}” já é uma coluna de atributos. O rastreamento sobrescreveria seus valores."
     }
+  },
+  "quickFilters": {
+    "heading": "Filtros rápidos",
+    "empty": "Ainda não há filtros. Adicione um abaixo para restringir esta camada por qualquer um dos seus campos.",
+    "addFilter": "Adicionar um filtro…",
+    "allFieldsUsed": "Todos os campos já têm um filtro",
+    "removeAll": "Remover todos",
+    "clearAll": "Limpar filtros",
+    "clearOne": "Limpar este filtro",
+    "clearOneNamed": "Limpar o filtro de {{field}}",
+    "remove": "Remover filtro",
+    "removeNamed": "Remover o filtro de {{field}}",
+    "controlType": "Tipo de filtro",
+    "enabledTitle": "Aplicar este filtro",
+    "kind": {
+      "categorical": "Valores",
+      "range": "Intervalo",
+      "date": "Datas",
+      "text": "Texto"
+    },
+    "operator": {
+      "contains": "Contém",
+      "startsWith": "Começa com",
+      "equals": "É exatamente"
+    },
+    "searchValues": "Pesquisar valores",
+    "noValues": "Este campo não tem valores para escolher.",
+    "noMatchingValues": "Nenhum valor corresponde à sua busca.",
+    "selectAll": "Selecionar tudo",
+    "selectNone": "Selecionar nenhum",
+    "allValues": "Todos os valores",
+    "selectedCount_one": "{{count}} selecionado",
+    "selectedCount_other": "{{count}} selecionados",
+    "rangeMin": "Mínimo",
+    "rangeMax": "Máximo",
+    "rangeSeparator": "a",
+    "dateFrom": "De",
+    "dateTo": "Até",
+    "textOperator": "Correspondência",
+    "textValue": "Texto a procurar",
+    "textPlaceholder": "Digite para filtrar",
+    "noFields": "Esta camada não tem atributos para filtrar.",
+    "noTileFeatures": "Nenhuma feição foi carregada ainda. Desloque ou aproxime o mapa até os dados e reabra esta seção.",
+    "viewportSampleHint": "Os valores vêm dos tiles carregados no momento, então a lista cresce conforme você desloca e aproxima o mapa.",
+    "layerFilteredHint": "Um filtro rápido está ocultando parte das feições desta camada."
   },
   "vectorExport": {
     "invalidKmlCoordinatesByPosition": "A exportação KML não conseguiu gravar a feição {{position}} porque ela tem coordenadas inválidas.",
@@ -6711,6 +6955,10 @@
     "moveDown": "Mover para baixo",
     "zoomToLayer": "Ampliar para a camada",
     "layerActions": "Ações da camada",
+    "exportSketchesAsLayer": "Exportar esboços como nova camada",
+    "exportSketchesKeep": "Manter feições nos Esboços",
+    "exportSketchesClear": "Limpar Esboços após exportar",
+    "exportedSketchesName": "Exportação de esboços",
     "metadata": "Metadados",
     "removeLayer": "Remover camada",
     "identifyFeatures": "Identificar feições",
@@ -6718,6 +6966,7 @@
     "identifyInspectPixels": "Inspecionar valores de pixel",
     "identifyStopInspectPixels": "Parar de inspecionar valores de pixel",
     "identifyUnavailable": "A identificação está disponível apenas para camadas vetoriais, WMS e COG",
+    "identifyCapabilityDisabled": "A consulta está desativada para esta camada",
     "selectFeaturesMenu": "Selecionar feições",
     "selectFeaturesSingle": "Selecionar feições por clique",
     "selectFeaturesRectangle": "Selecionar feições por retângulo",
@@ -6797,6 +7046,8 @@
     "searchPlacesClear": "Limpar pesquisa",
     "searchPlacesGoToCoordinate": "Ir para {{coordinate}}",
     "searchPlacesGoToH3Cell": "Ir para a célula H3 {{cell}} (res. {{resolution}})",
+    "searchPlacesGroup": "Lugares",
+    "searchFeaturesPartial": "(parcial)",
     "background": "Fundo",
     "backgroundCannotReorder": "O fundo não pode ser reordenado",
     "hideBackground": "Ocultar fundo",
@@ -7314,5 +7565,60 @@
     "mapPoint": "Ponto do mapa",
     "reply": "Responder",
     "replyPlaceholder": "Escreva uma resposta..."
+  },
+  "samgeoPlugin": {
+    "panelTitle": "Segmentação SamGeo",
+    "intro": "Segmente imagens com SAM3 usando texto, pontos, uma caixa ou máscaras automáticas.",
+    "apiUrl": "URL da API do SamGeo",
+    "checkConnection": "Verificar conexão",
+    "notChecked": "Não verificada",
+    "checking": "Verificando…",
+    "connected": "Conectada",
+    "unavailable": "Indisponível: {{error}}",
+    "image": "Imagem",
+    "imageSource": "Origem da imagem",
+    "imageUpload": "Enviar um arquivo",
+    "noRasterLayers": "Nenhuma camada raster carregada",
+    "layerUnreadable": "Esta camada não tem uma fonte GeoTIFF legível; exporte-a ou envie o arquivo.",
+    "docsLink": "Como configurar a API do SamGeo",
+    "mode": "Modo",
+    "modeText": "Prompt de texto",
+    "modePoints": "Prompts de pontos",
+    "modeBox": "Caixa delimitadora (encontrar semelhantes)",
+    "modeAutomatic": "Automático (tudo)",
+    "modelId": "ID do modelo",
+    "sam2ModelId": "Modelo SAM2",
+    "automaticHint": "O modo automático executa o gerador de máscaras do SAM2, que segmenta todos os objetos; o SAM3 responde apenas a prompts.",
+    "textPrompt": "Prompt de texto",
+    "confidence": "Limite de confiança",
+    "minSize": "Tamanho mínimo da máscara (pixels)",
+    "maxSize": "Tamanho máximo da máscara (0 = sem limite)",
+    "backend": "Backend",
+    "foregroundPoint": "+ Ponto de primeiro plano",
+    "backgroundPoint": "− Ponto de fundo",
+    "clickForeground": "Clique no mapa para adicionar um ponto de primeiro plano.",
+    "clickBackground": "Clique no mapa para adicionar um ponto de fundo.",
+    "pointAdded": "Ponto adicionado.",
+    "drawBox": "Desenhar caixa no mapa",
+    "dragBox": "Arraste um retângulo no mapa.",
+    "boxAdded": "Caixa adicionada.",
+    "boxSummary": "Caixa: {{box}}",
+    "noBox": "Nenhuma caixa desenhada.",
+    "pointSummary": "{{foreground}} de primeiro plano, {{background}} de fundo",
+    "pointsPerSide": "Pontos por lado",
+    "predIou": "Limite de IoU previsto",
+    "stability": "Limite de estabilidade",
+    "clearPrompts": "Limpar prompts",
+    "promptsCleared": "Prompts limpos.",
+    "segment": "Segmentar",
+    "chooseImage": "Escolha primeiro uma imagem.",
+    "enterPrompt": "Digite um prompt de texto.",
+    "addPoint": "Adicione pelo menos um ponto de primeiro plano.",
+    "drawBoxFirst": "Desenhe primeiro uma caixa.",
+    "segmenting": "Segmentando…",
+    "noObjects": "Nenhum objeto encontrado.",
+    "added": "{{count}} feição(ões) adicionada(s){{layer}}.",
+    "badResponse": "A API do SamGeo não retornou uma FeatureCollection GeoJSON.",
+    "unknownProjection": "O resultado não está em WGS84 e a imagem não traz uma projeção legível, por isso não pode ser posicionado no mapa. Use um GeoTIFF georreferenciado."
   }
 }

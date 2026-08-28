@@ -36,6 +36,8 @@ import {
   Download,
   GripVertical,
   LayoutGrid,
+  Maximize2,
+  Minimize2,
   PanelLeft,
   PanelRight,
   Loader2,
@@ -279,6 +281,7 @@ export function ModelBuilderPanel({
 
   const [position, setPosition] = useState({ x: 48, y: 48 });
   const [size, setSize] = useState({ width: 980, height: 560 });
+  const [maximized, setMaximized] = useState(false);
   const [paletteWidth, setPaletteWidth] = useState(DEFAULT_PALETTE_WIDTH);
   const [inspectorWidth, setInspectorWidth] = useState(DEFAULT_INSPECTOR_WIDTH);
   const [logHeight, setLogHeight] = useState(DEFAULT_LOG_HEIGHT);
@@ -319,6 +322,10 @@ export function ModelBuilderPanel({
   const sectionRef = useRef<HTMLElement | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const importRef = useRef<HTMLInputElement | null>(null);
+  const restoredGeometryRef = useRef<{
+    position: { x: number; y: number };
+    size: { width: number; height: number };
+  } | null>(null);
 
   const appendLog = useCallback((line: string) => setLog((prev) => [...prev, line]), []);
 
@@ -334,6 +341,11 @@ export function ModelBuilderPanel({
   const fitToContainer = useCallback(() => {
     const bounds = sectionRef.current?.parentElement?.getBoundingClientRect();
     if (!bounds) return;
+    if (maximized) {
+      setPosition({ x: 0, y: 0 });
+      setSize({ width: bounds.width, height: bounds.height });
+      return;
+    }
     const maxWidth = Math.max(FLOOR_WIDTH, bounds.width - EDGE_MARGIN * 2);
     const maxHeight = Math.max(FLOOR_HEIGHT, bounds.height - EDGE_MARGIN * 2);
     const width = clamp(size.width, Math.min(MIN_WIDTH, maxWidth), maxWidth);
@@ -343,7 +355,7 @@ export function ModelBuilderPanel({
       x: clamp(current.x, 0, Math.max(0, bounds.width - width - EDGE_MARGIN)),
       y: clamp(current.y, 0, Math.max(0, bounds.height - height - EDGE_MARGIN)),
     }));
-  }, [size.width, size.height]);
+  }, [maximized, size.width, size.height]);
 
   // Re-fit whenever the map area changes, not just when the panel opens: a
   // resized window or a side panel opening would otherwise leave the panel
@@ -433,19 +445,23 @@ export function ModelBuilderPanel({
   }, [issues]);
 
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
-  // The palette renders translated names and group headings, so the search has
-  // to see them too or a user can only find a tool by its English name.
+  // The palette renders translated names and owned-catalog group headings, so
+  // the search has to see them too or a user can only find a tool by its
+  // English name.
   const filtered = useMemo(
     () =>
       searchModelTools(catalog, search, (descriptor) => {
         const catalogName = modelProviderCatalog(descriptor.provider);
-        // Whitebox metadata is not translated, and its raw name/group are
-        // already in the haystack, so there is nothing to add for those.
+        // Whitebox categories render verbatim (see translateModelToolGroup), so
+        // only its tool name is added to the localized haystack.
         if (!catalogName) return "";
-        return `${translateToolName(t, catalogName, {
+        const name = translateToolName(t, catalogName, {
           id: descriptor.toolId,
           name: descriptor.name,
-        })} ${translateToolGroup(t, descriptor.group)}`;
+        });
+        const group =
+          descriptor.provider === "vector" ? translateToolGroup(t, descriptor.group) : "";
+        return `${name} ${group}`;
       }),
     [catalog, search, t],
   );
@@ -1011,6 +1027,7 @@ export function ModelBuilderPanel({
   // --- Panel chrome -------------------------------------------------------
 
   const handleDragStart = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (maximized) return;
     if ((event.target as HTMLElement).closest("button, input")) return;
     event.preventDefault();
     const handle = event.currentTarget;
@@ -1222,6 +1239,27 @@ export function ModelBuilderPanel({
     handle.addEventListener("pointercancel", handleEnd);
   };
 
+  const toggleMaximized = useCallback(() => {
+    if (maximized) {
+      const restored = restoredGeometryRef.current;
+      if (restored) {
+        setPosition(restored.position);
+        setSize(restored.size);
+      }
+      restoredGeometryRef.current = null;
+      setMaximized(false);
+      return;
+    }
+
+    const bounds = sectionRef.current?.parentElement?.getBoundingClientRect();
+    if (!bounds) return;
+    restoredGeometryRef.current = { position, size };
+    setMinimized(false);
+    setPosition({ x: 0, y: 0 });
+    setSize({ width: bounds.width, height: bounds.height });
+    setMaximized(true);
+  }, [maximized, position, size]);
+
   if (!open) return null;
 
   const canvasExtent = graph.nodes.reduce(
@@ -1244,7 +1282,10 @@ export function ModelBuilderPanel({
     <section
       ref={sectionRef}
       aria-label={t("processing.modelBuilder.title")}
-      className="pointer-events-auto absolute z-20 flex flex-col overflow-hidden rounded-lg border bg-card shadow-xl"
+      className={cn(
+        "pointer-events-auto absolute z-20 flex flex-col overflow-hidden border bg-card shadow-xl",
+        maximized ? "rounded-none" : "rounded-lg",
+      )}
       style={
         {
           left: position.x,
@@ -1420,6 +1461,25 @@ export function ModelBuilderPanel({
             }
           >
             {minimized ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 shrink-0 p-0"
+            onClick={toggleMaximized}
+            aria-pressed={maximized}
+            aria-label={
+              maximized
+                ? t("processing.modelBuilder.restorePanelSize")
+                : t("processing.modelBuilder.maximizePanel")
+            }
+            title={
+              maximized
+                ? t("processing.modelBuilder.restorePanelSize")
+                : t("processing.modelBuilder.maximizePanel")
+            }
+          >
+            {maximized ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </Button>
           <Button
             size="sm"
@@ -1776,7 +1836,7 @@ export function ModelBuilderPanel({
       )}
 
       {/* Resize grip */}
-      {!minimized && (
+      {!minimized && !maximized && (
         <div
           onPointerDown={handleResizeStart}
           onKeyDown={handleResizeKey}

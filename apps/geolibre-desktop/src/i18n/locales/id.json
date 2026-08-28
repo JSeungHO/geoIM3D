@@ -684,7 +684,7 @@
       "errorConnectFirst": "Hubungkan ke PostgreSQL terlebih dahulu.",
       "errorNoVectorLayers": "Sumber Martin yang dipilih tidak memiliki layer vektor.",
       "errorSelectSource": "Pilih sumber Martin untuk ditambahkan.",
-      "desktopOnlyNotice": "Layer PostgreSQL hanya tersedia di GeoLibre Desktop. Fitur ini menjalankan server ubin Martin lokal, yang tidak dapat diluncurkan oleh aplikasi web.",
+      "desktopOnlyNotice": "Layer PostgreSQL hanya tersedia di GeoLibre Desktop. Fitur ini menjalankan server ubin Martin lokal, yang tidak dapat diluncurkan oleh aplikasi web dan seluler.",
       "savedConnection": "Koneksi tersimpan",
       "selectSavedConnection": "Pilih koneksi tersimpan",
       "connectionString": "String koneksi PostgreSQL",
@@ -1856,6 +1856,7 @@
     "description": "Konfigurasi preferensi proyek dan pengaturan runtime.",
     "saveButton": "Simpan Pengaturan",
     "section": {
+      "language": "Bahasa",
       "map": "Peta",
       "layout": "Tata Letak",
       "appearance": "Tampilan",
@@ -1879,6 +1880,39 @@
       "managePlugins": "Kelola Plugin",
       "styleManager": "Pengelola Gaya",
       "urlOverrideNote": "Parameter tata letak URL menimpa pengaturan yang tersimpan."
+    },
+    "languagePack": {
+      "title": "Paket bahasa",
+      "description": "Tambahkan terjemahan opsional untuk nama alat, parameter, dan teks bantuan Whitebox tanpa memperbesar setiap pemasangan GeoLibre.",
+      "manage": "Kelola paket bahasa",
+      "interfaceLanguage": "Bahasa antarmuka",
+      "installed": "Paket bahasa Whitebox terpasang",
+      "notInstalled": "Tidak ada paket bahasa Whitebox yang terpasang",
+      "installedDetail": "{{source}} · dipasang {{date}}",
+      "installedDetailNoDate": "{{source}} · dipasang",
+      "notInstalledDetail": "Metadata pemrosesan Whitebox tetap dalam bahasa Inggris sampai Anda mengunduh atau mengimpor sebuah paket.",
+      "downloadsDisabled": "Unduhan resmi dinonaktifkan pada build ini. Impor berkas paket bahasa sebagai gantinya.",
+      "englishFallback": "Whitebox menyediakan metadata bahasa Inggrisnya secara langsung, sehingga paket tambahan tidak diperlukan.",
+      "sourceOfficial": "Unduhan resmi",
+      "sourceFile": "Berkas yang diimpor",
+      "download": "Unduh paket",
+      "importFile": "Impor berkas",
+      "remove": "Hapus paket",
+      "downloaded": "Paket bahasa diunduh dan diterapkan.",
+      "imported": "Paket bahasa untuk {{locale}} diimpor dan diterapkan.",
+      "removed": "Paket bahasa dihapus. Metadata Whitebox kini menggunakan bahasa Inggris.",
+      "privacy": "Paket hanya disimpan di perangkat ini. Mengunduh paket akan mengirim kode lokal ke {{host}}, tetapi tidak mengirim data proyek.",
+      "privacyLocalOnly": "Paket hanya disimpan di perangkat ini. Build ini tidak mengunduh apa pun: impor berkas paket bahasa sebagai gantinya.",
+      "browse": "Jelajahi paket bahasa",
+      "errorInvalidJson": "Berkas tersebut bukan JSON yang valid.",
+      "errorInvalidFormat": "Berkas tersebut bukan paket bahasa Whitebox GeoLibre yang valid.",
+      "errorUnsupportedVersion": "Versi paket bahasa ini tidak didukung oleh rilis GeoLibre ini.",
+      "errorInvalidLocale": "Paket bahasa memiliki lokal yang tidak valid atau tidak diharapkan.",
+      "errorUnsupportedLocale": "GeoLibre tidak menyertakan bahasa antarmuka dasar yang dibutuhkan paket ini.",
+      "errorTooLarge": "Paket bahasa melebihi batas keamanan 5 MB.",
+      "errorNotFound": "Belum ada paket bahasa Whitebox resmi untuk bahasa ini.",
+      "errorDownload": "Paket bahasa tidak dapat diunduh. Periksa koneksi Anda atau impor berkas lokal.",
+      "errorGeneric": "Paket bahasa tidak dapat dipasang."
     },
     "updates": {
       "title": "Pembaruan Perangkat Lunak",
@@ -1909,6 +1943,13 @@
       "noProjectSelected": "Tidak ada proyek yang dipilih",
       "globeByDefault": "Aktifkan bola dunia 3D secara bawaan",
       "globeByDefaultHint": "Digunakan untuk ruang kerja tanpa judul saat tidak ada proyek saat memulai atau tautan proyek yang diberikan.",
+      "defaultView": "Tampilan peta bawaan",
+      "defaultViewHint": "Tetapkan pusat dan tingkat zoom untuk ruang kerja tanpa judul.",
+      "longitude": "Bujur pusat",
+      "latitude": "Lintang pusat",
+      "zoom": "Tingkat zoom",
+      "useCurrentView": "Gunakan Tampilan Saat Ini",
+      "viewUnavailable": "Tampilan peta saat ini tidak tersedia.",
       "selectError": "Proyek yang dipilih tidak dapat dibaca.",
       "restoring": "Membuka proyek saat memulai Anda…",
       "loadWarning": "Proyek saat memulai tidak tersedia. GeoLibre membuka ruang kerja bawaan sebagai gantinya."
@@ -2054,6 +2095,10 @@
       "osEnvNote": "Aplikasi desktop juga membaca kunci API yang cocok dari variabel lingkungan sistem Anda. Kunci tersebut digunakan secara otomatis dan tidak pernah disimpan ke file proyek — biarkan bidang kosong untuk tetap menggunakan nilai lingkungan.",
       "osEnvField": "Dibaca dari variabel lingkungan sistem Anda {{name}}.",
       "osEnvPlaceholder": "Atur di lingkungan sistem Anda",
+      "refreshModels": "Segarkan daftar model",
+      "modelsFailedToLoad": "Tidak dapat memuat model: {{message}}",
+      "ollamaNetworkFailure": "Tidak dapat menjangkau server Ollama. Periksa apakah server berjalan di alamat ini dan apakah OLLAMA_ORIGINS mengizinkan origin aplikasi ini, beserta aturan firewall atau proxy apa pun.",
+      "ollamaTimedOut": "Permintaan ke server Ollama melebihi batas waktu. Host mungkin lambat, tidak dapat dijangkau, atau diblokir oleh firewall atau proxy.",
       "newProfile": "Profil baru",
       "cancel": "Batal",
       "addProfile": "Tambah profil",
@@ -2460,7 +2505,8 @@
       "getisOrd": "Hotspot Getis-Ord Gi*",
       "averageNearestNeighbor": "Rata-rata tetangga terdekat",
       "kernelDensity": "Kepadatan kernel (heatmap)",
-      "emergingHotSpot": "Hotspot yang muncul (kubus ruang-waktu)"
+      "emergingHotSpot": "Hotspot yang muncul (kubus ruang-waktu)",
+      "compositeScore": "Skor komposit (indeks kesesuaian)"
     },
     "rasterTool": {
       "hillshade": "Hillshade",
@@ -2731,6 +2777,7 @@
       "embedVectorTitle": "Sematkan data vektor lokal?",
       "embedVectorDesc": "Proyek ini memiliki {{count}} layer vektor lokal yang dimuat dari komputer Anda. Browser tidak dapat membaca ulang layer ini saat proyek dibuka kembali, sehingga datanya harus disematkan dalam file proyek untuk dipulihkan. Menyematkan menambah sekitar {{size}} ke file.",
       "embedVectorDescDesktop": "Proyek ini memiliki {{count}} layer vektor lokal yang dimuat dari komputer Anda. Sematkan datanya agar proyek mandiri (menambah sekitar {{size}}), atau simpan referensi file yang dimuat ulang dari disk saat proyek dibuka kembali. Referensi menjaga file tetap kecil tetapi rusak jika file sumber kemudian dipindahkan atau dihapus.",
+      "embedVectorDescMas": "Proyek ini memiliki {{count}} layer vektor lokal yang dimuat dari komputer Anda. Sandbox Mac App Store tidak dapat mempertahankan akses ke file tersebut setelah GeoLibre ditutup, sehingga datanya harus disematkan dalam file proyek agar dapat dipulihkan. Penyematan menambah sekitar {{size}} ke file.",
       "embedVectorLargeWarning": "Menyematkan sekitar {{size}} menghasilkan berkas proyek yang sangat besar. Membukanya kembali bisa lambat atau gagal sama sekali, karena setiap fitur harus diurai dan disimpan di memori sekaligus. Untuk data sebesar ini, konversikan lapisan ke PMTiles atau FlatGeobuf dan tambahkan sebagai lapisan jarak jauh alih-alih menyematkannya.",
       "embedVectorEmbedButton": "Sematkan data",
       "embedVectorReferenceButton": "Simpan referensi file",
@@ -4149,6 +4196,8 @@
       "removeConnection": "Hapus koneksi",
       "removeNode": "Hapus simpul",
       "resizePanel": "Ubah ukuran panel",
+      "maximizePanel": "Maksimalkan panel",
+      "restorePanelSize": "Pulihkan ukuran sebelumnya",
       "minimizePanel": "Perkecil panel",
       "restorePanel": "Pulihkan panel",
       "resizePalette": "Ubah ukuran palet alat",
@@ -4185,8 +4234,30 @@
     "parameterField": {
       "selectLayer": "Pilih layer...",
       "selectField": "Pilih bidang...",
+      "selectOption": "Pilih sebuah opsi...",
       "selectLayerFirst": "Pilih layer terlebih dahulu",
       "layersSelected_other": "{{count}} layer dipilih"
+    },
+    "fieldWeights": {
+      "columnField": "Bidang",
+      "columnNormalization": "Normalisasi",
+      "columnWeight": "Bobot",
+      "columnDirection": "Arah",
+      "addField": "Tambah bidang",
+      "removeAria": "Hapus {{field}}",
+      "empty": "Belum ada bidang. Tambahkan setidaknya dua untuk menyusun skor.",
+      "shares": "Bobot: {{shares}}",
+      "noWeight": "Beri setidaknya satu bidang bobot di atas nol.",
+      "normalization": {
+        "minMax": "Min-maks",
+        "zScore": "Skor Z",
+        "rank": "Peringkat",
+        "quantile": "Kuantil"
+      },
+      "direction": {
+        "higher": "Makin tinggi makin baik",
+        "lower": "Makin rendah makin baik"
+      }
     },
     "whitebox": {
       "run": "Jalankan",
@@ -4237,6 +4308,25 @@
       "auto": "Otomatis",
       "chooseOutputPath": "Pilih jalur keluaran",
       "chooseInputPath": "Pilih jalur masukan",
+      "startServer": "Mulai server",
+      "stopServer": "Hentikan server",
+      "loadingTools": "Memuat…",
+      "lockedPrefix": "[Terkunci] ",
+      "missingRequiredParameter": "Parameter wajib tidak ada: {{label}}",
+      "sidecarCannotReadBrowserFiles": "Sidecar tidak dapat membaca berkas yang dipilih di browser untuk {{label}}. Jalankan alat secara lokal (WASM), atau masukkan jalur berkas yang dapat diakses sidecar.",
+      "selectedLayersMissing": "Satu atau beberapa layer yang dipilih untuk {{label}} sudah tidak ada.",
+      "layerMissingGeoJson": "Layer “{{layer}}” tidak memiliki GeoJSON di memori untuk {{label}}.",
+      "layerNotFetchable": "Layer “{{layer}}” tidak dapat diambil untuk {{label}}.",
+      "layerMissingPath": "Layer “{{layer}}” tidak memiliki jalur berkas untuk {{label}}.",
+      "importOutputFailed": "Tidak dapat mengimpor keluaran Whitebox.",
+      "showingSnapshotOnly": "Hanya menampilkan katalog GitHub.",
+      "liveCatalogEmpty": "Katalog langsung kosong. Hanya menampilkan katalog GitHub.",
+      "jobStatus": {
+        "pending": "Tertunda",
+        "running": "Berjalan",
+        "succeeded": "Berhasil",
+        "failed": "Gagal"
+      },
       "categoryGeneral": "Umum",
       "categoryAll": "Semua ({{total}})",
       "errorLoadSnapshot": "Tidak dapat memuat snapshot katalog Whitebox.",
@@ -5450,6 +5540,50 @@
               }
             }
           }
+        },
+        "composite-score": {
+          "name": "Skor komposit (indeks kesesuaian)",
+          "description": "Normalisasi, beri bobot, dan gabungkan beberapa bidang numerik menjadi satu indeks 0 sampai 100, lalu beri gaya pada layer berdasarkan indeks itu.",
+          "params": {
+            "layer": {
+              "label": "Layer"
+            },
+            "fields": {
+              "label": "Bidang dan bobot",
+              "description": "Dua bidang numerik atau lebih. Masing-masing mendapat metode normalisasi, bobot relatif, dan ujung rentangnya yang dinilai baik."
+            },
+            "aggregation": {
+              "label": "Agregasi",
+              "description": "Rata-rata geometrik membiarkan satu bidang yang lemah menarik skor turun: bidang yang kuat tidak dapat sepenuhnya menutupinya.",
+              "options": {
+                "weighted-mean": "Rata-rata aritmetik berbobot",
+                "geometric-mean": "Rata-rata geometrik berbobot"
+              }
+            },
+            "nullHandling": {
+              "label": "Fitur tanpa nilai",
+              "description": "Tidak ada default yang aman: membuang dan menormalisasi ulang menghasilkan peta yang berbeda, jadi pilih makna indeks ini.",
+              "options": {
+                "drop": "Buang fitur tersebut dari hasil",
+                "renormalize": "Normalisasi ulang bobot pada bidang yang dimilikinya"
+              }
+            },
+            "scoreField": {
+              "label": "Nama bidang skor",
+              "description": "Nama kolom numerik tempat skor ditulis."
+            },
+            "scoreRange": {
+              "label": "Rentang skor",
+              "options": {
+                "0-100": "0 sampai 100",
+                "0-1": "0 sampai 1"
+              }
+            },
+            "keepComponents": {
+              "label": "Pertahankan komponen ternormalisasi",
+              "description": "Menulis nilai ternormalisasi setiap bidang sebagai kolom tersendiri, sehingga skor dapat diaudit alih-alih diterima begitu saja."
+            }
+          }
         }
       },
       "raster": {
@@ -5934,6 +6068,7 @@
     "editValues": "Edit nilai atribut",
     "editTitleFinishGeometry": "Selesaikan pengeditan geometri untuk mengedit atribut",
     "editTitleReadOnly": "Pengeditan tidak tersedia untuk layer Tambahkan Layer Vektor",
+    "editTitleCapabilityDisabled": "Pengeditan dinonaktifkan untuk layer ini",
     "editTitleUseSaveCancel": "Gunakan Simpan atau Batal untuk menyelesaikan pengeditan",
     "exitEditMode": "Keluar dari mode edit",
     "editTitleDuckdb": "Edit atribut kueri DuckDB yang ditampilkan dalam memori",
@@ -5959,6 +6094,7 @@
     "dashboard": "Dasbor",
     "exportSelectedLayer": "Ekspor layer yang dipilih",
     "exportTitleDisabled": "Ekspor memerlukan layer berbasis GeoJSON",
+    "exportTitleCapabilityDisabled": "Ekspor dinonaktifkan untuk layer ini",
     "cancelEdits": "Batalkan pengeditan atribut",
     "searchPlaceholder": "Cari atribut...",
     "searchAria": "Cari atribut",
@@ -6126,6 +6262,15 @@
     "addClass": "Tambah kelas",
     "removeClass": "Hapus kelas",
     "beforeIdSavedUnavailable": "Tersimpan (tidak tersedia)",
+    "blendMode": "Pembauran",
+    "blendModeFor": "Mode pembauran untuk {{name}}",
+    "blendModes": {
+      "normal": "Normal",
+      "multiply": "Perkalian",
+      "screen": "Layar",
+      "lighten": "Terangkan",
+      "add": "Tambah"
+    },
     "raster": {
       "greyscale": "Skala abu-abu",
       "greyscaleHint": "Alihkan peta dasar skala abu-abu (menurunkan saturasi ke minimum)",
@@ -6602,6 +6747,60 @@
       "noFields": "Lapisan tidak memiliki bidang atribut untuk dikonfigurasi.",
       "minMaxInvalid": "Min harus kurang dari atau sama dengan Maks."
     },
+    "popup": {
+      "heading": "Popup",
+      "showOnClick": "Tampilkan popup saat diklik (Identifikasi)",
+      "showOnHover": "Tampilkan tooltip saat kursor diarahkan",
+      "hoverHint": "Tooltip menampilkan judul dan bidang yang Anda centang sebagai “Di tooltip”.",
+      "titleField": "Bidang judul",
+      "titleFieldDefault": "Nama layer",
+      "titleExpression": "Ekspresi judul",
+      "titleExpressionPlaceholder": "[\"get\", \"name\"]",
+      "bodyExpression": "Ekspresi isi",
+      "bodyExpressionPlaceholder": "[\"concat\", [\"get\", \"name\"], \" has \", [\"to-string\", [\"get\", \"pop_max\"]], \" residents\"]",
+      "bodyExpressionHint": "Ekspresi isi menggantikan baris-baris bidang dengan teksnya sendiri.",
+      "bodyReplacesRows": "Selama ekspresi isi disetel, ekspresi itu menggantikan baris-baris bidang dan baris id.",
+      "invalidExpression": "Ekspresi tidak valid",
+      "openBuilder": "Buka pembuat ekspresi",
+      "showFeatureId": "Tampilkan baris id fitur",
+      "fields": "Bidang",
+      "allFields": "Tidak ada bidang yang dipilih, jadi semua bidang yang terlihat ditampilkan dalam urutan asli datanya.",
+      "addField": "Tambah bidang…",
+      "noFieldsLeft": "Semua bidang sudah tercantum",
+      "chooseFields": "Pilih bidang",
+      "resetFields": "Tampilkan semua bidang",
+      "removeField": "Hapus bidang",
+      "moveUp": "Pindahkan bidang ke atas",
+      "moveDown": "Pindahkan bidang ke bawah",
+      "dragToReorder": "Seret untuk mengurutkan ulang",
+      "dragNamedToReorder": "Seret {{name}} untuk mengurutkan ulang",
+      "label": "Label",
+      "kind": "Jenis nilai",
+      "kinds": {
+        "auto": "Otomatis",
+        "text": "Teks",
+        "number": "Angka",
+        "date": "Tanggal",
+        "link": "Tautan",
+        "image": "Gambar"
+      },
+      "decimals": "Tempat desimal",
+      "thousands": "Kelompokkan ribuan",
+      "dateFormat": "Format tanggal",
+      "dateFormats": {
+        "date": "Tanggal",
+        "datetime": "Tanggal dan waktu",
+        "time": "Waktu",
+        "iso": "ISO 8601",
+        "year": "Tahun"
+      },
+      "linkLabel": "Teks tautan",
+      "linkLabelPlaceholder": "URL itu sendiri",
+      "prefix": "Awalan",
+      "suffix": "Akhiran",
+      "inHover": "Di tooltip",
+      "imageNotInHover": "Bidang gambar tetap berada di popup klik; tooltip tidak punya ruang untuk gambar."
+    },
     "editorTracking": {
       "heading": "Pelacakan Penyuntingan",
       "description": "Catat siapa yang membuat setiap fitur dan siapa yang terakhir mengubahnya. Bidang di bawah diisi otomatis saat fitur digambar, disunting, dihitung, atau dikumpulkan.",
@@ -6617,6 +6816,50 @@
       "duplicateName": "Setiap bidang pelacakan memerlukan nama yang berbeda.",
       "columnTaken": "“{{name}}” sudah menjadi bidang atribut. Pelacakan akan menimpa nilainya."
     }
+  },
+  "quickFilters": {
+    "heading": "Filter cepat",
+    "empty": "Belum ada filter. Tambahkan satu di bawah untuk mempersempit layer ini berdasarkan bidang mana pun miliknya.",
+    "addFilter": "Tambah filter…",
+    "allFieldsUsed": "Setiap bidang sudah memiliki filter",
+    "removeAll": "Hapus semua",
+    "clearAll": "Bersihkan filter",
+    "clearOne": "Bersihkan filter ini",
+    "clearOneNamed": "Bersihkan filter pada {{field}}",
+    "remove": "Hapus filter",
+    "removeNamed": "Hapus filter pada {{field}}",
+    "controlType": "Jenis filter",
+    "enabledTitle": "Terapkan filter ini",
+    "kind": {
+      "categorical": "Nilai",
+      "range": "Rentang",
+      "date": "Tanggal",
+      "text": "Teks"
+    },
+    "operator": {
+      "contains": "Memuat",
+      "startsWith": "Diawali dengan",
+      "equals": "Persis sama dengan"
+    },
+    "searchValues": "Cari nilai",
+    "noValues": "Bidang ini tidak memiliki nilai untuk dipilih.",
+    "noMatchingValues": "Tidak ada nilai yang cocok dengan pencarian Anda.",
+    "selectAll": "Pilih semua",
+    "selectNone": "Pilih tidak ada",
+    "allValues": "Semua nilai",
+    "selectedCount_other": "{{count}} dipilih",
+    "rangeMin": "Minimum",
+    "rangeMax": "Maksimum",
+    "rangeSeparator": "sampai",
+    "dateFrom": "Dari",
+    "dateTo": "Sampai",
+    "textOperator": "Kecocokan",
+    "textValue": "Teks yang dicocokkan",
+    "textPlaceholder": "Ketik untuk memfilter",
+    "noFields": "Layer ini tidak memiliki atribut untuk difilter.",
+    "noTileFeatures": "Belum ada fitur yang dimuat. Geser atau perbesar peta ke data, lalu buka kembali bagian ini.",
+    "viewportSampleHint": "Nilai berasal dari tile yang sedang dimuat, jadi daftarnya bertambah seiring Anda menggeser dan memperbesar peta.",
+    "layerFilteredHint": "Sebuah filter cepat sedang menyembunyikan sebagian fitur layer ini."
   },
   "vectorExport": {
     "invalidKmlCoordinatesByPosition": "Ekspor KML tidak dapat menulis fitur {{position}} karena koordinatnya tidak valid.",
@@ -6634,6 +6877,10 @@
     "moveDown": "Pindahkan ke bawah",
     "zoomToLayer": "Zoom ke layer",
     "layerActions": "Aksi layer",
+    "exportSketchesAsLayer": "Ekspor sketsa sebagai layer baru",
+    "exportSketchesKeep": "Pertahankan fitur di Sketsa",
+    "exportSketchesClear": "Kosongkan Sketsa setelah ekspor",
+    "exportedSketchesName": "Ekspor sketsa",
     "metadata": "Metadata",
     "removeLayer": "Hapus layer",
     "identifyFeatures": "Identifikasi fitur",
@@ -6641,6 +6888,7 @@
     "identifyInspectPixels": "Periksa nilai piksel",
     "identifyStopInspectPixels": "Berhenti memeriksa nilai piksel",
     "identifyUnavailable": "Identifikasi hanya tersedia untuk layer vektor, WMS, dan COG",
+    "identifyCapabilityDisabled": "Kueri dinonaktifkan untuk layer ini",
     "selectFeaturesMenu": "Pilih fitur",
     "selectFeaturesSingle": "Pilih fitur dengan klik",
     "selectFeaturesRectangle": "Pilih fitur dengan persegi panjang",
@@ -6720,6 +6968,8 @@
     "searchPlacesClear": "Bersihkan pencarian",
     "searchPlacesGoToCoordinate": "Menuju {{coordinate}}",
     "searchPlacesGoToH3Cell": "Menuju sel H3 {{cell}} (res {{resolution}})",
+    "searchPlacesGroup": "Tempat",
+    "searchFeaturesPartial": "(sebagian)",
     "background": "Latar belakang",
     "backgroundCannotReorder": "Latar belakang tidak dapat diurutkan ulang",
     "hideBackground": "Sembunyikan latar belakang",
@@ -7232,5 +7482,60 @@
     "mapPoint": "Titik Peta",
     "reply": "Balas",
     "replyPlaceholder": "Tulis balasan..."
+  },
+  "samgeoPlugin": {
+    "panelTitle": "Segmentasi SamGeo",
+    "intro": "Segmentasikan citra dengan SAM3 menggunakan teks, titik, kotak, atau mask otomatis.",
+    "apiUrl": "URL API SamGeo",
+    "checkConnection": "Periksa koneksi",
+    "notChecked": "Belum diperiksa",
+    "checking": "Memeriksa…",
+    "connected": "Terhubung",
+    "unavailable": "Tidak tersedia: {{error}}",
+    "image": "Gambar",
+    "imageSource": "Sumber gambar",
+    "imageUpload": "Unggah berkas",
+    "noRasterLayers": "Tidak ada layer raster yang dimuat",
+    "layerUnreadable": "Layer ini tidak memiliki sumber GeoTIFF yang dapat dibaca; ekspor layer tersebut atau unggah berkasnya.",
+    "docsLink": "Cara menyiapkan API SamGeo",
+    "mode": "Mode",
+    "modeText": "Perintah teks",
+    "modePoints": "Perintah titik",
+    "modeBox": "Kotak pembatas (cari yang serupa)",
+    "modeAutomatic": "Otomatis (semuanya)",
+    "modelId": "ID model",
+    "sam2ModelId": "Model SAM2",
+    "automaticHint": "Mode otomatis menjalankan pembangkit mask SAM2, yang menyegmentasi setiap objek; SAM3 hanya merespons perintah.",
+    "textPrompt": "Perintah teks",
+    "confidence": "Ambang batas keyakinan",
+    "minSize": "Ukuran mask minimum (piksel)",
+    "maxSize": "Ukuran mask maksimum (0 = tanpa batas)",
+    "backend": "Backend",
+    "foregroundPoint": "+ Titik latar depan",
+    "backgroundPoint": "− Titik latar belakang",
+    "clickForeground": "Klik peta untuk menambahkan titik latar depan.",
+    "clickBackground": "Klik peta untuk menambahkan titik latar belakang.",
+    "pointAdded": "Titik ditambahkan.",
+    "drawBox": "Gambar kotak pada peta",
+    "dragBox": "Seret sebuah persegi panjang pada peta.",
+    "boxAdded": "Kotak ditambahkan.",
+    "boxSummary": "Kotak: {{box}}",
+    "noBox": "Belum ada kotak yang digambar.",
+    "pointSummary": "{{foreground}} latar depan, {{background}} latar belakang",
+    "pointsPerSide": "Titik per sisi",
+    "predIou": "Ambang batas IoU prediksi",
+    "stability": "Ambang batas stabilitas",
+    "clearPrompts": "Bersihkan perintah",
+    "promptsCleared": "Perintah dibersihkan.",
+    "segment": "Segmentasikan",
+    "chooseImage": "Pilih gambar terlebih dahulu.",
+    "enterPrompt": "Masukkan perintah teks.",
+    "addPoint": "Tambahkan setidaknya satu titik latar depan.",
+    "drawBoxFirst": "Gambar kotak terlebih dahulu.",
+    "segmenting": "Menyegmentasi…",
+    "noObjects": "Tidak ditemukan objek.",
+    "added": "Menambahkan {{count}} fitur{{layer}}.",
+    "badResponse": "API SamGeo tidak mengembalikan FeatureCollection GeoJSON.",
+    "unknownProjection": "Hasilnya tidak dalam WGS84 dan gambar tidak memuat proyeksi yang dapat dibaca, sehingga tidak dapat ditempatkan pada peta. Gunakan GeoTIFF yang tergeoreferensi."
   }
 }

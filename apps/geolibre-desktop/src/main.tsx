@@ -1,4 +1,5 @@
 import "./lib/symbol-dispose-polyfill";
+import "./lib/crypto-random-uuid-polyfill";
 // Must precede any Map construction (see the module docs).
 import "./lib/maplibre-worker";
 import React from "react";
@@ -69,7 +70,9 @@ import "./lib/auth-return-url-boot";
 // lazily imported, so `i18nReady` resolves once the initial locale's catalog has
 // loaded and init has run — the render below awaits it.
 import i18n, { AVAILABLE_LANGUAGES, i18nReady, setActiveLanguage } from "./i18n";
+import { startAnalytics } from "./lib/analytics";
 import { installDiagnosticsCapture } from "./lib/diagnostics";
+import { isWindows } from "./lib/is-mobile";
 import { isTauri } from "./lib/is-tauri";
 import { installStaleChunkReload } from "./lib/stale-chunk-reload";
 import { resolveAuthGate, type AuthGateConfig } from "./lib/auth-gate";
@@ -82,12 +85,27 @@ import {
 } from "./lib/desktop-settings-url";
 
 installDiagnosticsCapture();
+let nativeSidecarFetchReady: Promise<void> = Promise.resolve();
 // In the desktop build, route geocoding (place search / reverse geocode)
 // through Tauri's native HTTP client so it bypasses WebView CORS: public
 // Nominatim's CDN intermittently omits the CORS header on cached responses,
 // which the WebView rejects as "Search failed. Try again." Lazy + desktop-only
 // so the web/embedded bundles never import the Tauri HTTP plugin.
 if (isTauri()) {
+  // WebView2 can apply browser CORS and Local Network Access restrictions to
+  // the loopback processing server. Route those requests through Tauri's
+  // scoped native client so Windows uses the same reliable path as the shell
+  // that launched the server. Windows-only: the macOS and Linux webviews reach
+  // the sidecar directly, and the native client serializes request bodies over
+  // IPC, which would tax large uploads (ML segmentation) on platforms that were
+  // never broken.
+  if (isWindows()) {
+    nativeSidecarFetchReady = import("./lib/sidecar-fetch")
+      .then(({ installNativeSidecarFetch }) => installNativeSidecarFetch())
+      .catch((error: unknown) => {
+        console.error("[GeoLibre] Failed to install native sidecar fetch", error);
+      });
+  }
   void import("./lib/geocoding-fetch")
     .then(({ installNativeGeocodingFetch }) => installNativeGeocodingFetch())
     .catch((error: unknown) => {
@@ -126,6 +144,10 @@ installStaleChunkReload();
 // `isEmbedded()` — that returns true for a plain `?embed=1` query parameter, so
 // any visitor could disable a configured sign-in wall by typing a URL.
 const isHostedWebApp = !isTauri() && !__GEOLIBRE_EMBED_BUILD__;
+// Google Analytics, if this deployment was built with a measurement ID (only
+// the geolibre.app and web.geolibre.app Pages deploys are, see analytics.ts).
+// A no-op in every other build, so nothing is loaded and nothing is sent.
+startAnalytics(isHostedWebApp);
 // Clerk or Auth0, whichever this deployment configured (neither, normally).
 const authGate = resolveAuthGate(isHostedWebApp);
 if (authGate) {
@@ -243,6 +265,9 @@ void Promise.all([
   import("./App"),
   import("./components/common/error-boundaries"),
   loadAuthGate(authGate),
+  // Sidecar-dependent panels can issue a request as soon as App mounts. On
+  // Windows, wait until those requests have the native transport installed.
+  nativeSidecarFetchReady,
   // Gate the first render on i18next being initialized with the active locale's
   // (lazily loaded) catalog, so the UI never paints raw translation keys.
   startupLanguageReady,

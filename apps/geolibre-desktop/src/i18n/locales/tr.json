@@ -699,7 +699,7 @@
       "errorConnectFirst": "Önce PostgreSQL'e bağlanın.",
       "errorNoVectorLayers": "Seçilen Martin kaynağının vektör katmanı yok.",
       "errorSelectSource": "Eklenecek bir Martin kaynağı seçin.",
-      "desktopOnlyNotice": "PostgreSQL katmanları yalnızca GeoLibre Masaüstü'nde kullanılabilir. Bu özellik, web uygulamasının başlatamadığı yerel bir Martin döşeme sunucusu çalıştırır.",
+      "desktopOnlyNotice": "PostgreSQL katmanları yalnızca GeoLibre Masaüstü'nde kullanılabilir. Bu özellik, web ve mobil uygulamaların başlatamadığı yerel bir Martin döşeme sunucusu çalıştırır.",
       "savedConnection": "Kayıtlı bağlantı",
       "selectSavedConnection": "Kayıtlı bağlantı seç",
       "connectionString": "PostgreSQL bağlantı dizesi",
@@ -1900,6 +1900,7 @@
     "description": "Proje tercihlerini ve çalışma zamanı ayarlarını yapılandırın.",
     "saveButton": "Ayarları Kaydet",
     "section": {
+      "language": "Dil",
       "map": "Harita",
       "layout": "Düzen",
       "appearance": "Görünüm",
@@ -1923,6 +1924,39 @@
       "managePlugins": "Eklentileri Yönet",
       "styleManager": "Stil Yöneticisi",
       "urlOverrideNote": "URL düzen parametreleri kayıtlı ayarları geçersiz kılar."
+    },
+    "languagePack": {
+      "title": "Dil paketleri",
+      "description": "Her GeoLibre kurulumunu büyütmeden Whitebox araç adları, parametreleri ve yardım metinleri için isteğe bağlı çeviriler ekleyin.",
+      "manage": "Dil paketlerini yönet",
+      "interfaceLanguage": "Arayüz dili",
+      "installed": "Whitebox dil paketi kurulu",
+      "notInstalled": "Kurulu Whitebox dil paketi yok",
+      "installedDetail": "{{source}} · {{date}} tarihinde kuruldu",
+      "installedDetailNoDate": "{{source}} · kuruldu",
+      "notInstalledDetail": "Bir paket indirene veya içe aktarana kadar Whitebox işleme meta verileri İngilizce kalır.",
+      "downloadsDisabled": "Bu sürümde resmi indirmeler devre dışı. Bunun yerine bir dil paketi dosyası içe aktarın.",
+      "englishFallback": "Whitebox İngilizce meta verilerini doğrudan sağlar, bu nedenle ek bir pakete gerek yoktur.",
+      "sourceOfficial": "Resmi indirme",
+      "sourceFile": "İçe aktarılan dosya",
+      "download": "Paketi indir",
+      "importFile": "Dosya içe aktar",
+      "remove": "Paketi kaldır",
+      "downloaded": "Dil paketi indirildi ve uygulandı.",
+      "imported": "{{locale}} için dil paketi içe aktarıldı ve uygulandı.",
+      "removed": "Dil paketi kaldırıldı. Whitebox meta verileri artık İngilizce kullanıyor.",
+      "privacy": "Paketler yalnızca bu cihazda saklanır. Bir paketi indirmek {{host}} adresine dil kodunu gönderir, ancak hiçbir proje verisi gönderilmez.",
+      "privacyLocalOnly": "Paketler yalnızca bu cihazda saklanır. Bu sürüm hiçbir şey indirmez: bunun yerine bir dil paketi dosyası içe aktarın.",
+      "browse": "Dil paketlerine göz at",
+      "errorInvalidJson": "Bu dosya geçerli JSON değil.",
+      "errorInvalidFormat": "Bu dosya geçerli bir GeoLibre Whitebox dil paketi değil.",
+      "errorUnsupportedVersion": "Bu dil paketi sürümü, bu GeoLibre sürümü tarafından desteklenmiyor.",
+      "errorInvalidLocale": "Dil paketinin yerel ayarı geçersiz veya beklenmedik.",
+      "errorUnsupportedLocale": "GeoLibre, bu paketin gerektirdiği temel arayüz dilini içermiyor.",
+      "errorTooLarge": "Dil paketi 5 MB güvenlik sınırını aşıyor.",
+      "errorNotFound": "Bu dil için henüz resmi bir Whitebox dil paketi yok.",
+      "errorDownload": "Dil paketi indirilemedi. Bağlantınızı kontrol edin veya yerel bir dosya içe aktarın.",
+      "errorGeneric": "Dil paketi kurulamadı."
     },
     "updates": {
       "title": "Yazılım Güncellemeleri",
@@ -1953,6 +1987,13 @@
       "noProjectSelected": "Proje seçilmedi",
       "globeByDefault": "3D küreyi varsayılan olarak etkinleştir",
       "globeByDefaultHint": "Başlangıç projesi veya proje bağlantısı verilmediğinde adsız çalışma alanı için kullanılır.",
+      "defaultView": "Varsayılan harita görünümü",
+      "defaultViewHint": "Adsız çalışma alanı için merkezi ve yakınlaştırmayı belirleyin.",
+      "longitude": "Merkez boylamı",
+      "latitude": "Merkez enlemi",
+      "zoom": "Yakınlaştırma düzeyi",
+      "useCurrentView": "Geçerli Görünümü Kullan",
+      "viewUnavailable": "Geçerli harita görünümü kullanılamıyor.",
       "selectError": "Seçilen proje okunamadı.",
       "restoring": "Başlangıç projeniz açılıyor…",
       "loadWarning": "Başlangıç projesi kullanılamıyor. GeoLibre bunun yerine varsayılan çalışma alanını açtı."
@@ -2099,6 +2140,10 @@
       "osEnvNote": "Masaüstü uygulaması ayrıca sistem ortam değişkenlerinizden eşleşen API anahtarlarını okur. Bunlar otomatik olarak kullanılır ve asla proje dosyasına kaydedilmez — ortam değerini kullanmaya devam etmek için bir alanı boş bırakın.",
       "osEnvField": "Sistem ortam değişkeninizden okunur: {{name}}.",
       "osEnvPlaceholder": "Sistem ortamınızda ayarlanmış",
+      "refreshModels": "Model listesini yenile",
+      "modelsFailedToLoad": "Modeller yüklenemedi: {{message}}",
+      "ollamaNetworkFailure": "Ollama sunucusuna erişilemedi. Bu adreste çalıştığını ve OLLAMA_ORIGINS ayarının bu uygulamanın kaynağına izin verdiğini, ayrıca güvenlik duvarı veya proxy kurallarını denetleyin.",
+      "ollamaTimedOut": "Ollama sunucusuna gönderilen istek zaman aşımına uğradı. Ana bilgisayar yavaş, erişilemez ya da bir güvenlik duvarı veya proxy tarafından engelleniyor olabilir.",
       "newProfile": "Yeni profil",
       "cancel": "İptal",
       "addProfile": "Profil ekle",
@@ -2506,7 +2551,8 @@
       "getisOrd": "Getis-Ord Gi* sıcak noktaları",
       "averageNearestNeighbor": "Ortalama en yakın komşu",
       "kernelDensity": "Çekirdek yoğunluğu (ısı haritası)",
-      "emergingHotSpot": "Yükselen sıcak noktalar (uzay-zaman küpü)"
+      "emergingHotSpot": "Yükselen sıcak noktalar (uzay-zaman küpü)",
+      "compositeScore": "Bileşik puan (uygunluk endeksi)"
     },
     "rasterTool": {
       "hillshade": "Tepe gölgeleme",
@@ -2780,6 +2826,7 @@
       "embedVectorTitle": "Yerel vektör verisi gömülsün mü?",
       "embedVectorDesc": "Bu projede bilgisayarınızdan yüklenmiş {{count}} yerel vektör katmanı var. Tarayıcı, proje yeniden açıldığında bunları yeniden okuyamaz; bu nedenle geri yüklenebilmeleri için verilerinin proje dosyasına gömülmesi gerekir. Gömme, dosyaya yaklaşık {{size}} ekler.",
       "embedVectorDescDesktop": "Bu projede bilgisayarınızdan yüklenmiş {{count}} yerel vektör katmanı var. Projeyi kendi kendine yeterli hale getirmek için verilerini gömün (yaklaşık {{size}} ekler) veya proje yeniden açıldığında diskten yeniden yüklenen dosya referansları kaydedin. Referanslar dosyayı küçük tutar ancak kaynak dosya daha sonra taşınır veya silinirse bozulur.",
+      "embedVectorDescMas": "Bu projede bilgisayarınızdan yüklenmiş {{count}} yerel vektör katmanı var. Mac App Store korumalı alanı, GeoLibre kapatıldıktan sonra bu dosyalara erişimi koruyamaz; bu nedenle geri yüklenebilmeleri için verileri proje dosyasına gömülmelidir. Gömme, dosyaya yaklaşık {{size}} ekler.",
       "embedVectorLargeWarning": "Yaklaşık {{size}} gömmek çok büyük bir proje dosyası oluşturur. Her nesnenin aynı anda ayrıştırılıp bellekte tutulması gerektiğinden dosyayı yeniden açmak yavaş olabilir veya tamamen başarısız olabilir. Bu boyuttaki veriler için katmanları PMTiles ya da FlatGeobuf biçimine dönüştürün ve gömmek yerine uzak katman olarak ekleyin.",
       "embedVectorEmbedButton": "Veriyi göm",
       "embedVectorReferenceButton": "Dosya referanslarını kaydet",
@@ -4217,6 +4264,8 @@
       "removeConnection": "Bağlantıyı kaldır",
       "removeNode": "Düğümü kaldır",
       "resizePanel": "Paneli yeniden boyutlandır",
+      "maximizePanel": "Paneli büyüt",
+      "restorePanelSize": "Önceki boyutu geri yükle",
       "minimizePanel": "Paneli küçült",
       "restorePanel": "Paneli geri yükle",
       "resizePalette": "Araç paletini yeniden boyutlandır",
@@ -4253,9 +4302,31 @@
     "parameterField": {
       "selectLayer": "Bir katman seçin...",
       "selectField": "Bir alan seçin...",
+      "selectOption": "Bir seçenek seçin...",
       "selectLayerFirst": "Önce bir katman seçin",
       "layersSelected_one": "{{count}} katman seçildi",
       "layersSelected_other": "{{count}} katman seçildi"
+    },
+    "fieldWeights": {
+      "columnField": "Alan",
+      "columnNormalization": "Normalleştir",
+      "columnWeight": "Ağırlık",
+      "columnDirection": "Yön",
+      "addField": "Alan ekle",
+      "removeAria": "{{field}} alanını kaldır",
+      "empty": "Henüz alan yok. Bir puan oluşturmak için en az iki alan ekleyin.",
+      "shares": "Ağırlıklar: {{shares}}",
+      "noWeight": "En az bir alana sıfırdan büyük bir ağırlık verin.",
+      "normalization": {
+        "minMax": "Min-maks",
+        "zScore": "Z puanı",
+        "rank": "Sıra",
+        "quantile": "Kantil"
+      },
+      "direction": {
+        "higher": "Yüksek olan daha iyi",
+        "lower": "Düşük olan daha iyi"
+      }
     },
     "whitebox": {
       "run": "Çalıştır",
@@ -4307,6 +4378,25 @@
       "auto": "Otomatik",
       "chooseOutputPath": "Çıktı yolunu seç",
       "chooseInputPath": "Girdi yolunu seç",
+      "startServer": "Sunucuyu başlat",
+      "stopServer": "Sunucuyu durdur",
+      "loadingTools": "Yükleniyor…",
+      "lockedPrefix": "[Kilitli] ",
+      "missingRequiredParameter": "Zorunlu parametre eksik: {{label}}",
+      "sidecarCannotReadBrowserFiles": "Sidecar, {{label}} için tarayıcıda seçilen dosyaları okuyamaz. Aracı yerel olarak çalıştırın (WASM) veya sidecar'ın erişebileceği dosya sistemi yollarını girin.",
+      "selectedLayersMissing": "{{label}} için seçilen katmanlardan biri veya birkaçı artık mevcut değil.",
+      "layerMissingGeoJson": "“{{layer}}” katmanının {{label}} için bellekte GeoJSON'u yok.",
+      "layerNotFetchable": "“{{layer}}” katmanı {{label}} için getirilemiyor.",
+      "layerMissingPath": "“{{layer}}” katmanının {{label}} için dosya sistemi yolu yok.",
+      "importOutputFailed": "Whitebox çıktısı içe aktarılamadı.",
+      "showingSnapshotOnly": "Yalnızca GitHub kataloğu gösteriliyor.",
+      "liveCatalogEmpty": "Canlı katalog boş. Yalnızca GitHub kataloğu gösteriliyor.",
+      "jobStatus": {
+        "pending": "Beklemede",
+        "running": "Çalışıyor",
+        "succeeded": "Başarılı",
+        "failed": "Başarısız"
+      },
       "categoryGeneral": "Genel",
       "categoryAll": "Tümü ({{total}})",
       "errorLoadSnapshot": "Whitebox katalog anlık görüntüsü yüklenemedi.",
@@ -5520,6 +5610,50 @@
               }
             }
           }
+        },
+        "composite-score": {
+          "name": "Bileşik puan (uygunluk endeksi)",
+          "description": "Birden çok sayısal alanı normalleştirip ağırlıklandırarak 0 ile 100 arasında tek bir endekste birleştirin ve katmanı bu endekse göre biçimlendirin.",
+          "params": {
+            "layer": {
+              "label": "Katman"
+            },
+            "fields": {
+              "label": "Alanlar ve ağırlıklar",
+              "description": "İki veya daha fazla sayısal alan. Her biri bir normalleştirme, göreli bir ağırlık ve aralığının yüksek puan alan ucunu alır."
+            },
+            "aggregation": {
+              "label": "Toplulaştırma",
+              "description": "Geometrik ortalamada zayıf bir alan puanı aşağı çeker: güçlü bir alan bunu tümüyle telafi edemez.",
+              "options": {
+                "weighted-mean": "Ağırlıklı aritmetik ortalama",
+                "geometric-mean": "Ağırlıklı geometrik ortalama"
+              }
+            },
+            "nullHandling": {
+              "label": "Değeri eksik öğeler",
+              "description": "Güvenli bir varsayılan yok: dışarıda bırakmak ile yeniden normalleştirmek farklı haritalar üretir, bu yüzden bu endeksin hangisini ifade ettiğini seçin.",
+              "options": {
+                "drop": "Öğeyi sonuçtan çıkar",
+                "renormalize": "Ağırlıkları sahip olduğu alanlar üzerinde yeniden normalleştir"
+              }
+            },
+            "scoreField": {
+              "label": "Puan alanının adı",
+              "description": "Puanın yazılacağı sayısal sütunun adı."
+            },
+            "scoreRange": {
+              "label": "Puan aralığı",
+              "options": {
+                "0-100": "0 ile 100 arası",
+                "0-1": "0 ile 1 arası"
+              }
+            },
+            "keepComponents": {
+              "label": "Normalleştirilmiş bileşenleri sakla",
+              "description": "Her alanın normalleştirilmiş değerini ayrı bir sütun olarak yazar; böylece puan olduğu gibi kabul edilmek yerine denetlenebilir."
+            }
+          }
         }
       },
       "raster": {
@@ -6004,6 +6138,7 @@
     "editValues": "Öznitelik değerlerini düzenle",
     "editTitleFinishGeometry": "Öznitelikleri düzenlemek için geometri düzenlemeyi bitirin",
     "editTitleReadOnly": "Vektör Katmanı Ekle ile eklenen katmanlar için düzenleme kullanılamaz",
+    "editTitleCapabilityDisabled": "Bu katman için düzenleme devre dışı",
     "editTitleUseSaveCancel": "Düzenlemeyi bitirmek için Kaydet veya İptal'i kullanın",
     "exitEditMode": "Düzenleme modundan çık",
     "editTitleDuckdb": "Gösterilen DuckDB sorgu özniteliklerini bellekte düzenle",
@@ -6029,6 +6164,7 @@
     "dashboard": "Gösterge Paneli",
     "exportSelectedLayer": "Seçilen katmanı dışa aktar",
     "exportTitleDisabled": "Dışa aktarma, GeoJSON destekli bir katman gerektirir",
+    "exportTitleCapabilityDisabled": "Bu katman için dışa aktarma devre dışı",
     "cancelEdits": "Öznitelik düzenlemelerini iptal et",
     "searchPlaceholder": "Öznitelik ara...",
     "searchAria": "Öznitelik ara",
@@ -6200,6 +6336,15 @@
     "addClass": "Sınıf ekle",
     "removeClass": "Sınıfı kaldır",
     "beforeIdSavedUnavailable": "Kaydedildi (kullanılamıyor)",
+    "blendMode": "Karışım",
+    "blendModeFor": "{{name}} için karışım modu",
+    "blendModes": {
+      "normal": "Normal",
+      "multiply": "Çarpma",
+      "screen": "Ekran",
+      "lighten": "Açıklaştır",
+      "add": "Toplama"
+    },
     "raster": {
       "greyscale": "Gri tonlama",
       "greyscaleHint": "Bir gri tonlamalı temel haritayı aç/kapat (doygunluğu minimuma indirir)",
@@ -6679,6 +6824,60 @@
       "noFields": "Katmanda yapılandırılacak öznitelik alanı yok.",
       "minMaxInvalid": "Min, Maks değerinden küçük veya ona eşit olmalıdır."
     },
+    "popup": {
+      "heading": "Açılır pencere",
+      "showOnClick": "Tıklamada açılır pencereyi göster (Tanımla)",
+      "showOnHover": "Üzerine gelindiğinde ipucunu göster",
+      "hoverHint": "İpucu, başlığı ve “İpucunda göster” olarak işaretlediğiniz alanları gösterir.",
+      "titleField": "Başlık alanı",
+      "titleFieldDefault": "Katman adı",
+      "titleExpression": "Başlık ifadesi",
+      "titleExpressionPlaceholder": "[\"get\", \"name\"]",
+      "bodyExpression": "Gövde ifadesi",
+      "bodyExpressionPlaceholder": "[\"concat\", [\"get\", \"name\"], \" has \", [\"to-string\", [\"get\", \"pop_max\"]], \" residents\"]",
+      "bodyExpressionHint": "Bir gövde ifadesi, alan satırlarının yerine kendi metnini koyar.",
+      "bodyReplacesRows": "Bir gövde ifadesi tanımlı olduğu sürece alan satırlarının ve kimlik satırının yerini alır.",
+      "invalidExpression": "Geçersiz ifade",
+      "openBuilder": "İfade oluşturucuyu aç",
+      "showFeatureId": "Öğe kimliği satırını göster",
+      "fields": "Alanlar",
+      "allFields": "Hiçbir alan seçilmedi, bu yüzden görünür tüm alanlar verinin kendi sırasında gösterilir.",
+      "addField": "Alan ekle…",
+      "noFieldsLeft": "Tüm alanlar zaten listede",
+      "chooseFields": "Alanları seç",
+      "resetFields": "Tüm alanları göster",
+      "removeField": "Alanı kaldır",
+      "moveUp": "Alanı yukarı taşı",
+      "moveDown": "Alanı aşağı taşı",
+      "dragToReorder": "Yeniden sıralamak için sürükleyin",
+      "dragNamedToReorder": "Yeniden sıralamak için {{name}} alanını sürükleyin",
+      "label": "Etiket",
+      "kind": "Değer türü",
+      "kinds": {
+        "auto": "Otomatik",
+        "text": "Metin",
+        "number": "Sayı",
+        "date": "Tarih",
+        "link": "Bağlantı",
+        "image": "Görsel"
+      },
+      "decimals": "Ondalık basamak",
+      "thousands": "Binlik ayırıcı kullan",
+      "dateFormat": "Tarih biçimi",
+      "dateFormats": {
+        "date": "Tarih",
+        "datetime": "Tarih ve saat",
+        "time": "Saat",
+        "iso": "ISO 8601",
+        "year": "Yıl"
+      },
+      "linkLabel": "Bağlantı metni",
+      "linkLabelPlaceholder": "URL'nin kendisi",
+      "prefix": "Ön ek",
+      "suffix": "Son ek",
+      "inHover": "İpucunda göster",
+      "imageNotInHover": "Görsel alanları tıklama açılır penceresinde kalır; bir ipucunda resme yer yoktur."
+    },
     "editorTracking": {
       "heading": "Düzenleme Takibi",
       "description": "Her nesneyi kimin oluşturduğunu ve en son kimin değiştirdiğini kaydedin. Nesneler çizildiğinde, düzenlendiğinde, hesaplandığında veya toplandığında aşağıdaki alanlar otomatik doldurulur.",
@@ -6694,6 +6893,51 @@
       "duplicateName": "Her takip alanının farklı bir adı olmalıdır.",
       "columnTaken": "“{{name}}” zaten bir öznitelik alanı. Takip, değerlerinin üzerine yazar."
     }
+  },
+  "quickFilters": {
+    "heading": "Hızlı filtreler",
+    "empty": "Henüz filtre yok. Bu katmanı alanlarından herhangi biriyle daraltmak için aşağıdan bir filtre ekleyin.",
+    "addFilter": "Filtre ekle…",
+    "allFieldsUsed": "Her alanın zaten bir filtresi var",
+    "removeAll": "Tümünü kaldır",
+    "clearAll": "Filtreleri temizle",
+    "clearOne": "Bu filtreyi temizle",
+    "clearOneNamed": "{{field}} alanındaki filtreyi temizle",
+    "remove": "Filtreyi kaldır",
+    "removeNamed": "{{field}} alanındaki filtreyi kaldır",
+    "controlType": "Filtre türü",
+    "enabledTitle": "Bu filtreyi uygula",
+    "kind": {
+      "categorical": "Değerler",
+      "range": "Aralık",
+      "date": "Tarihler",
+      "text": "Metin"
+    },
+    "operator": {
+      "contains": "İçerir",
+      "startsWith": "Şununla başlar",
+      "equals": "Tam olarak eşittir"
+    },
+    "searchValues": "Değerlerde ara",
+    "noValues": "Bu alanda seçilebilecek değer yok.",
+    "noMatchingValues": "Aramanızla eşleşen değer yok.",
+    "selectAll": "Tümünü seç",
+    "selectNone": "Hiçbirini seçme",
+    "allValues": "Tüm değerler",
+    "selectedCount_one": "{{count}} değer seçildi",
+    "selectedCount_other": "{{count}} değer seçildi",
+    "rangeMin": "Minimum",
+    "rangeMax": "Maksimum",
+    "rangeSeparator": "ile",
+    "dateFrom": "Başlangıç",
+    "dateTo": "Bitiş",
+    "textOperator": "Eşleşme",
+    "textValue": "Eşleştirilecek metin",
+    "textPlaceholder": "Filtrelemek için yazın",
+    "noFields": "Bu katmanda filtrelenecek öznitelik yok.",
+    "noTileFeatures": "Henüz hiçbir öğe yüklenmedi. Haritayı verilerin bulunduğu alana kaydırın veya orayı yakınlaştırın, sonra bu bölümü yeniden açın.",
+    "viewportSampleHint": "Değerler şu anda yüklü olan döşemelerden gelir, bu yüzden haritayı kaydırıp yakınlaştırdıkça liste büyür.",
+    "layerFilteredHint": "Bir hızlı filtre bu katmanın öğelerinin bir kısmını gizliyor."
   },
   "vectorExport": {
     "invalidKmlCoordinatesByPosition": "Koordinatları geçersiz olduğu için KML dışa aktarımı {{position}}. öğeyi yazamadı.",
@@ -6711,6 +6955,10 @@
     "moveDown": "Aşağı taşı",
     "zoomToLayer": "Katmana yakınlaştır",
     "layerActions": "Katman eylemleri",
+    "exportSketchesAsLayer": "Çizimleri yeni katman olarak dışa aktar",
+    "exportSketchesKeep": "Detayları Çizimler içinde tut",
+    "exportSketchesClear": "Dışa aktardıktan sonra Çizimleri temizle",
+    "exportedSketchesName": "Çizim dışa aktarımı",
     "metadata": "Meta veri",
     "removeLayer": "Katmanı kaldır",
     "identifyFeatures": "Öğeleri tanımla",
@@ -6718,6 +6966,7 @@
     "identifyInspectPixels": "Piksel değerlerini incele",
     "identifyStopInspectPixels": "Piksel değerlerini incelemeyi durdur",
     "identifyUnavailable": "Tanımlama yalnızca vektör, WMS ve COG katmanları için kullanılabilir",
+    "identifyCapabilityDisabled": "Bu katman için sorgulama devre dışı",
     "selectFeaturesMenu": "Öğeleri seç",
     "selectFeaturesSingle": "Öğeleri tıklayarak seç",
     "selectFeaturesRectangle": "Öğeleri dikdörtgenle seç",
@@ -6797,6 +7046,8 @@
     "searchPlacesClear": "Aramayı temizle",
     "searchPlacesGoToCoordinate": "{{coordinate}} konumuna git",
     "searchPlacesGoToH3Cell": "H3 hücresi {{cell}} konumuna git (çözünürlük {{resolution}})",
+    "searchPlacesGroup": "Yerler",
+    "searchFeaturesPartial": "(kısmi)",
     "background": "Arka plan",
     "backgroundCannotReorder": "Arka plan yeniden sıralanamaz",
     "hideBackground": "Arka planı gizle",
@@ -7314,5 +7565,60 @@
     "mapPoint": "Harita Noktası",
     "reply": "Yanıtla",
     "replyPlaceholder": "Bir yanıt yazın..."
+  },
+  "samgeoPlugin": {
+    "panelTitle": "SamGeo Segmentasyonu",
+    "intro": "Metin, nokta, kutu veya otomatik maskeler kullanarak görüntüleri SAM3 ile segmentleyin.",
+    "apiUrl": "SamGeo API URL'si",
+    "checkConnection": "Bağlantıyı denetle",
+    "notChecked": "Denetlenmedi",
+    "checking": "Denetleniyor…",
+    "connected": "Bağlandı",
+    "unavailable": "Kullanılamıyor: {{error}}",
+    "image": "Görüntü",
+    "imageSource": "Görüntü kaynağı",
+    "imageUpload": "Dosya yükle",
+    "noRasterLayers": "Yüklü raster katman yok",
+    "layerUnreadable": "Bu katmanın okunabilir bir GeoTIFF kaynağı yok; katmanı dışa aktarın veya bunun yerine dosyayı yükleyin.",
+    "docsLink": "SamGeo API nasıl kurulur",
+    "mode": "Mod",
+    "modeText": "Metin istemi",
+    "modePoints": "Nokta istemleri",
+    "modeBox": "Sınırlayıcı kutu (benzerlerini bul)",
+    "modeAutomatic": "Otomatik (her şey)",
+    "modelId": "Model kimliği",
+    "sam2ModelId": "SAM2 modeli",
+    "automaticHint": "Otomatik mod, her nesneyi segmentleyen SAM2 maske üreticisini çalıştırır; SAM3 yalnızca istemlere yanıt verir.",
+    "textPrompt": "Metin istemi",
+    "confidence": "Güven eşiği",
+    "minSize": "En küçük maske boyutu (piksel)",
+    "maxSize": "En büyük maske boyutu (0 = sınırsız)",
+    "backend": "Arka uç",
+    "foregroundPoint": "+ Ön plan noktası",
+    "backgroundPoint": "− Arka plan noktası",
+    "clickForeground": "Ön plan noktası eklemek için haritaya tıklayın.",
+    "clickBackground": "Arka plan noktası eklemek için haritaya tıklayın.",
+    "pointAdded": "Nokta eklendi.",
+    "drawBox": "Haritaya kutu çiz",
+    "dragBox": "Harita üzerinde bir dikdörtgen sürükleyin.",
+    "boxAdded": "Kutu eklendi.",
+    "boxSummary": "Kutu: {{box}}",
+    "noBox": "Çizilmiş kutu yok.",
+    "pointSummary": "{{foreground}} ön plan, {{background}} arka plan",
+    "pointsPerSide": "Kenar başına nokta",
+    "predIou": "Tahmini IoU eşiği",
+    "stability": "Kararlılık eşiği",
+    "clearPrompts": "İstemleri temizle",
+    "promptsCleared": "İstemler temizlendi.",
+    "segment": "Segmentle",
+    "chooseImage": "Önce bir görüntü seçin.",
+    "enterPrompt": "Bir metin istemi girin.",
+    "addPoint": "En az bir ön plan noktası ekleyin.",
+    "drawBoxFirst": "Önce bir kutu çizin.",
+    "segmenting": "Segmentleniyor…",
+    "noObjects": "Nesne bulunamadı.",
+    "added": "{{count}} öğe{{layer}} eklendi.",
+    "badResponse": "SamGeo API bir GeoJSON FeatureCollection döndürmedi.",
+    "unknownProjection": "Sonuç WGS84 değil ve görüntü okunabilir bir projeksiyon taşımıyor, bu nedenle haritaya yerleştirilemiyor. Coğrafi referanslı bir GeoTIFF kullanın."
   }
 }

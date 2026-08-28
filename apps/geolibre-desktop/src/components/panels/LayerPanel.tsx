@@ -24,8 +24,10 @@ import {
   isStyleLibraryTargetLayer,
   canSaveLayerToLibrary,
   captureLayerLibraryEntry,
+  clearQuickFilterValues,
   createLayerLibraryEntryId,
   copyableLayerStyleKind,
+  hasActiveQuickFilter,
   pluginOwnsPaint,
   supportsBridgedOpacity,
   useAppStore,
@@ -33,6 +35,7 @@ import {
   layerGroupDepth,
   layerGroupMoveability,
   layerPanelGroupHeaders,
+  resolveLayerCapabilities,
 } from "@geolibre/core";
 import type { EllipsoidId, GeoLibreLayer, LayerGroup } from "@geolibre/core";
 import type { FeatureCollection } from "geojson";
@@ -142,6 +145,7 @@ import {
   Eye,
   EyeOff,
   FilePlus2,
+  Filter,
   Folder,
   FolderMinus,
   FolderOpen,
@@ -375,6 +379,9 @@ function isPostgisEditableLayer(layer: GeoLibreLayer): boolean {
  * desktop-only, geojson-backed layer loaded either from a local file in a
  * supported format or from a PostGIS table with a primary key. The sidecar
  * needs real filesystem/database access, so this is false on the web build.
+ * This answers only "is there a writable source": the layer's capabilities are
+ * applied by the caller (`canWriteBack`), so a layer that allows creates or
+ * deletes but not updates still offers the save.
  */
 function canWriteEditsToSource(layer: GeoLibreLayer): boolean {
   if (!isTauri() || layer.type !== "geojson") return false;
@@ -689,9 +696,11 @@ export function LayerPanel({
   }, [selectedPlanet, basemapStyleUrl]);
   const setLayerVisibility = useAppStore((s) => s.setLayerVisibility);
   const setLayerOpacity = useAppStore((s) => s.setLayerOpacity);
+  const setLayerQuickFilters = useAppStore((s) => s.setLayerQuickFilters);
   const reorderLayer = useAppStore((s) => s.reorderLayer);
   const moveLayer = useAppStore((s) => s.moveLayer);
   const moveLayersRelative = useAppStore((s) => s.moveLayersRelative);
+  const addGeoJsonLayer = useAppStore((s) => s.addGeoJsonLayer);
   const removeLayer = useAppStore((s) => s.removeLayer);
   const updateLayer = useAppStore((s) => s.updateLayer);
   const copyLayerStyle = useAppStore((s) => s.copyLayerStyle);
@@ -1206,6 +1215,38 @@ export function LayerPanel({
     setEditingLayerId(null);
     setEditingName("");
   };
+
+  /** Copy the editor-managed Sketches overlay into an ordinary project layer. */
+  const exportSketchesAsLayer = useCallback(
+    (layer: GeoLibreLayer, clearAfterExport = false) => {
+      if (
+        layer.metadata.sourceKind !== SKETCHES_SOURCE_KIND ||
+        !Array.isArray(layer.geojson?.features) ||
+        layer.geojson.features.length === 0 ||
+        (clearAfterExport && !canEditLayer(layer.id))
+      ) {
+        return;
+      }
+
+      const baseName = t("layers.exportedSketchesName");
+      const names = new Set(useAppStore.getState().layers.map((item) => item.name));
+      let name = baseName;
+      for (let suffix = 2; names.has(name); suffix += 1) name = `${baseName} ${suffix}`;
+
+      const id = addGeoJsonLayer(name, structuredClone(layer.geojson));
+      updateLayer(id, {
+        opacity: layer.opacity,
+        visible: layer.visible,
+        style: structuredClone(layer.style),
+      });
+      if (layer.groupId) moveLayersToGroup([id], layer.groupId);
+      if (clearAfterExport) {
+        updateLayer(layer.id, { geojson: { type: "FeatureCollection", features: [] } });
+      }
+      selectLayer(id);
+    },
+    [addGeoJsonLayer, canEditLayer, moveLayersToGroup, selectLayer, t, updateLayer],
+  );
 
   const clearRefreshStatusTimer = useCallback((layerId: string) => {
     const timer = refreshStatusTimersRef.current.get(layerId);
@@ -2021,6 +2062,11 @@ export function LayerPanel({
             // The baseline lives on the layer metadata, so it survives a
             // project reload.
             baseline_keys: postgisBaselineKeys(layer),
+            // Resolved, not `layer.capabilities`: the sidecar reads an omitted
+            // flag as allowed, so a partial override has to be filled in from
+            // the same inferred defaults the UI gated on, or the two can
+            // disagree about a flag the override never mentioned.
+            capabilities: resolveLayerCapabilities(layer),
           });
           // Re-read the table so inserted features pick up their database-
           // assigned primary keys; without this a second save would insert
@@ -3077,22 +3123,29 @@ export function LayerPanel({
               : layer.visible
                 ? t("layers.hideLayer")
                 : t("layers.showLayer");
+            // Explicit per-layer capabilities (issue #1674) overlaid on the
+            // defaults inferred from the layer's source kind. Each flag gates
+            // only the actions it names: `query` the read/inspect paths,
+            // `create`/`update`/`delete` the feature writes, `export` the
+            // paths that copy the layer's data out.
+            const layerCaps = resolveLayerCapabilities(layer);
             const canIdentify =
-              layer.type === "geojson" ||
-              isDuckDBQueryLayer(layer) ||
-              (layer.type === "wms" &&
-                typeof layer.source.layers === "string" &&
-                Boolean(layer.source.layers.trim()) &&
-                Boolean(
-                  (typeof layer.source.url === "string" && layer.source.url.trim()) ||
-                  layer.sourcePath,
-                )) ||
-              layer.type === "vector-tiles" ||
-              (layer.type === "mbtiles" && layer.metadata.tileType === "vector") ||
-              // COG layers identify pixel values via the raster control's pixel
-              // inspector (see useRasterIdentify), not the vector feature query.
-              layer.type === "cog" ||
-              hasNativeIdentifyLayers(layer);
+              layerCaps.query &&
+              (layer.type === "geojson" ||
+                isDuckDBQueryLayer(layer) ||
+                (layer.type === "wms" &&
+                  typeof layer.source.layers === "string" &&
+                  Boolean(layer.source.layers.trim()) &&
+                  Boolean(
+                    (typeof layer.source.url === "string" && layer.source.url.trim()) ||
+                    layer.sourcePath,
+                  )) ||
+                layer.type === "vector-tiles" ||
+                (layer.type === "mbtiles" && layer.metadata.tileType === "vector") ||
+                // COG layers identify pixel values via the raster control's pixel
+                // inspector (see useRasterIdentify), not the vector feature query.
+                layer.type === "cog" ||
+                hasNativeIdentifyLayers(layer));
             const identifyActive = identifyLayerId === layer.id;
             // COGs inspect raw pixel/band values rather than vector features, so
             // the icon's tooltip reflects that distinct action. Time Slider COG
@@ -3108,8 +3161,14 @@ export function LayerPanel({
                 : isPixelIdentify
                   ? t("layers.identifyInspectPixels")
                   : t("layers.identifyFeatures")
-              : t("layers.identifyUnavailable");
-            const canEditGeometry = canEditLayerGeometry(layer);
+              : // A layer whose `query` capability is denied is not the same as
+                // one whose type has no identify route, and saying "only
+                // available for vector, WMS, and COG layers" on a vector layer
+                // reads as a bug.
+                layerCaps.query
+                ? t("layers.identifyUnavailable")
+                : t("layers.identifyCapabilityDisabled");
+            const canEditGeometry = canEditLayerGeometry(layer) && layerCaps.update;
             // A vector layer whose in-view features can be loaded into the
             // GeoEditor (a copy, not in-place): geojson and vector tile layers
             // (vector-tiles, and PMTiles/MBTiles carrying vector tiles),
@@ -3117,7 +3176,15 @@ export function LayerPanel({
             // included here (unlike Edit geometry) because loading grabs a copy
             // of what is rendered rather than editing the source in place;
             // raster PMTiles/MBTiles have no vector features so are excluded.
+            // Gated on `export`, not `create`/`update`: the action copies this
+            // layer's features into the editor's own layer, so it is the same
+            // kind of copy-out as Export selection and Save to Layer Library.
+            // `create` would be wrong twice over — the features are created in
+            // the editor's layer, not this one, and `inferLayerCapabilities`
+            // infers `create: false` for every tile layer in the list below,
+            // which would remove the action from all of them by default.
             const canLoadIntoEditor =
+              layerCaps.export &&
               layer.metadata.sourceKind !== SKETCHES_SOURCE_KIND &&
               layer.metadata.tileType !== "raster" &&
               (layer.type === "geojson" ||
@@ -3130,17 +3197,23 @@ export function LayerPanel({
               isDuckDBQueryLayer(layer) && typeof layer.metadata.query === "string";
             // The attribute table reads features from geojson layers (including
             // Add Vector Layer geojson-mode) and DuckDB query layers.
-            const canOpenAttributeTable = layer.type === "geojson" || isDuckDBQueryLayer(layer);
+            const canOpenAttributeTable =
+              layerCaps.query && (layer.type === "geojson" || isDuckDBQueryLayer(layer));
             // The interactive selection dialogs (#1314) resolve selection ids
-            // against in-store features, like the highlight overlay does.
-            const canSelectFeatures = (layer.geojson?.features?.length ?? 0) > 0;
+            // against in-store features, like the highlight overlay does, and
+            // inspecting which features match is a read of the layer's data.
+            const canSelectFeatures = layerCaps.query && (layer.geojson?.features?.length ?? 0) > 0;
             // Selection actions act on the live selection, which always
             // belongs to the active layer.
             const holdsSelection =
               canSelectFeatures && layer.id === selectedLayerId && selectedFeatureCount > 0;
+            // Exporting the selection copies the selected features into a new
+            // layer they can be shared or published from, so it follows
+            // `export` rather than the read-only selection actions beside it.
+            const canExportSelection = holdsSelection && layerCaps.export;
             // Export writes the layer's GeoJSON features to disk; only
             // geojson-backed vector layers carry those features.
-            const canExportLayer = layer.type === "geojson";
+            const canExportLayer = layerCaps.export && layer.type === "geojson";
             const canExportPolyline = canExportLayer && layerSupportsPolylineExport(layer);
             // Importing a style (Mapbox GL or SLD) only writes the layer's
             // vector symbology, so it applies to any vector-styled layer (local
@@ -3156,18 +3229,25 @@ export function LayerPanel({
             // uses to read features out of the vector control, so the menu never
             // hides a layer the capture path could in fact embed (a tiles-mode
             // Add Vector Layer layer has no `layer.geojson` to look at).
-            const canSaveToLibrary = canSaveLayerToLibrary(layer, {
-              canRestoreControlPainted: canRestoreLibraryLayer,
-              hasMaterializableFeatures: isEmbeddableLocalVectorLayer,
-            });
+            const canSaveToLibrary =
+              layerCaps.export &&
+              canSaveLayerToLibrary(layer, {
+                canRestoreControlPainted: canRestoreLibraryLayer,
+                hasMaterializableFeatures: isEmbeddableLocalVectorLayer,
+              });
             // Copy/paste symbology (issue #1339). Vector-styled layers and
             // deck.gl rasters each copy their own style family; a paste only
             // lands when the clipboard entry shares the target's family.
             const copyStyleKind = copyableLayerStyleKind(layer);
             const canPasteStyle = copiedLayerStyle?.kind === copyStyleKind;
             // Write-back commits edits to the layer's local source file in place
-            // (desktop only, supported formats); Export writes a new file.
-            const canWriteBack = canWriteEditsToSource(layer);
+            // (desktop only, supported formats); Export writes a new file. A
+            // save can insert, update or delete rows, so any one of those three
+            // capabilities is enough to offer it — the sidecar refuses the
+            // individual statements the layer does not allow.
+            const canWriteBack =
+              canWriteEditsToSource(layer) &&
+              (layerCaps.update || layerCaps.create || layerCaps.delete);
             // Vector layers with a date/timestamp property can be driven by the
             // Time Slider; the binding (if any) lives on the layer metadata.
             // Tile-backed vector layers qualify too: the window is a MapLibre
@@ -3183,10 +3263,10 @@ export function LayerPanel({
             const timeBinding = getLayerTimeBinding(layer);
             // Raster/COG layers backed by a downloadable file (a retained
             // local-bytes blob URL or a source URL) export to GeoTIFF.
-            const canExportRaster = canExportRasterLayer(layer);
+            const canExportRaster = layerCaps.export && canExportRasterLayer(layer);
             // COG/WMS/XYZ layers can also export a bounding-box subset (a clip)
             // via the in-browser geolibre-wasm extractors, drawn on the map.
-            const canExtractSubset = canExtractRasterSubset(layer);
+            const canExtractSubset = layerCaps.export && canExtractRasterSubset(layer);
             // Rasters added through the floating Add Raster Layer panel are
             // styled there; offer a shortcut to reopen that panel since it is
             // dismissed (and its on-map icon removed) when closed.
@@ -3198,6 +3278,11 @@ export function LayerPanel({
             const canAutoRefresh = canRefresh && supportsAutoRefresh(layer);
             const isLayerLocked =
               collaboration.isActive && (collaboration.lockedLayerIds ?? []).includes(layer.id);
+            // Whether collaboration lets this session touch the layer at all —
+            // rename, remove, move between groups. Deliberately *not* anded
+            // with `layerCaps.update`: that flag governs the layer's features
+            // and attributes, so a read-only reference layer can still be
+            // renamed or taken off the map.
             const layerEditable = canEditLayer(layer.id);
             const refreshConfig = getLayerRefreshConfig(layer);
             // Live SQL query layers (issue #1295) refresh by re-running their
@@ -3375,6 +3460,16 @@ export function LayerPanel({
                           <Lock
                             className="h-3 w-3 shrink-0 text-amber-500"
                             aria-label={t("collaborate.layerLockedHint")}
+                          />
+                        </span>
+                      )}
+                      {/* A quick filter hides features, so say so on the row:
+                          without this a filtered layer reads as missing data. */}
+                      {hasActiveQuickFilter(layer) && (
+                        <span title={t("quickFilters.layerFilteredHint")}>
+                          <Filter
+                            className="h-3 w-3 shrink-0 text-primary"
+                            aria-label={t("quickFilters.layerFilteredHint")}
                           />
                         </span>
                       )}
@@ -3597,6 +3692,22 @@ export function LayerPanel({
                               {t("layers.openStylePanel")}
                             </DropdownMenuItem>
                           )}
+                          {/* Clearing keeps the controls the author configured
+                              and only empties what they were answered with, so
+                              the next question does not start from scratch. */}
+                          {hasActiveQuickFilter(layer) && (
+                            <DropdownMenuItem
+                              onSelect={() =>
+                                setLayerQuickFilters(
+                                  layer.id,
+                                  clearQuickFilterValues(layer.quickFilters),
+                                )
+                              }
+                            >
+                              <Filter className="me-2 h-3.5 w-3.5" />
+                              {t("quickFilters.clearAll")}
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem
                             onSelect={() => {
                               addLayerGroup(undefined, moveIds);
@@ -3644,6 +3755,33 @@ export function LayerPanel({
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuSeparator />
+                          {layer.metadata.sourceKind === SKETCHES_SOURCE_KIND && (
+                            <>
+                              <DropdownMenuSub>
+                                <DropdownMenuSubTrigger
+                                  disabled={
+                                    !Array.isArray(layer.geojson?.features) ||
+                                    layer.geojson.features.length === 0
+                                  }
+                                >
+                                  <FilePlus2 className="h-3.5 w-3.5" />
+                                  {t("layers.exportSketchesAsLayer")}
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent>
+                                  <DropdownMenuItem onSelect={() => exportSketchesAsLayer(layer)}>
+                                    {t("layers.exportSketchesKeep")}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    disabled={!layerEditable}
+                                    onSelect={() => exportSketchesAsLayer(layer, true)}
+                                  >
+                                    {t("layers.exportSketchesClear")}
+                                  </DropdownMenuItem>
+                                </DropdownMenuSubContent>
+                              </DropdownMenuSub>
+                              <DropdownMenuSeparator />
+                            </>
+                          )}
                           {canMaterializeDuckDB && (
                             <>
                               <DropdownMenuItem
@@ -3869,18 +4007,20 @@ export function LayerPanel({
                                 <X className="me-2 h-3.5 w-3.5" />
                                 {t("toolbar.item.clearSelection")}
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onSelect={() =>
-                                  exportSelectionAsLayer(
-                                    t("selection.exportedLayerName", {
-                                      name: layer.name,
-                                    }),
-                                  )
-                                }
-                              >
-                                <FilePlus2 className="me-2 h-3.5 w-3.5" />
-                                {t("toolbar.item.exportSelection")}
-                              </DropdownMenuItem>
+                              {canExportSelection && (
+                                <DropdownMenuItem
+                                  onSelect={() =>
+                                    exportSelectionAsLayer(
+                                      t("selection.exportedLayerName", {
+                                        name: layer.name,
+                                      }),
+                                    )
+                                  }
+                                >
+                                  <FilePlus2 className="me-2 h-3.5 w-3.5" />
+                                  {t("toolbar.item.exportSelection")}
+                                </DropdownMenuItem>
+                              )}
                             </>
                           )}
                           {canBindTimeSlider && (

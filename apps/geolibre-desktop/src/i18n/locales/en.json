@@ -699,7 +699,7 @@
       "errorConnectFirst": "Connect to PostgreSQL first.",
       "errorNoVectorLayers": "The selected Martin source has no vector layers.",
       "errorSelectSource": "Select a Martin source to add.",
-      "desktopOnlyNotice": "PostgreSQL layers are only available in GeoLibre Desktop. This feature runs a local Martin tile server, which the web app cannot launch.",
+      "desktopOnlyNotice": "PostgreSQL layers are only available in GeoLibre Desktop. This feature runs a local Martin tile server, which the web and mobile apps cannot launch.",
       "savedConnection": "Saved connection",
       "selectSavedConnection": "Select saved connection",
       "connectionString": "PostgreSQL connection string",
@@ -1900,6 +1900,7 @@
     "description": "Configure project preferences and runtime settings.",
     "saveButton": "Save Settings",
     "section": {
+      "language": "Language",
       "map": "Map",
       "layout": "Layout",
       "appearance": "Appearance",
@@ -1923,6 +1924,39 @@
       "managePlugins": "Manage Plugins",
       "styleManager": "Style Manager",
       "urlOverrideNote": "URL layout parameters override saved settings."
+    },
+    "languagePack": {
+      "title": "Language packs",
+      "description": "Add optional translations for Whitebox tool names, parameters, and help text without increasing every GeoLibre installation.",
+      "manage": "Manage language packs",
+      "interfaceLanguage": "Interface language",
+      "installed": "Whitebox language pack installed",
+      "notInstalled": "No Whitebox language pack installed",
+      "installedDetail": "{{source}} · installed {{date}}",
+      "installedDetailNoDate": "{{source}} · installed",
+      "notInstalledDetail": "Whitebox processing metadata remains in English until you download or import a pack.",
+      "downloadsDisabled": "Official downloads are disabled in this build. Import a language-pack file instead.",
+      "englishFallback": "Whitebox provides its English metadata directly, so an additional pack is not required.",
+      "sourceOfficial": "Official download",
+      "sourceFile": "Imported file",
+      "download": "Download pack",
+      "importFile": "Import file",
+      "remove": "Remove pack",
+      "downloaded": "Language pack downloaded and applied.",
+      "imported": "Language pack for {{locale}} imported and applied.",
+      "removed": "Language pack removed. Whitebox metadata now uses English.",
+      "privacy": "Packs are stored only on this device. Downloading a pack sends the locale code, but no project data, to {{host}}.",
+      "privacyLocalOnly": "Packs are stored only on this device. This build downloads nothing: import a language-pack file instead.",
+      "browse": "Browse language packs",
+      "errorInvalidJson": "That file is not valid JSON.",
+      "errorInvalidFormat": "That file is not a valid GeoLibre Whitebox language pack.",
+      "errorUnsupportedVersion": "This language-pack version is not supported by this GeoLibre release.",
+      "errorInvalidLocale": "The language pack has an invalid or unexpected locale.",
+      "errorUnsupportedLocale": "GeoLibre does not include the base interface language required by this pack.",
+      "errorTooLarge": "The language pack exceeds the 5 MB safety limit.",
+      "errorNotFound": "No official Whitebox language pack is available for this language yet.",
+      "errorDownload": "The language pack could not be downloaded. Check your connection or import a local file.",
+      "errorGeneric": "The language pack could not be installed."
     },
     "updates": {
       "title": "Software Updates",
@@ -1953,6 +1987,13 @@
       "noProjectSelected": "No project selected",
       "globeByDefault": "Enable 3D globe by default",
       "globeByDefaultHint": "Used for the untitled workspace when no startup project or project link is provided.",
+      "defaultView": "Default map view",
+      "defaultViewHint": "Set the center and zoom for the untitled workspace.",
+      "longitude": "Center longitude",
+      "latitude": "Center latitude",
+      "zoom": "Zoom level",
+      "useCurrentView": "Use Current View",
+      "viewUnavailable": "The current map view is unavailable.",
       "selectError": "The selected project could not be read.",
       "restoring": "Opening your startup project…",
       "loadWarning": "The startup project is unavailable. GeoLibre opened the default workspace instead."
@@ -2099,6 +2140,10 @@
       "osEnvNote": "The desktop app also reads matching API keys from your system environment variables. Those are used automatically and are never saved to the project file — leave a field blank to keep using the environment value.",
       "osEnvField": "Read from your system environment variable {{name}}.",
       "osEnvPlaceholder": "Set in your system environment",
+      "refreshModels": "Refresh model list",
+      "modelsFailedToLoad": "Could not load models: {{message}}",
+      "ollamaNetworkFailure": "Could not reach the Ollama server. Check that it is running at this address and that OLLAMA_ORIGINS allows this app's origin, plus any firewall or proxy rules.",
+      "ollamaTimedOut": "The request to the Ollama server timed out. The host may be slow, unreachable, or blocked by a firewall or proxy.",
       "newProfile": "New profile",
       "cancel": "Cancel",
       "addProfile": "Add profile",
@@ -2506,7 +2551,8 @@
       "getisOrd": "Getis-Ord Gi* hotspots",
       "averageNearestNeighbor": "Average nearest neighbor",
       "kernelDensity": "Kernel density (heatmap)",
-      "emergingHotSpot": "Emerging Hot Spot (space-time cube)"
+      "emergingHotSpot": "Emerging Hot Spot (space-time cube)",
+      "compositeScore": "Composite score (suitability index)"
     },
     "rasterTool": {
       "hillshade": "Hillshade",
@@ -2780,6 +2826,7 @@
       "embedVectorTitle": "Embed local vector data?",
       "embedVectorDesc": "This project has {{count}} local vector layer(s) loaded from your computer. The browser cannot re-read them when the project is reopened, so their data must be embedded in the project file to be restored. Embedding adds about {{size}} to the file.",
       "embedVectorDescDesktop": "This project has {{count}} local vector layer(s) loaded from your computer. Embed their data to make the project self-contained (adds about {{size}}), or save file references that reload from disk when the project is reopened. References keep the file small but break if a source file is later moved or deleted.",
+      "embedVectorDescMas": "This project has {{count}} local vector layer(s) loaded from your computer. The Mac App Store sandbox cannot retain access to those files after GeoLibre closes, so their data must be embedded in the project file to be restored. Embedding adds about {{size}} to the file.",
       "embedVectorLargeWarning": "Embedding about {{size}} makes a very large project file. Reopening it may be slow or fail outright, because every feature has to be parsed and held in memory at once. For data this size, convert the layers to PMTiles or FlatGeobuf and add them as remote layers instead of embedding them.",
       "embedVectorEmbedButton": "Embed data",
       "embedVectorReferenceButton": "Save file references",
@@ -4221,6 +4268,8 @@
       "removeConnection": "Remove connection",
       "removeNode": "Remove node",
       "resizePanel": "Resize panel",
+      "maximizePanel": "Maximize panel",
+      "restorePanelSize": "Restore previous size",
       "minimizePanel": "Minimize panel",
       "restorePanel": "Restore panel",
       "resizePalette": "Resize the tool palette",
@@ -4257,9 +4306,31 @@
     "parameterField": {
       "selectLayer": "Select a layer...",
       "selectField": "Select a field...",
+      "selectOption": "Select an option...",
       "selectLayerFirst": "Select a layer first",
       "layersSelected_one": "{{count}} layer selected",
       "layersSelected_other": "{{count}} layers selected"
+    },
+    "fieldWeights": {
+      "columnField": "Field",
+      "columnNormalization": "Normalize",
+      "columnWeight": "Weight",
+      "columnDirection": "Direction",
+      "addField": "Add field",
+      "removeAria": "Remove {{field}}",
+      "empty": "No fields yet. Add at least two to build a score.",
+      "shares": "Weights: {{shares}}",
+      "noWeight": "Give at least one field a weight above zero.",
+      "normalization": {
+        "minMax": "Min-max",
+        "zScore": "Z-score",
+        "rank": "Rank",
+        "quantile": "Quantile"
+      },
+      "direction": {
+        "higher": "Higher is better",
+        "lower": "Lower is better"
+      }
     },
     "whitebox": {
       "run": "Run",
@@ -4311,6 +4382,25 @@
       "auto": "Auto",
       "chooseOutputPath": "Choose output path",
       "chooseInputPath": "Choose input path",
+      "startServer": "Start server",
+      "stopServer": "Stop server",
+      "loadingTools": "Loading…",
+      "lockedPrefix": "[Locked] ",
+      "missingRequiredParameter": "Missing required parameter: {{label}}",
+      "sidecarCannotReadBrowserFiles": "The sidecar cannot read browser-selected files for {{label}}. Run locally (WASM), or enter filesystem paths available to the sidecar.",
+      "selectedLayersMissing": "One or more selected layers for {{label}} no longer exist.",
+      "layerMissingGeoJson": "Layer \"{{layer}}\" has no in-memory GeoJSON for {{label}}.",
+      "layerNotFetchable": "Layer \"{{layer}}\" is not fetchable for {{label}}.",
+      "layerMissingPath": "Layer \"{{layer}}\" has no filesystem path for {{label}}.",
+      "importOutputFailed": "Could not import Whitebox output.",
+      "showingSnapshotOnly": "Showing GitHub catalog only.",
+      "liveCatalogEmpty": "Live catalog is empty. Showing GitHub catalog only.",
+      "jobStatus": {
+        "pending": "Pending",
+        "running": "Running",
+        "succeeded": "Succeeded",
+        "failed": "Failed"
+      },
       "categoryGeneral": "General",
       "categoryAll": "All ({{total}})",
       "errorLoadSnapshot": "Could not load Whitebox catalog snapshot.",
@@ -5524,6 +5614,50 @@
               }
             }
           }
+        },
+        "composite-score": {
+          "name": "Composite score (suitability index)",
+          "description": "Normalize, weight, and combine several numeric fields into a single 0-100 index, then style the layer by it.",
+          "params": {
+            "layer": {
+              "label": "Layer"
+            },
+            "fields": {
+              "label": "Fields and weights",
+              "description": "Two or more numeric fields. Each gets a normalization, a relative weight, and the end of its range that scores well."
+            },
+            "aggregation": {
+              "label": "Aggregation",
+              "description": "The geometric mean lets a weak field pull the score down: a strong field cannot fully compensate for it.",
+              "options": {
+                "weighted-mean": "Weighted arithmetic mean",
+                "geometric-mean": "Weighted geometric mean"
+              }
+            },
+            "nullHandling": {
+              "label": "Features missing a value",
+              "description": "There is no safe default: dropping and renormalizing produce different maps, so choose which one this index means.",
+              "options": {
+                "drop": "Drop the feature from the result",
+                "renormalize": "Renormalize weights over the fields it has"
+              }
+            },
+            "scoreField": {
+              "label": "Score field name",
+              "description": "Name of the numeric column the score is written to."
+            },
+            "scoreRange": {
+              "label": "Score range",
+              "options": {
+                "0-100": "0 to 100",
+                "0-1": "0 to 1"
+              }
+            },
+            "keepComponents": {
+              "label": "Keep normalized components",
+              "description": "Write each field's normalized value as its own column, so the score can be audited instead of taken on trust."
+            }
+          }
         }
       },
       "raster": {
@@ -6008,6 +6142,7 @@
     "editValues": "Edit attribute values",
     "editTitleFinishGeometry": "Finish geometry editing to edit attributes",
     "editTitleReadOnly": "Editing is not available for Add Vector Layer layers",
+    "editTitleCapabilityDisabled": "Editing is disabled for this layer",
     "editTitleUseSaveCancel": "Use Save or Cancel to finish editing",
     "exitEditMode": "Exit edit mode",
     "editTitleDuckdb": "Edit displayed DuckDB query attributes in memory",
@@ -6033,6 +6168,7 @@
     "dashboard": "Dashboard",
     "exportSelectedLayer": "Export selected layer",
     "exportTitleDisabled": "Export requires a GeoJSON-backed layer",
+    "exportTitleCapabilityDisabled": "Export is disabled for this layer",
     "cancelEdits": "Cancel attribute edits",
     "searchPlaceholder": "Search attributes...",
     "searchAria": "Search attributes",
@@ -6204,6 +6340,15 @@
     "addClass": "Add class",
     "removeClass": "Remove class",
     "beforeIdSavedUnavailable": "Saved (unavailable)",
+    "blendMode": "Blend",
+    "blendModeFor": "Blend mode for {{name}}",
+    "blendModes": {
+      "normal": "Normal",
+      "multiply": "Multiply",
+      "screen": "Screen",
+      "lighten": "Lighten",
+      "add": "Add"
+    },
     "raster": {
       "greyscale": "Greyscale",
       "greyscaleHint": "Toggle a greyscale basemap (drives saturation to its minimum)",
@@ -6683,6 +6828,60 @@
       "noFields": "The layer has no attribute fields to configure.",
       "minMaxInvalid": "Min must be less than or equal to Max."
     },
+    "popup": {
+      "heading": "Popup",
+      "showOnClick": "Show popup on click (Identify)",
+      "showOnHover": "Show tooltip on hover",
+      "hoverHint": "The tooltip shows the title and the fields you tick as “In hover tooltip”.",
+      "titleField": "Title field",
+      "titleFieldDefault": "Layer name",
+      "titleExpression": "Title expression",
+      "titleExpressionPlaceholder": "[\"get\", \"name\"]",
+      "bodyExpression": "Body expression",
+      "bodyExpressionPlaceholder": "[\"concat\", [\"get\", \"name\"], \" has \", [\"to-string\", [\"get\", \"pop_max\"]], \" residents\"]",
+      "bodyExpressionHint": "A body expression replaces the field rows with its own text.",
+      "bodyReplacesRows": "While a body expression is set it replaces the field rows and the id row.",
+      "invalidExpression": "Invalid expression",
+      "openBuilder": "Open expression builder",
+      "showFeatureId": "Show the feature id row",
+      "fields": "Fields",
+      "allFields": "No fields chosen, so every visible field is shown, in the data's own order.",
+      "addField": "Add a field…",
+      "noFieldsLeft": "Every field is already listed",
+      "chooseFields": "Choose fields",
+      "resetFields": "Show every field",
+      "removeField": "Remove field",
+      "moveUp": "Move field up",
+      "moveDown": "Move field down",
+      "dragToReorder": "Drag to reorder",
+      "dragNamedToReorder": "Drag {{name}} to reorder",
+      "label": "Label",
+      "kind": "Value type",
+      "kinds": {
+        "auto": "Automatic",
+        "text": "Text",
+        "number": "Number",
+        "date": "Date",
+        "link": "Link",
+        "image": "Image"
+      },
+      "decimals": "Decimals",
+      "thousands": "Group thousands",
+      "dateFormat": "Date format",
+      "dateFormats": {
+        "date": "Date",
+        "datetime": "Date and time",
+        "time": "Time",
+        "iso": "ISO 8601",
+        "year": "Year"
+      },
+      "linkLabel": "Link text",
+      "linkLabelPlaceholder": "The URL itself",
+      "prefix": "Prefix",
+      "suffix": "Suffix",
+      "inHover": "In hover tooltip",
+      "imageNotInHover": "Image fields stay in the click popup; a tooltip has no room for a picture."
+    },
     "editorTracking": {
       "heading": "Editor Tracking",
       "description": "Record who created each feature and who last changed it. The columns below are filled in automatically when features are drawn, edited, calculated, or captured.",
@@ -6698,6 +6897,51 @@
       "duplicateName": "Each tracking column needs a different name.",
       "columnTaken": "“{{name}}” is already an attribute column. Tracking would overwrite its values."
     }
+  },
+  "quickFilters": {
+    "heading": "Quick filters",
+    "empty": "No filters yet. Add one below to narrow this layer by any of its fields.",
+    "addFilter": "Add a filter…",
+    "allFieldsUsed": "Every field already has a filter",
+    "removeAll": "Remove all",
+    "clearAll": "Clear filters",
+    "clearOne": "Clear this filter",
+    "clearOneNamed": "Clear the filter on {{field}}",
+    "remove": "Remove filter",
+    "removeNamed": "Remove the filter on {{field}}",
+    "controlType": "Filter type",
+    "enabledTitle": "Apply this filter",
+    "kind": {
+      "categorical": "Values",
+      "range": "Range",
+      "date": "Dates",
+      "text": "Text"
+    },
+    "operator": {
+      "contains": "Contains",
+      "startsWith": "Starts with",
+      "equals": "Is exactly"
+    },
+    "searchValues": "Search values",
+    "noValues": "This field has no values to choose from.",
+    "noMatchingValues": "No values match your search.",
+    "selectAll": "Select all",
+    "selectNone": "Select none",
+    "allValues": "All values",
+    "selectedCount_one": "{{count}} selected",
+    "selectedCount_other": "{{count}} selected",
+    "rangeMin": "Minimum",
+    "rangeMax": "Maximum",
+    "rangeSeparator": "to",
+    "dateFrom": "From",
+    "dateTo": "To",
+    "textOperator": "Match",
+    "textValue": "Text to match",
+    "textPlaceholder": "Type to filter",
+    "noFields": "This layer has no attributes to filter on.",
+    "noTileFeatures": "No features are loaded yet. Pan or zoom to the data, then reopen this section.",
+    "viewportSampleHint": "Values come from the tiles currently loaded, so the list grows as you pan and zoom.",
+    "layerFilteredHint": "A quick filter is hiding some of this layer's features."
   },
   "vectorExport": {
     "invalidKmlCoordinatesByPosition": "KML export could not write feature {{position}} because it has invalid coordinates.",
@@ -6715,6 +6959,10 @@
     "moveDown": "Move down",
     "zoomToLayer": "Zoom to layer",
     "layerActions": "Layer actions",
+    "exportSketchesAsLayer": "Export Sketches as new layer",
+    "exportSketchesKeep": "Keep features in Sketches",
+    "exportSketchesClear": "Clear Sketches after export",
+    "exportedSketchesName": "Sketches export",
     "metadata": "Metadata",
     "removeLayer": "Remove layer",
     "identifyFeatures": "Identify features",
@@ -6722,6 +6970,7 @@
     "identifyInspectPixels": "Inspect pixel values",
     "identifyStopInspectPixels": "Stop inspecting pixel values",
     "identifyUnavailable": "Identify is only available for vector, WMS, and COG layers",
+    "identifyCapabilityDisabled": "Querying is disabled for this layer",
     "selectFeaturesMenu": "Select features",
     "selectFeaturesSingle": "Select features by click",
     "selectFeaturesRectangle": "Select features by rectangle",
@@ -6794,13 +7043,15 @@
     "saveEditsPostgisNoConnection": "No PostgreSQL connection is available for this layer. Reconnect in Add Data > PostgreSQL, then try again.",
     "typeBasemap": "basemap",
     "searchPlaces": "Search places",
-    "searchPlacesPlaceholder": "Search places, lat, lon, or H3 cell...",
+    "searchPlacesPlaceholder": "Search layers, places, lat, lon, or H3 cell...",
     "searchPlacesSearching": "Searching...",
     "searchPlacesNoResults": "No places found",
     "searchPlacesError": "Search failed. Try again.",
     "searchPlacesClear": "Clear search",
     "searchPlacesGoToCoordinate": "Go to {{coordinate}}",
     "searchPlacesGoToH3Cell": "Go to H3 cell {{cell}} (res {{resolution}})",
+    "searchPlacesGroup": "Places",
+    "searchFeaturesPartial": "(partial)",
     "background": "Background",
     "backgroundCannotReorder": "Background cannot be reordered",
     "hideBackground": "Hide background",
@@ -7318,5 +7569,60 @@
     "mapPoint": "Map Point",
     "reply": "Reply",
     "replyPlaceholder": "Write a reply..."
+  },
+  "samgeoPlugin": {
+    "panelTitle": "SamGeo Segmentation",
+    "intro": "Segment imagery with SAM3 using text, points, a box, or automatic masks.",
+    "apiUrl": "SamGeo API URL",
+    "checkConnection": "Check connection",
+    "notChecked": "Not checked",
+    "checking": "Checking…",
+    "connected": "Connected",
+    "unavailable": "Unavailable: {{error}}",
+    "image": "Image",
+    "imageSource": "Image source",
+    "imageUpload": "Upload a file",
+    "noRasterLayers": "No raster layers loaded",
+    "layerUnreadable": "This layer has no readable GeoTIFF source; export it or upload the file instead.",
+    "docsLink": "How to set up the SamGeo API",
+    "mode": "Mode",
+    "modeText": "Text prompt",
+    "modePoints": "Point prompts",
+    "modeBox": "Bounding box (find similar)",
+    "modeAutomatic": "Automatic (everything)",
+    "modelId": "Model ID",
+    "sam2ModelId": "SAM2 model",
+    "automaticHint": "Automatic mode runs SAM2's mask generator, which segments every object; SAM3 only responds to prompts.",
+    "textPrompt": "Text prompt",
+    "confidence": "Confidence threshold",
+    "minSize": "Minimum mask size (pixels)",
+    "maxSize": "Maximum mask size (0 = no limit)",
+    "backend": "Backend",
+    "foregroundPoint": "+ Foreground point",
+    "backgroundPoint": "− Background point",
+    "clickForeground": "Click the map to add a foreground point.",
+    "clickBackground": "Click the map to add a background point.",
+    "pointAdded": "Point added.",
+    "drawBox": "Draw box on map",
+    "dragBox": "Drag a rectangle on the map.",
+    "boxAdded": "Box added.",
+    "boxSummary": "Box: {{box}}",
+    "noBox": "No box drawn.",
+    "pointSummary": "{{foreground}} foreground, {{background}} background",
+    "pointsPerSide": "Points per side",
+    "predIou": "Predicted IoU threshold",
+    "stability": "Stability threshold",
+    "clearPrompts": "Clear prompts",
+    "promptsCleared": "Prompts cleared.",
+    "segment": "Segment",
+    "chooseImage": "Choose an image first.",
+    "enterPrompt": "Enter a text prompt.",
+    "addPoint": "Add at least one foreground point.",
+    "drawBoxFirst": "Draw a box first.",
+    "segmenting": "Segmenting…",
+    "noObjects": "No objects found.",
+    "added": "Added {{count}} feature(s){{layer}}.",
+    "badResponse": "SamGeo API did not return a GeoJSON FeatureCollection.",
+    "unknownProjection": "The result is not in WGS84 and the image carries no readable projection, so it cannot be placed on the map. Use a georeferenced GeoTIFF."
   }
 }

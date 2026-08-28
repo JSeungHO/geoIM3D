@@ -100,3 +100,6 @@ apps/geolibre-desktop/src-tauri/mas/embedded.provisionprofile
 apps/geolibre-desktop/public/objects/*
 !apps/geolibre-desktop/public/objects/manifest.json
 !apps/geolibre-desktop/public/objects/README.md
+
+# Local Android Gradle cache for the vendored Tauri geolocation plugin.
+apps/geolibre-desktop/src-tauri/vendor/tauri-plugin-geolocation/android/.gradle/

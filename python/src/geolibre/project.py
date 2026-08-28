@@ -338,6 +338,10 @@ DEFAULT_LAYER_STYLE: dict[str, Any] = {
     "rasterSaturation": 0,
     "rasterContrast": 0,
     "rasterHueRotate": 0,
+    # How the layer composites onto the map beneath it. "normal" is ordinary
+    # alpha compositing; see BLEND_MODES in packages/core/src/types.ts for the
+    # full set the app accepts.
+    "blendMode": "normal",
 }
 
 # Mirror of DEFAULT_PROJECT_PREFERENCES in packages/core/src/types.ts.
@@ -450,6 +454,7 @@ def tile_layer(
     *,
     tile_size: int = 256,
     attribution: str | None = None,
+    bounds: list[float] | None = None,
     **style: Any,
 ) -> dict[str, Any]:
     """Build a raster XYZ tile layer (e.g. an ``{z}/{x}/{y}`` template).
@@ -459,6 +464,7 @@ def tile_layer(
         url: The XYZ tile URL template.
         tile_size: Tile size in pixels (typically 256).
         attribution: Optional attribution string.
+        bounds: Optional ``[west, south, east, north]`` request bounds.
         **style: Style overrides merged into the default layer style.
 
     Returns:
@@ -473,6 +479,8 @@ def tile_layer(
     }
     if attribution:
         source["attribution"] = attribution
+    if bounds:
+        source["bounds"] = bounds
     layer["source"] = source
     layer["metadata"] = {"sourceKind": "xyz-url"}
     return layer

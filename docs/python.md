@@ -26,14 +26,17 @@ Or with conda from [conda-forge](https://anaconda.org/conda-forge/geolibre):
 conda install -c conda-forge geolibre
 ```
 
-Optional extras for `add_geojson()` from a GeoDataFrame and for reading **local**
-vector files with `add_vector()` / `add_geoparquet()` / `add_flatgeobuf()` /
-`add_shp()` / `add_kml()` / `add_gpkg()` (remote URLs for those formats need no
-extras):
+Optional extras provide GeoPandas/Shapely support for GeoDataFrames and local
+vector files, plus xarray/rioxarray/rasterio/rio-tiler support for in-memory rasters:
 
 ```bash
-pip install "geolibre[all]"   # adds GeoPandas and Shapely
+pip install "geolibre[all]"      # both
+pip install "geolibre[vector]"   # GeoPandas/Shapely only
+pip install "geolibre[raster]"   # xarray/rioxarray/rasterio/rio-tiler only
 ```
+
+`[all]` is the union of the two, so it now installs rasterio (and GDAL with it);
+use `[vector]` to keep an existing vector-only environment as light as before.
 
 The optional `[all]` extra is pip-only. If you installed via conda, add it with
 `pip install "geolibre[all]"` inside the same environment.
@@ -61,13 +64,58 @@ m.add_basemap("dark")
 m.set_center(-120, 47, zoom=8)
 ```
 
+Google Earth Engine layers are optional and need `pip install earthengine-api`
+plus credentials (`ee.Authenticate()` once, then a Google Cloud project):
+
+```python
+import ee
+
+ee.Authenticate()  # once per machine
+ee.Initialize(project="your-google-cloud-project")
+m.add_ee_layer(ee.Image("USGS/SRTMGL1_003"), {"min": 0, "max": 3000}, name="SRTM")
+```
+
+`add_ee_layer` evaluates the Earth Engine object in the kernel and adds the
+resulting tile URL as a raster layer (ImageCollections are mosaicked, vector
+objects are styled into raster tiles — for those, `vis_params` takes
+`ee.FeatureCollection.style()` keys such as `color`, `fillColor`, `width`, and
+`pointSize`, not image keys). That URL is tied to an Earth Engine map id that
+expires, so a saved project may need the Earth Engine layer regenerated when it
+is reopened. The result is a plain raster tile layer, not one of the live layers
+the app's own Earth Engine panel manages.
+
 `add_raster` / `add_cog` also accept a **local** GeoTIFF path on the kernel host:
 the file is served by the bundled localhost server so the app can read it. This
-only works where the **browser can reach the kernel's localhost** (local Jupyter,
-VS Code); on remote/browser-separated setups (Colab, JupyterHub, remote servers)
-the localhost route is unreachable, so pass a hosted URL there. The served URL is
-also session-scoped, so a project saved with a local raster will not restore it
-when reopened later — pass a hosted URL for durable projects.
+works directly in local Jupyter and VS Code. In Google Colab, where the kernel
+proxy does not preserve the byte-range semantics required by browser COG
+rendering, GeoLibre renders local rasters as PNG XYZ tiles in the kernel instead.
+JupyterHub can route the COG through the kernel port when
+`jupyter-server-proxy` is available. A static-server-extension-only deployment
+cannot expose kernel files, so pass a hosted URL there. The served URL is
+session-scoped, so a project saved with a local raster will not restore it when
+reopened later — pass a hosted URL for durable projects.
+
+Install `geolibre[raster]` to visualize an in-memory xarray object. Spatial
+dimensions named `lon`/`lat` or `longitude`/`latitude` default to EPSG:4326;
+otherwise provide CRS and dimension names explicitly. Dataset variables become
+bands unless one is selected:
+
+```python
+m.add_raster(data_array, name="Temperature", colormap="viridis")
+m.add_raster(
+    dataset,
+    name="Temperature",
+    array_args={"variable": "temperature", "isel": {"time": 0}},
+)
+```
+
+The temporary Cloud-Optimized GeoTIFF backing an xarray layer is removed when the widget is
+closed, so xarray layers have the same session-only limitation as local files.
+Locally the browser reads that COG directly; in Colab rio-tiler renders it into
+ordinary PNG XYZ tiles to avoid Colab's incompatible byte-range proxy behavior.
+Call `m.close()` when you are done to remove it promptly; otherwise it is removed
+when the `Map` is garbage collected or when the kernel exits normally. A kernel
+that is killed outright leaves the file behind in the system temp directory.
 
 Add markers and data-driven symbology without precomputing styles:
 
@@ -240,11 +288,12 @@ m.on_layer_change(lambda e: print("layers", e["layerIds"]))
 | `add_vector_tiles(url, name=, source_layers=, source_layer=, **style)` | Add a vector tile layer from a TileJSON endpoint. |
 | `add_pmtiles(url, name=, tile_type=, source_layers=, **style)` | Add a PMTiles archive (vector or raster). |
 | `add_tile_layer(url, name=, tile_size=, attribution=)` | Add a raster XYZ tile layer. |
+| `add_ee_layer(ee_object, vis_params=, name=, shown=, opacity=)` | Add an authenticated Google Earth Engine object as raster tiles (needs `earthengine-api`). |
 | `add_wms(endpoint, layers, name=, styles=, image_format=, transparent=, tile_size=, **style)` | Add a WMS layer (GetMap, tiled raster). |
 | `add_wmts(url, name=, tile_size=, **style)` | Add a WMTS layer from a tile URL template. |
 | `add_wfs(endpoint, type_name, name=, version=, output_format=, srs_name=, max_features=, **style)` | Add a WFS layer (GetFeature GeoJSON, fetched and inlined). |
 | `add_cog(url, name=, bands=, colormap=, rescale=, **style)` | Add a Cloud Optimized GeoTIFF (URL or a kernel-side local GeoTIFF path). |
-| `add_raster(url, name=, bands=, colormap=, rescale=, **style)` | Add a raster (COG/GeoTIFF), URL or local path; alias of `add_cog`. |
+| `add_raster(source, name=, bands=, colormap=, rescale=, array_args=, **style)` | Add a COG/GeoTIFF URL or path, or an xarray DataArray/Dataset (xarray needs `geolibre[raster]`). |
 | `add_3d_tiles(url, name=, altitude_offset=, request_headers=, **style)` | Add a 3D Tiles `tileset.json`. |
 | `add_video(urls, coordinates, name=, **style)` | Add a georeferenced video (four `[lng, lat]` corners). |
 | `add_basemap(basemap)` | Set the background basemap. |

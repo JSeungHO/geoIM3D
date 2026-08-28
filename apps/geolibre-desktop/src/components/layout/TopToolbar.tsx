@@ -21,7 +21,6 @@ import {
   openPMTilesLayerPanel,
   openRasterLayerPanel,
   openSplattingLayerPanel,
-  openStacSearchLayerPanel,
   openZarrLayerPanel,
   openThreeDTilesLayerPanel,
   openVectorLayerPanel,
@@ -45,7 +44,9 @@ import {
   setHuggingFaceLabels,
   setSourceCoopLabels,
   setReverseGeocodeLabels,
+  setSamGeoLabels,
   setStacLabels,
+  STAC_PLUGIN_ID,
   setTimelapseLabels,
   DECK_VIZ_PLUGIN_ID,
   DIRECTIONS_PLUGIN_ID,
@@ -235,6 +236,8 @@ export function TopToolbar({
     });
     setAnnotationLabels({
       toolbar: t("annotations.toolbar"),
+      collapse: t("sharedRail.collapse", { title: t("annotations.toolbar") }),
+      expand: t("sharedRail.expand", { title: t("annotations.toolbar") }),
       layerName: t("annotations.layerName"),
       elementsPanelTitle: t("annotations.elementsPanelTitle"),
       tools: {
@@ -968,6 +971,62 @@ export function TopToolbar({
       chooseTarget: t("stacPlugin.chooseTarget"),
       notAddable: t("stacPlugin.notAddable"),
     });
+    setSamGeoLabels({
+      panelTitle: t("samgeoPlugin.panelTitle"),
+      intro: t("samgeoPlugin.intro"),
+      apiUrl: t("samgeoPlugin.apiUrl"),
+      checkConnection: t("samgeoPlugin.checkConnection"),
+      notChecked: t("samgeoPlugin.notChecked"),
+      checking: t("samgeoPlugin.checking"),
+      connected: t("samgeoPlugin.connected"),
+      unavailable: (error) => t("samgeoPlugin.unavailable", { error }),
+      image: t("samgeoPlugin.image"),
+      imageSource: t("samgeoPlugin.imageSource"),
+      imageUpload: t("samgeoPlugin.imageUpload"),
+      noRasterLayers: t("samgeoPlugin.noRasterLayers"),
+      layerUnreadable: t("samgeoPlugin.layerUnreadable"),
+      docsLink: t("samgeoPlugin.docsLink"),
+      mode: t("samgeoPlugin.mode"),
+      modeText: t("samgeoPlugin.modeText"),
+      modePoints: t("samgeoPlugin.modePoints"),
+      modeBox: t("samgeoPlugin.modeBox"),
+      modeAutomatic: t("samgeoPlugin.modeAutomatic"),
+      modelId: t("samgeoPlugin.modelId"),
+      sam2ModelId: t("samgeoPlugin.sam2ModelId"),
+      automaticHint: t("samgeoPlugin.automaticHint"),
+      textPrompt: t("samgeoPlugin.textPrompt"),
+      confidence: t("samgeoPlugin.confidence"),
+      minSize: t("samgeoPlugin.minSize"),
+      maxSize: t("samgeoPlugin.maxSize"),
+      backend: t("samgeoPlugin.backend"),
+      foregroundPoint: t("samgeoPlugin.foregroundPoint"),
+      backgroundPoint: t("samgeoPlugin.backgroundPoint"),
+      clickForeground: t("samgeoPlugin.clickForeground"),
+      clickBackground: t("samgeoPlugin.clickBackground"),
+      pointAdded: t("samgeoPlugin.pointAdded"),
+      drawBox: t("samgeoPlugin.drawBox"),
+      dragBox: t("samgeoPlugin.dragBox"),
+      boxAdded: t("samgeoPlugin.boxAdded"),
+      boxSummary: (box) => t("samgeoPlugin.boxSummary", { box }),
+      noBox: t("samgeoPlugin.noBox"),
+      pointSummary: (foreground, background) =>
+        t("samgeoPlugin.pointSummary", { foreground, background }),
+      pointsPerSide: t("samgeoPlugin.pointsPerSide"),
+      predIou: t("samgeoPlugin.predIou"),
+      stability: t("samgeoPlugin.stability"),
+      clearPrompts: t("samgeoPlugin.clearPrompts"),
+      promptsCleared: t("samgeoPlugin.promptsCleared"),
+      segment: t("samgeoPlugin.segment"),
+      chooseImage: t("samgeoPlugin.chooseImage"),
+      enterPrompt: t("samgeoPlugin.enterPrompt"),
+      addPoint: t("samgeoPlugin.addPoint"),
+      drawBoxFirst: t("samgeoPlugin.drawBoxFirst"),
+      segmenting: t("samgeoPlugin.segmenting"),
+      noObjects: t("samgeoPlugin.noObjects"),
+      added: (count, layer) => t("samgeoPlugin.added", { count, layer }),
+      badResponse: t("samgeoPlugin.badResponse"),
+      unknownProjection: t("samgeoPlugin.unknownProjection"),
+    });
   }, [t]);
 
   const setProcessingOpen = useAppStore((s) => s.setProcessingOpen);
@@ -1172,7 +1231,10 @@ export function TopToolbar({
   const addLayer: AddLayerHandlers = {
     vector: () => openVectorLayerPanel(appApi),
     raster: () => openRasterLayerPanel(appApi),
-    stac: () => openStacSearchLayerPanel(appApi),
+    stac: () => {
+      if (isActive(STAC_PLUGIN_ID)) openRightPanel(STAC_PLUGIN_ID);
+      else toggle(STAC_PLUGIN_ID, appApi);
+    },
     flatGeobuf: () => openFlatGeobufAddVectorLayerPanel(appApi),
     pmtiles: () => openPMTilesLayerPanel(appApi),
     zarr: () => openZarrLayerPanel(appApi),
@@ -1783,7 +1845,9 @@ export function TopToolbar({
       )
       .map((plugin) => ({
         id: `plugin.${plugin.id}`,
-        title: t("toolbar.command.togglePlugin", { name: pluginDisplayName(t, plugin) }),
+        title: t("toolbar.command.togglePlugin", {
+          name: pluginDisplayName(t, plugin),
+        }),
         group: t("toolbar.commandGroup.plugins"),
         keywords: isActive(plugin.id) ? "plugin deactivate" : "plugin activate",
         run: () => toggle(plugin.id, appApi),

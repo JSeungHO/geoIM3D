@@ -699,7 +699,7 @@
       "errorConnectFirst": "Stellen Sie zuerst eine Verbindung zu PostgreSQL her.",
       "errorNoVectorLayers": "Die ausgewählte Martin-Quelle hat keine Vektorebenen.",
       "errorSelectSource": "Wählen Sie eine Martin-Quelle zum Hinzufügen aus.",
-      "desktopOnlyNotice": "PostgreSQL-Ebenen sind nur in GeoLibre Desktop verfügbar. Diese Funktion startet einen lokalen Martin-Kachelserver, den die Web-App nicht starten kann.",
+      "desktopOnlyNotice": "PostgreSQL-Ebenen sind nur in GeoLibre Desktop verfügbar. Diese Funktion startet einen lokalen Martin-Kachelserver, den die Web- und Mobil-Apps nicht starten können.",
       "savedConnection": "Gespeicherte Verbindung",
       "selectSavedConnection": "Gespeicherte Verbindung auswählen",
       "connectionString": "PostgreSQL-Verbindungszeichenfolge",
@@ -1900,6 +1900,7 @@
     "description": "Projekteinstellungen und Laufzeiteinstellungen konfigurieren.",
     "saveButton": "Einstellungen speichern",
     "section": {
+      "language": "Sprache",
       "map": "Karte",
       "layout": "Layout",
       "appearance": "Erscheinungsbild",
@@ -1923,6 +1924,39 @@
       "managePlugins": "Plugins verwalten",
       "styleManager": "Stilverwaltung",
       "urlOverrideNote": "URL-Layout-Parameter überschreiben gespeicherte Einstellungen."
+    },
+    "languagePack": {
+      "title": "Sprachpakete",
+      "description": "Fügen Sie optionale Übersetzungen für Whitebox-Werkzeugnamen, -Parameter und -Hilfetexte hinzu, ohne jede GeoLibre-Installation zu vergrößern.",
+      "manage": "Sprachpakete verwalten",
+      "interfaceLanguage": "Sprache der Oberfläche",
+      "installed": "Whitebox-Sprachpaket installiert",
+      "notInstalled": "Kein Whitebox-Sprachpaket installiert",
+      "installedDetail": "{{source}} · installiert am {{date}}",
+      "installedDetailNoDate": "{{source}} · installiert",
+      "notInstalledDetail": "Die Metadaten der Whitebox-Verarbeitung bleiben auf Englisch, bis Sie ein Paket herunterladen oder importieren.",
+      "downloadsDisabled": "Offizielle Downloads sind in diesem Build deaktiviert. Importieren Sie stattdessen eine Sprachpaketdatei.",
+      "englishFallback": "Whitebox liefert seine englischen Metadaten direkt mit, daher ist kein zusätzliches Paket erforderlich.",
+      "sourceOfficial": "Offizieller Download",
+      "sourceFile": "Importierte Datei",
+      "download": "Paket herunterladen",
+      "importFile": "Datei importieren",
+      "remove": "Paket entfernen",
+      "downloaded": "Sprachpaket heruntergeladen und angewendet.",
+      "imported": "Sprachpaket für {{locale}} importiert und angewendet.",
+      "removed": "Sprachpaket entfernt. Die Whitebox-Metadaten sind jetzt auf Englisch.",
+      "privacy": "Pakete werden nur auf diesem Gerät gespeichert. Beim Herunterladen eines Pakets wird der Sprachcode an {{host}} gesendet, jedoch keine Projektdaten.",
+      "privacyLocalOnly": "Pakete werden nur auf diesem Gerät gespeichert. Dieser Build lädt nichts herunter: Importieren Sie stattdessen eine Sprachpaketdatei.",
+      "browse": "Sprachpakete durchsuchen",
+      "errorInvalidJson": "Diese Datei ist kein gültiges JSON.",
+      "errorInvalidFormat": "Diese Datei ist kein gültiges GeoLibre-Whitebox-Sprachpaket.",
+      "errorUnsupportedVersion": "Diese Sprachpaketversion wird von dieser GeoLibre-Version nicht unterstützt.",
+      "errorInvalidLocale": "Das Sprachpaket hat eine ungültige oder unerwartete Sprachkennung.",
+      "errorUnsupportedLocale": "GeoLibre enthält die von diesem Paket benötigte Basissprache der Oberfläche nicht.",
+      "errorTooLarge": "Das Sprachpaket überschreitet die Sicherheitsgrenze von 5 MB.",
+      "errorNotFound": "Für diese Sprache ist noch kein offizielles Whitebox-Sprachpaket verfügbar.",
+      "errorDownload": "Das Sprachpaket konnte nicht heruntergeladen werden. Überprüfen Sie Ihre Verbindung oder importieren Sie eine lokale Datei.",
+      "errorGeneric": "Das Sprachpaket konnte nicht installiert werden."
     },
     "updates": {
       "title": "Software-Updates",
@@ -1953,6 +1987,13 @@
       "noProjectSelected": "Kein Projekt ausgewählt",
       "globeByDefault": "3D-Globus standardmäßig aktivieren",
       "globeByDefaultHint": "Wird für den unbenannten Arbeitsbereich verwendet, wenn kein Startprojekt und kein Projektlink angegeben ist.",
+      "defaultView": "Standard-Kartenansicht",
+      "defaultViewHint": "Legen Sie Zentrum und Zoom für den unbenannten Arbeitsbereich fest.",
+      "longitude": "Längengrad des Zentrums",
+      "latitude": "Breitengrad des Zentrums",
+      "zoom": "Zoomstufe",
+      "useCurrentView": "Aktuelle Ansicht übernehmen",
+      "viewUnavailable": "Die aktuelle Kartenansicht ist nicht verfügbar.",
       "selectError": "Das ausgewählte Projekt konnte nicht gelesen werden.",
       "restoring": "Ihr Startprojekt wird geöffnet…",
       "loadWarning": "Das Startprojekt ist nicht verfügbar. GeoLibre hat stattdessen den Standardarbeitsbereich geöffnet."
@@ -2099,6 +2140,10 @@
       "osEnvNote": "Die Desktop-App liest passende API-Schlüssel auch aus den Umgebungsvariablen Ihres Systems. Diese werden automatisch verwendet und nie in der Projektdatei gespeichert — lassen Sie ein Feld leer, um weiterhin den Wert aus der Umgebung zu verwenden.",
       "osEnvField": "Wird aus der Systemumgebungsvariable {{name}} gelesen.",
       "osEnvPlaceholder": "In Ihrer Systemumgebung gesetzt",
+      "refreshModels": "Modellliste aktualisieren",
+      "modelsFailedToLoad": "Modelle konnten nicht geladen werden: {{message}}",
+      "ollamaNetworkFailure": "Der Ollama-Server ist nicht erreichbar. Prüfen Sie, ob er unter dieser Adresse läuft und ob OLLAMA_ORIGINS den Ursprung dieser App erlaubt, sowie etwaige Firewall- oder Proxy-Regeln.",
+      "ollamaTimedOut": "Zeitüberschreitung bei der Anfrage an den Ollama-Server. Der Host ist möglicherweise langsam, nicht erreichbar oder durch eine Firewall oder einen Proxy blockiert.",
       "newProfile": "Neues Profil",
       "cancel": "Abbrechen",
       "addProfile": "Profil hinzufügen",
@@ -2506,7 +2551,8 @@
       "getisOrd": "Getis-Ord Gi*-Hotspots",
       "averageNearestNeighbor": "Durchschnittlicher nächster Nachbar",
       "kernelDensity": "Kerndichte (Heatmap)",
-      "emergingHotSpot": "Aufkommende Hotspots (Raum-Zeit-Würfel)"
+      "emergingHotSpot": "Aufkommende Hotspots (Raum-Zeit-Würfel)",
+      "compositeScore": "Kombinierter Score (Eignungsindex)"
     },
     "rasterTool": {
       "hillshade": "Schummerung",
@@ -2780,6 +2826,7 @@
       "embedVectorTitle": "Lokale Vektordaten einbetten?",
       "embedVectorDesc": "Dieses Projekt enthält {{count}} lokale Vektorebene(n), die von Ihrem Computer geladen wurden. Der Browser kann sie beim erneuten Öffnen des Projekts nicht erneut einlesen, daher müssen ihre Daten in die Projektdatei eingebettet werden, damit sie wiederhergestellt werden können. Das Einbetten fügt der Datei etwa {{size}} hinzu.",
       "embedVectorDescDesktop": "Dieses Projekt enthält {{count}} lokale Vektorebene(n), die von Ihrem Computer geladen wurden. Betten Sie ihre Daten ein, um das Projekt eigenständig zu machen (fügt etwa {{size}} hinzu), oder speichern Sie Dateiverweise, die beim erneuten Öffnen des Projekts von der Festplatte neu geladen werden. Verweise halten die Datei klein, funktionieren aber nicht mehr, wenn eine Quelldatei später verschoben oder gelöscht wird.",
+      "embedVectorDescMas": "Dieses Projekt enthält {{count}} lokale Vektorebene(n), die von Ihrem Computer geladen wurden. Die Mac App Store-Sandbox kann den Zugriff auf diese Dateien nach dem Schließen von GeoLibre nicht beibehalten. Daher müssen ihre Daten in die Projektdatei eingebettet werden, damit sie wiederhergestellt werden können. Das Einbetten fügt der Datei etwa {{size}} hinzu.",
       "embedVectorLargeWarning": "Etwa {{size}} einzubetten ergibt eine sehr große Projektdatei. Das erneute Öffnen kann langsam sein oder ganz fehlschlagen, da jedes Objekt auf einmal geparst und im Speicher gehalten werden muss. Konvertieren Sie Daten dieser Größe in PMTiles oder FlatGeobuf und fügen Sie sie als Remote-Layer hinzu, statt sie einzubetten.",
       "embedVectorEmbedButton": "Daten einbetten",
       "embedVectorReferenceButton": "Dateiverweise speichern",
@@ -4217,6 +4264,8 @@
       "removeConnection": "Verbindung entfernen",
       "removeNode": "Knoten entfernen",
       "resizePanel": "Bereichsgröße ändern",
+      "maximizePanel": "Bereich maximieren",
+      "restorePanelSize": "Vorherige Größe wiederherstellen",
       "minimizePanel": "Bereich minimieren",
       "restorePanel": "Bereich wiederherstellen",
       "resizePalette": "Werkzeugpalette in der Größe ändern",
@@ -4253,9 +4302,31 @@
     "parameterField": {
       "selectLayer": "Ebene auswählen …",
       "selectField": "Feld auswählen …",
+      "selectOption": "Option auswählen...",
       "selectLayerFirst": "Zuerst eine Ebene auswählen",
       "layersSelected_one": "{{count}} Ebene ausgewählt",
       "layersSelected_other": "{{count}} Ebenen ausgewählt"
+    },
+    "fieldWeights": {
+      "columnField": "Feld",
+      "columnNormalization": "Normalisieren",
+      "columnWeight": "Gewicht",
+      "columnDirection": "Richtung",
+      "addField": "Feld hinzufügen",
+      "removeAria": "{{field}} entfernen",
+      "empty": "Noch keine Felder. Fügen Sie mindestens zwei hinzu, um einen Score zu bilden.",
+      "shares": "Gewichte: {{shares}}",
+      "noWeight": "Geben Sie mindestens einem Feld ein Gewicht über null.",
+      "normalization": {
+        "minMax": "Min-Max",
+        "zScore": "Z-Wert",
+        "rank": "Rang",
+        "quantile": "Quantil"
+      },
+      "direction": {
+        "higher": "Höher ist besser",
+        "lower": "Niedriger ist besser"
+      }
     },
     "whitebox": {
       "run": "Ausführen",
@@ -4307,6 +4378,25 @@
       "auto": "Automatisch",
       "chooseOutputPath": "Ausgabepfad wählen",
       "chooseInputPath": "Eingabepfad wählen",
+      "startServer": "Server starten",
+      "stopServer": "Server stoppen",
+      "loadingTools": "Wird geladen…",
+      "lockedPrefix": "[Gesperrt] ",
+      "missingRequiredParameter": "Erforderlicher Parameter fehlt: {{label}}",
+      "sidecarCannotReadBrowserFiles": "Das Sidecar kann im Browser ausgewählte Dateien für {{label}} nicht lesen. Führen Sie das Werkzeug lokal aus (WASM) oder geben Sie Dateipfade an, auf die das Sidecar zugreifen kann.",
+      "selectedLayersMissing": "Eine oder mehrere für {{label}} ausgewählte Ebenen existieren nicht mehr.",
+      "layerMissingGeoJson": "Die Ebene „{{layer}}“ hat kein GeoJSON im Arbeitsspeicher für {{label}}.",
+      "layerNotFetchable": "Die Ebene „{{layer}}“ kann für {{label}} nicht abgerufen werden.",
+      "layerMissingPath": "Die Ebene „{{layer}}“ hat keinen Dateipfad für {{label}}.",
+      "importOutputFailed": "Die Whitebox-Ausgabe konnte nicht importiert werden.",
+      "showingSnapshotOnly": "Es wird nur der GitHub-Katalog angezeigt.",
+      "liveCatalogEmpty": "Der Live-Katalog ist leer. Es wird nur der GitHub-Katalog angezeigt.",
+      "jobStatus": {
+        "pending": "Ausstehend",
+        "running": "Wird ausgeführt",
+        "succeeded": "Erfolgreich",
+        "failed": "Fehlgeschlagen"
+      },
       "categoryGeneral": "Allgemein",
       "categoryAll": "Alle ({{total}})",
       "errorLoadSnapshot": "Whitebox-Katalog-Snapshot konnte nicht geladen werden.",
@@ -5520,6 +5610,50 @@
               }
             }
           }
+        },
+        "composite-score": {
+          "name": "Kombinierter Score (Eignungsindex)",
+          "description": "Mehrere numerische Felder normalisieren, gewichten und zu einem einzigen Index von 0 bis 100 zusammenfassen und die Ebene danach gestalten.",
+          "params": {
+            "layer": {
+              "label": "Ebene"
+            },
+            "fields": {
+              "label": "Felder und Gewichte",
+              "description": "Zwei oder mehr numerische Felder. Jedes erhält eine Normalisierung, ein relatives Gewicht und das Ende seines Wertebereichs, das gut abschneidet."
+            },
+            "aggregation": {
+              "label": "Aggregation",
+              "description": "Beim geometrischen Mittel zieht ein schwaches Feld den Score nach unten: Ein starkes Feld kann das nicht vollständig ausgleichen.",
+              "options": {
+                "weighted-mean": "Gewichtetes arithmetisches Mittel",
+                "geometric-mean": "Gewichtetes geometrisches Mittel"
+              }
+            },
+            "nullHandling": {
+              "label": "Objekte ohne Wert",
+              "description": "Es gibt keine sichere Voreinstellung: Verwerfen und Neunormieren ergeben unterschiedliche Karten, wählen Sie also, was dieser Index bedeuten soll.",
+              "options": {
+                "drop": "Objekt aus dem Ergebnis entfernen",
+                "renormalize": "Gewichte über die vorhandenen Felder neu normieren"
+              }
+            },
+            "scoreField": {
+              "label": "Name des Score-Felds",
+              "description": "Name der numerischen Spalte, in die der Score geschrieben wird."
+            },
+            "scoreRange": {
+              "label": "Wertebereich des Scores",
+              "options": {
+                "0-100": "0 bis 100",
+                "0-1": "0 bis 1"
+              }
+            },
+            "keepComponents": {
+              "label": "Normalisierte Komponenten behalten",
+              "description": "Den normalisierten Wert jedes Felds als eigene Spalte schreiben, damit der Score nachvollziehbar ist und nicht blind übernommen werden muss."
+            }
+          }
         }
       },
       "raster": {
@@ -6004,6 +6138,7 @@
     "editValues": "Attributwerte bearbeiten",
     "editTitleFinishGeometry": "Geometriebearbeitung abschließen, um Attribute zu bearbeiten",
     "editTitleReadOnly": "Bearbeitung ist für Ebenen aus „Vektorebene hinzufügen“ nicht verfügbar",
+    "editTitleCapabilityDisabled": "Bearbeitung ist für diese Ebene deaktiviert",
     "editTitleUseSaveCancel": "Verwenden Sie Speichern oder Abbrechen, um die Bearbeitung abzuschließen",
     "exitEditMode": "Bearbeitungsmodus verlassen",
     "editTitleDuckdb": "Angezeigte DuckDB-Abfrageattribute im Speicher bearbeiten",
@@ -6029,6 +6164,7 @@
     "dashboard": "Dashboard",
     "exportSelectedLayer": "Ausgewählte Ebene exportieren",
     "exportTitleDisabled": "Export erfordert eine GeoJSON-basierte Ebene",
+    "exportTitleCapabilityDisabled": "Export ist für diese Ebene deaktiviert",
     "cancelEdits": "Attributänderungen verwerfen",
     "searchPlaceholder": "Attribute durchsuchen...",
     "searchAria": "Attribute durchsuchen",
@@ -6200,6 +6336,15 @@
     "addClass": "Klasse hinzufügen",
     "removeClass": "Klasse entfernen",
     "beforeIdSavedUnavailable": "Gespeichert (nicht verfügbar)",
+    "blendMode": "Mischen",
+    "blendModeFor": "Mischmodus für {{name}}",
+    "blendModes": {
+      "normal": "Normal",
+      "multiply": "Multiplizieren",
+      "screen": "Negativ multiplizieren",
+      "lighten": "Aufhellen",
+      "add": "Addieren"
+    },
     "raster": {
       "greyscale": "Graustufen",
       "greyscaleHint": "Graustufen-Basiskarte umschalten (setzt die Sättigung auf ihr Minimum)",
@@ -6679,6 +6824,60 @@
       "noFields": "Die Ebene hat keine Attributfelder zum Konfigurieren.",
       "minMaxInvalid": "Min muss kleiner oder gleich Max sein."
     },
+    "popup": {
+      "heading": "Popup",
+      "showOnClick": "Popup bei Klick anzeigen (Identifizieren)",
+      "showOnHover": "Kurzinfo beim Überfahren anzeigen",
+      "hoverHint": "Die Kurzinfo zeigt den Titel und die Felder, die Sie als „In der Kurzinfo“ markieren.",
+      "titleField": "Titelfeld",
+      "titleFieldDefault": "Ebenenname",
+      "titleExpression": "Ausdruck für den Titel",
+      "titleExpressionPlaceholder": "[\"get\", \"name\"]",
+      "bodyExpression": "Ausdruck für den Inhalt",
+      "bodyExpressionPlaceholder": "[\"concat\", [\"get\", \"name\"], \" has \", [\"to-string\", [\"get\", \"pop_max\"]], \" residents\"]",
+      "bodyExpressionHint": "Ein Inhaltsausdruck ersetzt die Feldzeilen durch seinen eigenen Text.",
+      "bodyReplacesRows": "Solange ein Inhaltsausdruck gesetzt ist, ersetzt er die Feldzeilen und die ID-Zeile.",
+      "invalidExpression": "Ungültiger Ausdruck",
+      "openBuilder": "Ausdruckseditor öffnen",
+      "showFeatureId": "Zeile mit der Objekt-ID anzeigen",
+      "fields": "Felder",
+      "allFields": "Keine Felder ausgewählt, daher werden alle sichtbaren Felder in der Reihenfolge der Daten angezeigt.",
+      "addField": "Feld hinzufügen…",
+      "noFieldsLeft": "Alle Felder sind bereits aufgeführt",
+      "chooseFields": "Felder auswählen",
+      "resetFields": "Alle Felder anzeigen",
+      "removeField": "Feld entfernen",
+      "moveUp": "Feld nach oben verschieben",
+      "moveDown": "Feld nach unten verschieben",
+      "dragToReorder": "Ziehen zum Neuanordnen",
+      "dragNamedToReorder": "{{name}} zum Neuanordnen ziehen",
+      "label": "Beschriftung",
+      "kind": "Werttyp",
+      "kinds": {
+        "auto": "Automatisch",
+        "text": "Text",
+        "number": "Zahl",
+        "date": "Datum",
+        "link": "Link",
+        "image": "Bild"
+      },
+      "decimals": "Dezimalstellen",
+      "thousands": "Tausender gruppieren",
+      "dateFormat": "Datumsformat",
+      "dateFormats": {
+        "date": "Datum",
+        "datetime": "Datum und Uhrzeit",
+        "time": "Uhrzeit",
+        "iso": "ISO 8601",
+        "year": "Jahr"
+      },
+      "linkLabel": "Linktext",
+      "linkLabelPlaceholder": "Die URL selbst",
+      "prefix": "Präfix",
+      "suffix": "Suffix",
+      "inHover": "In der Kurzinfo",
+      "imageNotInHover": "Bildfelder bleiben im Klick-Popup; in einer Kurzinfo ist kein Platz für ein Bild."
+    },
     "editorTracking": {
       "heading": "Bearbeitungsverfolgung",
       "description": "Erfassen Sie, wer jedes Objekt erstellt und wer es zuletzt geändert hat. Die Felder unten werden automatisch gefüllt, wenn Objekte gezeichnet, bearbeitet, berechnet oder erfasst werden.",
@@ -6694,6 +6893,51 @@
       "duplicateName": "Jedes Verfolgungsfeld benötigt einen eigenen Namen.",
       "columnTaken": "„{{name}}“ ist bereits eine Attributspalte. Die Verfolgung würde deren Werte überschreiben."
     }
+  },
+  "quickFilters": {
+    "heading": "Schnellfilter",
+    "empty": "Noch keine Filter. Fügen Sie unten einen hinzu, um diese Ebene nach einem beliebigen Feld einzuschränken.",
+    "addFilter": "Filter hinzufügen…",
+    "allFieldsUsed": "Jedes Feld hat bereits einen Filter",
+    "removeAll": "Alle entfernen",
+    "clearAll": "Filter leeren",
+    "clearOne": "Diesen Filter leeren",
+    "clearOneNamed": "Filter für {{field}} leeren",
+    "remove": "Filter entfernen",
+    "removeNamed": "Filter für {{field}} entfernen",
+    "controlType": "Filtertyp",
+    "enabledTitle": "Diesen Filter anwenden",
+    "kind": {
+      "categorical": "Werte",
+      "range": "Bereich",
+      "date": "Datum",
+      "text": "Text"
+    },
+    "operator": {
+      "contains": "Enthält",
+      "startsWith": "Beginnt mit",
+      "equals": "Ist genau"
+    },
+    "searchValues": "Werte suchen",
+    "noValues": "Dieses Feld hat keine Werte zur Auswahl.",
+    "noMatchingValues": "Keine Werte entsprechen Ihrer Suche.",
+    "selectAll": "Alle auswählen",
+    "selectNone": "Keine auswählen",
+    "allValues": "Alle Werte",
+    "selectedCount_one": "{{count}} ausgewählt",
+    "selectedCount_other": "{{count}} ausgewählt",
+    "rangeMin": "Minimum",
+    "rangeMax": "Maximum",
+    "rangeSeparator": "bis",
+    "dateFrom": "Von",
+    "dateTo": "Bis",
+    "textOperator": "Vergleich",
+    "textValue": "Zu suchender Text",
+    "textPlaceholder": "Zum Filtern tippen",
+    "noFields": "Diese Ebene hat keine Attribute zum Filtern.",
+    "noTileFeatures": "Es sind noch keine Objekte geladen. Verschieben Sie die Karte oder zoomen Sie zu den Daten und öffnen Sie diesen Abschnitt erneut.",
+    "viewportSampleHint": "Die Werte stammen aus den aktuell geladenen Kacheln, die Liste wächst also beim Verschieben und Zoomen.",
+    "layerFilteredHint": "Ein Schnellfilter blendet einen Teil der Objekte dieser Ebene aus."
   },
   "vectorExport": {
     "invalidKmlCoordinatesByPosition": "Der KML-Export konnte Feature {{position}} nicht schreiben, da es ungültige Koordinaten hat.",
@@ -6711,6 +6955,10 @@
     "moveDown": "Nach unten verschieben",
     "zoomToLayer": "Auf Ebene zoomen",
     "layerActions": "Ebenenaktionen",
+    "exportSketchesAsLayer": "Skizzen als neue Ebene exportieren",
+    "exportSketchesKeep": "Objekte in Skizzen behalten",
+    "exportSketchesClear": "Skizzen nach dem Export leeren",
+    "exportedSketchesName": "Skizzenexport",
     "metadata": "Metadaten",
     "removeLayer": "Ebene entfernen",
     "identifyFeatures": "Objekte identifizieren",
@@ -6718,6 +6966,7 @@
     "identifyInspectPixels": "Pixelwerte untersuchen",
     "identifyStopInspectPixels": "Untersuchung der Pixelwerte beenden",
     "identifyUnavailable": "Identifizieren ist nur für Vektor-, WMS- und COG-Ebenen verfügbar",
+    "identifyCapabilityDisabled": "Abfragen ist für diese Ebene deaktiviert",
     "selectFeaturesMenu": "Objekte auswählen",
     "selectFeaturesSingle": "Objekte per Klick auswählen",
     "selectFeaturesRectangle": "Objekte per Rechteck auswählen",
@@ -6797,6 +7046,8 @@
     "searchPlacesClear": "Suche löschen",
     "searchPlacesGoToCoordinate": "Zu {{coordinate}} springen",
     "searchPlacesGoToH3Cell": "Zur H3-Zelle {{cell}} springen (Res. {{resolution}})",
+    "searchPlacesGroup": "Orte",
+    "searchFeaturesPartial": "(teilweise)",
     "background": "Hintergrund",
     "backgroundCannotReorder": "Der Hintergrund kann nicht neu angeordnet werden",
     "hideBackground": "Hintergrund ausblenden",
@@ -7314,5 +7565,60 @@
     "mapPoint": "Kartenpunkt",
     "reply": "Antworten",
     "replyPlaceholder": "Antwort schreiben..."
+  },
+  "samgeoPlugin": {
+    "panelTitle": "SamGeo-Segmentierung",
+    "intro": "Segmentieren Sie Bilddaten mit SAM3 anhand von Text, Punkten, einem Rahmen oder automatischen Masken.",
+    "apiUrl": "SamGeo-API-URL",
+    "checkConnection": "Verbindung prüfen",
+    "notChecked": "Nicht geprüft",
+    "checking": "Wird geprüft…",
+    "connected": "Verbunden",
+    "unavailable": "Nicht verfügbar: {{error}}",
+    "image": "Bild",
+    "imageSource": "Bildquelle",
+    "imageUpload": "Datei hochladen",
+    "noRasterLayers": "Keine Rasterebenen geladen",
+    "layerUnreadable": "Diese Ebene hat keine lesbare GeoTIFF-Quelle; exportieren Sie sie oder laden Sie die Datei stattdessen hoch.",
+    "docsLink": "So richten Sie die SamGeo-API ein",
+    "mode": "Modus",
+    "modeText": "Textaufforderung",
+    "modePoints": "Punktaufforderungen",
+    "modeBox": "Begrenzungsrahmen (Ähnliche finden)",
+    "modeAutomatic": "Automatisch (alles)",
+    "modelId": "Modell-ID",
+    "sam2ModelId": "SAM2-Modell",
+    "automaticHint": "Im automatischen Modus wird der Maskengenerator von SAM2 ausgeführt, der jedes Objekt segmentiert; SAM3 reagiert nur auf Aufforderungen.",
+    "textPrompt": "Textaufforderung",
+    "confidence": "Konfidenzschwelle",
+    "minSize": "Minimale Maskengröße (Pixel)",
+    "maxSize": "Maximale Maskengröße (0 = keine Begrenzung)",
+    "backend": "Backend",
+    "foregroundPoint": "+ Vordergrundpunkt",
+    "backgroundPoint": "− Hintergrundpunkt",
+    "clickForeground": "Klicken Sie auf die Karte, um einen Vordergrundpunkt hinzuzufügen.",
+    "clickBackground": "Klicken Sie auf die Karte, um einen Hintergrundpunkt hinzuzufügen.",
+    "pointAdded": "Punkt hinzugefügt.",
+    "drawBox": "Rahmen auf Karte zeichnen",
+    "dragBox": "Ziehen Sie ein Rechteck auf der Karte auf.",
+    "boxAdded": "Rahmen hinzugefügt.",
+    "boxSummary": "Rahmen: {{box}}",
+    "noBox": "Kein Rahmen gezeichnet.",
+    "pointSummary": "{{foreground}} Vordergrund, {{background}} Hintergrund",
+    "pointsPerSide": "Punkte pro Seite",
+    "predIou": "Schwelle für vorhergesagten IoU",
+    "stability": "Stabilitätsschwelle",
+    "clearPrompts": "Aufforderungen löschen",
+    "promptsCleared": "Aufforderungen gelöscht.",
+    "segment": "Segmentieren",
+    "chooseImage": "Wählen Sie zuerst ein Bild aus.",
+    "enterPrompt": "Geben Sie eine Textaufforderung ein.",
+    "addPoint": "Fügen Sie mindestens einen Vordergrundpunkt hinzu.",
+    "drawBoxFirst": "Zeichnen Sie zuerst einen Rahmen.",
+    "segmenting": "Wird segmentiert…",
+    "noObjects": "Keine Objekte gefunden.",
+    "added": "{{count}} Objekt(e){{layer}} hinzugefügt.",
+    "badResponse": "Die SamGeo-API hat keine GeoJSON-FeatureCollection zurückgegeben.",
+    "unknownProjection": "Das Ergebnis liegt nicht in WGS84 vor und das Bild enthält keine lesbare Projektion, daher kann es nicht auf der Karte platziert werden. Verwenden Sie ein georeferenziertes GeoTIFF."
   }
 }

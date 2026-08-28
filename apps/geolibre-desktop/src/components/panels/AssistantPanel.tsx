@@ -27,6 +27,7 @@ import { useTranslation } from "react-i18next";
 import { AssistantSession } from "../../lib/assistant/agent";
 import { useTransmissionNotice } from "../assistant/useTransmissionNotice";
 import { renderAssistantMarkdown } from "../../lib/assistant/markdown";
+import { isOllamaNetworkFailure, withOllamaOriginHint } from "../../lib/assistant/ollama";
 import { selectActiveAssistantProfile } from "../../lib/assistant/profiles";
 import { isSendKey } from "../../lib/assistant/send-key";
 import { openSettingsSection } from "../layout/SettingsDialog";
@@ -38,6 +39,7 @@ import {
   hasProviderKey,
   PROVIDER_MODELS,
   PROVIDER_LABELS,
+  resolveProviderConfig,
   type AssistantProfile,
   type AssistantProviderId,
 } from "../../lib/assistant/provider";
@@ -413,7 +415,13 @@ export function AssistantPanel({ mapControllerRef }: AssistantPanelProps) {
       // Compare against myGeneration so a newer send can't unmask this older
       // run's cancellation as a failure.
       if (cancelledGenerationRef.current !== myGeneration) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message =
+          (activeProfile?.provider ?? resolveProviderConfig()?.provider) === "ollama" &&
+          isOllamaNetworkFailure(error)
+            ? withOllamaOriginHint(t("settings.ai.ollamaNetworkFailure"))
+            : error instanceof Error
+              ? error.message
+              : String(error);
         const errorId = (turnIdRef.current += 1);
         setTurns((prev) => [...prev, { id: errorId, role: "error", text: message }]);
       }
@@ -647,7 +655,13 @@ export function AssistantPanel({ mapControllerRef }: AssistantPanelProps) {
                   disabled={running}
                   onChange={(event) => onModelChange(event.target.value)}
                 >
-                  {PROVIDER_MODELS[activeProfile.provider].map((modelId) => (
+                  {[
+                    ...new Set(
+                      [activeProfile.modelId, ...PROVIDER_MODELS[activeProfile.provider]].filter(
+                        Boolean,
+                      ),
+                    ),
+                  ].map((modelId) => (
                     <option key={modelId} value={modelId}>
                       {modelId}
                     </option>

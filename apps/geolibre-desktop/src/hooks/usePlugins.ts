@@ -3,6 +3,7 @@ import {
   setExternalNativePaintBridge,
   useAppStore,
 } from "@geolibre/core";
+import { buildProjectEgressSnapshot } from "../lib/build-project-snapshot";
 import {
   addRasterToMap,
   addZarrRasterLayer,
@@ -67,6 +68,7 @@ import {
   maplibreMapillaryPlugin,
   maplibreReverseGeocodePlugin,
   maplibreStreetViewPlugin,
+  maplibreSamGeoPlugin,
   maplibreSunPlugin,
   maplibreRouteAnimationPlugin,
   flightSimulatorPlugin,
@@ -239,6 +241,9 @@ manager.registerAll([
   maplibreSunPlugin,
   maplibreRouteAnimationPlugin,
   flightSimulatorPlugin,
+  // Last visible entry of the Plugins menu; the ids below are skipped by
+  // PluginsMenu and surface elsewhere.
+  maplibreSamGeoPlugin,
   maplibreDirectionsPlugin,
   maplibreReverseGeocodePlugin,
   maplibreDeckGlVizPlugin,
@@ -1053,6 +1058,7 @@ export function createAppAPI(mapControllerRef?: RefObject<MapController | null>)
     getMap: () => mapControllerRef?.current?.getMap() ?? null,
     onMapClick: (handler: (position: { lng: number; lat: number }) => void) =>
       subscribeMapClick(handler, () => mapControllerRef?.current?.getMap() ?? null),
+    getProjectSnapshot: () => buildProjectEgressSnapshot(mapControllerRef ?? { current: null }),
     openExternalUrl: (url: string) => void openExternalLink(url),
     pickLocalDirectoryFiles,
     // Present only on desktop (filesystem access); the Vector panel keys off its

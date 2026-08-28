@@ -2,10 +2,13 @@
 
 The **Settings** menu holds the workspace preferences: how the map behaves, which panels are visible, runtime environment variables, project settings, and the entry point to [Manage Plugins](plugins.md).
 
+![The Settings menu](https://assets.geolibre.app/images/geolibre-settings-menu.webp)
+
 The Settings dialog is organized into these sections:
 
 | Section | What it covers |
 | --- | --- |
+| **Language** | The interface language. See [Internationalization](../i18n.md). |
 | **Map** | Navigation constraints, celestial body, scale units, and coordinate format. See [Map Preferences](#map-preferences). |
 | **Layout** | Which panels and toolbar labels are shown. See [Layout](#layout). |
 | **Appearance** | Light or dark mode and the accent color applied on top of it. |
@@ -15,12 +18,13 @@ The Settings dialog is organized into these sections:
 | **Environment** | The share token and runtime key-value pairs. See [Environment Variables](#environment-variables). |
 | **Updates** | Update checks (desktop only). See [Updates](#updates). |
 | **Startup** | Which project the app opens with (desktop only). See [Startup](#startup). |
+| **Style Manager** | Your saved symbology presets, reachable here and from a layer's **Layer actions → Styles → Saved styles**. See [Styling Layers](styling.md). |
 
 ## Map Preferences
 
 **Settings → Map Preferences** controls how the map can be navigated:
 
-![Settings dialog showing Map Preferences](https://data.geolibre.app/images/geolibre-settings.webp)
+![The Settings dialog, open on Map Preferences](https://assets.geolibre.app/images/geolibre-settings.webp)
 
 | Setting | Description |
 | --- | --- |
@@ -78,7 +82,7 @@ The project name is edited in place on the right of the toolbar, and it is saved
 | **Reopen the last project** | Open the most recently used *local* project. |
 | **Open a specific project** | Always open one chosen project. Use **Choose Project** to pick the file; the mode stays unavailable until you have. |
 
-**Enable 3D globe by default** controls the projection of the new, untitled workspace shown when no project is provided. Turn it off to start that workspace in Mercator. A restored project or project link always uses the projection saved in that project instead.
+**Enable 3D globe by default** controls the projection of the new, untitled workspace shown when no project is provided. Turn it off to start that workspace in Mercator. **Default map view** sets the center longitude, center latitude, and zoom level for the same workspace. Choose **Use Current View** to copy the center and zoom from the map canvas. A restored project or project link always uses the projection and camera saved in that project instead.
 
 If the startup project has been moved or deleted, GeoLibre opens the default workspace instead, says so in a banner, and drops the missing file from the recent-projects list.
 
@@ -98,6 +102,10 @@ Two deliberate limits are worth knowing:
 ## Updates
 
 **Settings → Updates** (desktop only) controls the update check: whether GeoLibre checks for a newer version at startup, and which kinds of releases raise a notification. Turn the check off for a fully offline workflow.
+
+## Style Manager
+
+**Settings → Style Manager** opens your personal library of symbology presets. Save the style you have built on a layer, then apply it to any other layer in any project. The same library is reachable from a layer's **Layer actions → Styles → Saved styles (Style Manager)…**. See [Styling Layers](styling.md).
 
 ## Manage Plugins
 
