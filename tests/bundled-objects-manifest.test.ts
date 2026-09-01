@@ -18,6 +18,9 @@ const MANIFEST = new URL("manifest.json", DIR);
 
 describe("the shipped object manifest", () => {
   const raw = readFileSync(MANIFEST, "utf8");
+  // With a `baseUrl` the binaries are served, not shipped: the app carries only
+  // this file, so the checks that pair an entry with a local file do not apply.
+  const servedRemotely = typeof (JSON.parse(raw) as { baseUrl?: unknown }).baseUrl === "string";
 
   it("is valid JSON with an objects array", () => {
     const parsed = JSON.parse(raw) as { objects?: unknown };
@@ -25,6 +28,7 @@ describe("the shipped object manifest", () => {
   });
 
   it("names a file that exists, wherever the binaries are present", () => {
+    if (servedRemotely) return;
     // The binaries are gitignored — tens of megabytes each — so a clean clone
     // has the manifest and no files, and this cannot demand they be there.
     // Where a file *is* present the name still has to match, which is what
@@ -42,6 +46,7 @@ describe("the shipped object manifest", () => {
   });
 
   it("names a tileset that exists, wherever it is present", () => {
+    if (servedRemotely) return;
     // A `tileset` is what the globe shows for a preset the splat renderer can
     // only draw on the 2D map. Same rule as `file`: gitignored, so only
     // checked where it is actually there.
@@ -58,6 +63,7 @@ describe("the shipped object manifest", () => {
   });
 
   it("has an entry for every object file present", () => {
+    if (servedRemotely) return;
     // The other direction: a file copied in but never listed ships its bytes
     // in the installer and is reachable from nowhere. A tileset is reachable
     // through its own field, so its folder counts as listed.

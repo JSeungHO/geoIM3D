@@ -207,6 +207,30 @@ export function isBundledPreset(preset: ObjectPreset): boolean {
  * @param baseUrl - The app's base URL, for resolving each file.
  * @returns The presets the manifest describes.
  */
+/** A URL that already names its own host is left alone. */
+function isAbsoluteUrl(value: string): boolean {
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(value);
+}
+
+function withTrailingSlash(value: string): string {
+  return value.endsWith("/") ? value : `${value}/`;
+}
+
+/**
+ * Where one of a manifest entry's files actually is.
+ *
+ * An entry may name a bare file (resolved against the manifest's base, which is
+ * either the app's `objects/` folder or a file server) or a full URL of its
+ * own, for the odd object that lives somewhere else.
+ *
+ * @param value - The `file` or `tileset` the entry names.
+ * @param root - The manifest's base, already ending in a slash.
+ * @returns The absolute URL to load.
+ */
+function resolveAsset(value: string, root: string): string {
+  return isAbsoluteUrl(value) ? value : new URL(value, root).href;
+}
+
 export function parseBundledManifest(raw: string, baseUrl: string): ObjectPreset[] {
   let parsed: unknown;
   try {
@@ -214,15 +238,26 @@ export function parseBundledManifest(raw: string, baseUrl: string): ObjectPreset
   } catch {
     return [];
   }
-  const entries = (parsed as { objects?: unknown } | null)?.objects;
+  const document = parsed as { objects?: unknown; baseUrl?: unknown } | null;
+  const entries = document?.objects;
   if (!Array.isArray(entries)) return [];
+
+  // Where the binaries live. They are tens of megabytes each and gitignored, so
+  // an installer carried to another machine either bloats by that much or
+  // arrives without them; `baseUrl` points the whole manifest at a file server
+  // instead, and the app ships only this file. Relative to the app when absent,
+  // which is the bundled layout.
+  const root =
+    typeof document?.baseUrl === "string" && document.baseUrl.trim()
+      ? withTrailingSlash(document.baseUrl.trim())
+      : new URL("objects/", baseUrl).href;
 
   const presets: ObjectPreset[] = [];
   for (const entry of entries) {
     const item = entry as Record<string, unknown> | null;
     const file = typeof item?.file === "string" ? item.file.trim() : "";
     if (!file) continue;
-    const source = new URL(`objects/${file}`, baseUrl).href;
+    const source = resolveAsset(file, root);
     const candidate = {
       id: `${BUNDLED_PRESET_ID_PREFIX}${file}`,
       name: typeof item?.name === "string" && item.name ? item.name : file,
@@ -237,11 +272,10 @@ export function parseBundledManifest(raw: string, baseUrl: string): ObjectPreset
         scale: item?.scale ?? 1,
         rotation: item?.rotation,
       },
-      // Resolved like `file`, so the manifest names a path beside itself
-      // rather than repeating the deployment base.
+      // Resolved like `file`: against the manifest's own base.
       tileset:
         typeof item?.tileset === "string" && item.tileset.trim()
-          ? new URL(`objects/${item.tileset.trim()}`, baseUrl).href
+          ? resolveAsset(item.tileset.trim(), root)
           : undefined,
       tilesetTransform: readTransform(item?.tilesetTransform),
     };

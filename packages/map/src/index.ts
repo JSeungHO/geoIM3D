@@ -11,6 +11,12 @@ export { SecondaryMapCanvas, type SecondaryMapCanvasProps } from "./SecondaryMap
 export { CesiumCanvas, type CesiumCanvasProps } from "./CesiumCanvas";
 export { isCesiumSupportedLayerType, setCesiumTileUrlResolver } from "./cesium-layer-sync";
 export {
+  cesiumSwipeSides,
+  setCesiumSwipeState,
+  type CesiumSwipeSide,
+  type CesiumSwipeState,
+} from "./geoim3d-cesium-swipe";
+export {
   applyMapViewToCamera,
   cesiumPitchToMapLibreDeg,
   groundResolution,

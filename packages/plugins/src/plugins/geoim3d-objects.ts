@@ -1009,6 +1009,24 @@ function syncSplatCameraOnPitch(map: {
 }
 
 /**
+ * Where an object goes when nothing says otherwise: the middle of the view.
+ *
+ * @param app - The host API.
+ * @param kind - What the file is, for the loader's default orientation.
+ * @returns A placement to start from.
+ */
+function defaultObjectTransform(app: GeoLibreAppAPI, kind: ObjectKind): ObjectTransform {
+  const center = app.getMap?.()?.getCenter();
+  return {
+    longitude: center?.lng ?? 0,
+    latitude: center?.lat ?? 0,
+    altitude: 0,
+    scale: 1,
+    rotation: defaultRotation(kind),
+  };
+}
+
+/**
  * Waits until the map style has finished loading.
  *
  * `@dvt3d/maplibre-three-plugin` adds its scene layer straight from the map's
@@ -1072,8 +1090,18 @@ async function ensureControl(app: GeoLibreAppAPI): Promise<SplatControlLike | nu
  */
 async function resolveReadableUrl(source: string): Promise<{ url: string; revocable: boolean }> {
   if (!needsNativeFetch(source)) return { url: source, revocable: false };
-  if (!objectFetcher) throw new Error("http-unavailable");
-  return { url: await objectFetcher(source), revocable: true };
+  // The desktop app reads it natively, which also keeps the webview's CSP out
+  // of it.
+  if (objectFetcher) return { url: await objectFetcher(source), revocable: true };
+  // No fetcher: a browser. It can still request plain http itself as long as
+  // the page is not https — mixed content is what blocks this, and a page
+  // served over http has no such rule. That covers an internal deployment and
+  // the dev server, where refusing outright meant a file server full of
+  // objects could not be used at all.
+  if (typeof location !== "undefined" && location.protocol !== "https:") {
+    return { url: source, revocable: false };
+  }
+  throw new Error("http-unavailable");
 }
 
 /**
@@ -1182,6 +1210,25 @@ async function loadObject(
     // A blob made for a load that then failed would otherwise be held until
     // the tab closes, and these are hundreds of megabytes.
     if (readable?.revocable) URL.revokeObjectURL(readable.url);
+    // A preset whose splat could not be read still has its tileset on the map —
+    // a browser refuses a plain-http splat, and the globe shows the tileset
+    // anyway. Listing it keeps the placement fields reachable instead of
+    // leaving a layer nothing can edit.
+    if (tilesetLayerId && !state.objects.some((entry) => entry.layerId === tilesetLayerId)) {
+      state.objects.push({
+        layerId: tilesetLayerId,
+        loaderId: "",
+        name,
+        kind,
+        source,
+        readableUrl: source,
+        revocable: false,
+        transform: placement ?? defaultObjectTransform(app, kind),
+        tilesetLayerId,
+        tilesetTransform: tilesetTransform ?? placement ?? defaultObjectTransform(app, kind),
+        tilesetOnly: true,
+      });
+    }
     setStatus(loadErrorMessage(error));
   } finally {
     state.busy = false;

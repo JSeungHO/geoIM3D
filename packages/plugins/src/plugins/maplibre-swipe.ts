@@ -1,3 +1,5 @@
+import { useAppStore } from "@geolibre/core";
+import { cesiumSwipeSides, setCesiumSwipeState } from "@geolibre/map";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import {
   SwipeControl,
@@ -203,6 +205,29 @@ function teardownCogSwipe(): void {
   cogMainForced.clear();
 }
 
+/**
+ * Hands the current swipe to the globe, or clears it.
+ *
+ * The 2D control compares by clipping the map; Cesium splits the scene itself,
+ * so all it needs is the position and a side per layer.
+ */
+function publishCesiumSwipe(): void {
+  const state = swipeControl?.getState() ?? savedSwipeState;
+  if (!state || state.active === false) {
+    setCesiumSwipeState(null);
+    return;
+  }
+  setCesiumSwipeState({
+    // The control counts 0-100; Cesium's split position is a fraction.
+    position: state.position / 100,
+    sides: cesiumSwipeSides(
+      useAppStore.getState().layers,
+      state.leftLayers ?? [],
+      state.rightLayers ?? [],
+    ),
+  });
+}
+
 export const maplibreSwipePlugin: GeoLibrePlugin = {
   id: SWIPE_PLUGIN_ID,
   name: "Layer Swipe",
@@ -216,6 +241,11 @@ export const maplibreSwipePlugin: GeoLibrePlugin = {
       return false;
     }
     expandSwipeControl(savedSwipeState ?? undefined);
+
+    // The globe compares through Cesium's own scene split, so it follows the
+    // control's state rather than its clipped comparison map.
+    swipeControl.on("statechange", publishCesiumSwipe);
+    publishCesiumSwipe();
 
     // Keep the swipe panel's COG raster rows and comparison-map mirror in sync
     // as rasters are added, removed, or restyled while the swipe is active.
@@ -245,7 +275,9 @@ export const maplibreSwipePlugin: GeoLibrePlugin = {
     // detachComparison also tears the mirror down, but that only runs when a
     // comparison map exists.
     teardownCogSwipe();
+    setCesiumSwipeState(null);
     if (!swipeControl) return;
+    swipeControl.off("statechange", publishCesiumSwipe);
     savedSwipeState = swipeControl.getState();
     app.removeMapControl(swipeControl);
     swipeControl = null;

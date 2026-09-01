@@ -1,6 +1,11 @@
 import { resolveThreeDTilesRequestHeaders, type GeoLibreLayer } from "@geolibre/core";
 import type { Cesium3DTileset, DataSource, ImageryLayer, Viewer } from "cesium";
 import type { StyleSpecification } from "maplibre-gl";
+import {
+  cesiumSplitDirectionFor,
+  getCesiumSwipeState,
+  subscribeCesiumSwipe,
+} from "./geoim3d-cesium-swipe";
 import { readTilesetPlacement, tilesetPlacementMatrix } from "./geoim3d-tileset-placement";
 
 // Reconciles the store's `GeoLibreLayer[]` onto a Cesium globe, mirroring what
@@ -313,10 +318,37 @@ export class CesiumLayerSync {
   /** The basemap tiles last applied, so an unrelated store change rebuilds nothing. */
   private basemapSignature = "";
 
+  /** Detaches the swipe subscription; see `applySwipe`. */
+  private readonly unsubscribeSwipe: () => void;
+
   constructor(
     private readonly Cesium: CesiumNs,
     private readonly viewer: Viewer,
-  ) {}
+  ) {
+    this.applySwipe();
+    this.unsubscribeSwipe = subscribeCesiumSwipe(() => this.applySwipe());
+  }
+
+  /**
+   * Mirror the Layer Swipe onto the globe.
+   *
+   * Cesium splits the whole scene at one position and asks each object which
+   * side it is on, so a swipe here is two property writes rather than the
+   * clipped second map the 2D control builds. Re-applied on every publish
+   * because a slider drag changes only the position, which no layer change
+   * would otherwise carry into `applyAppearance`.
+   */
+  private applySwipe(): void {
+    // Reached from a subscription as well as the constructor, so nothing here
+    // assumes a live viewer with every method a real one has.
+    const scene = this.viewer.scene as Viewer["scene"] | undefined;
+    if (!scene) return;
+    const swipe = getCesiumSwipeState();
+    // Cesium's default is 0.5, and a scene with nothing split ignores it.
+    scene.splitPosition = swipe?.position ?? 0.5;
+    for (const entry of this.entries.values()) this.applyAppearance(entry);
+    scene.requestRender?.();
+  }
 
   /** Reconcile the globe to `layers` (order preserved for imagery stacking). */
   sync(layers: GeoLibreLayer[]): void {
@@ -459,6 +491,7 @@ export class CesiumLayerSync {
   }
 
   destroy(): void {
+    this.unsubscribeSwipe();
     for (const entry of this.entries.values()) this.destroyEntry(entry);
     this.entries.clear();
     for (const imagery of this.basemapImagery) this.viewer.imageryLayers.remove(imagery, true);
@@ -632,14 +665,20 @@ export class CesiumLayerSync {
   private applyAppearance(entry: LayerEntry): void {
     const { handle, layer } = entry;
     if (!handle) return;
+    // Layer Swipe: the globe splits natively, so a side assignment is one
+    // property per object rather than a clipped copy of the map. See
+    // geoim3d-cesium-swipe.ts.
+    const splitDirection = cesiumSplitDirectionFor(layer.id) as ImageryLayer["splitDirection"];
     if (entry.kind === "imagery") {
       const imagery = handle as ImageryLayer;
       imagery.show = layer.visible;
       imagery.alpha = layer.opacity;
+      imagery.splitDirection = splitDirection;
     } else if (entry.kind === "geojson") {
       (handle as DataSource).show = layer.visible;
       this.applyGeoJsonStyle(entry);
     } else {
+      (handle as Cesium3DTileset).splitDirection = splitDirection;
       // Zero opacity hides it. A Gaussian splat tileset ignores the style set
       // below — `GaussianSplat3DTileContent.applyStyle` is empty in Cesium —
       // so without this the slider does nothing at all for the one kind of

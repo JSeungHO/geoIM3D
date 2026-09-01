@@ -100,6 +100,9 @@ apps/geolibre-desktop/src-tauri/mas/embedded.provisionprofile
 apps/geolibre-desktop/public/objects/*
 !apps/geolibre-desktop/public/objects/manifest.json
 !apps/geolibre-desktop/public/objects/README.md
+# ...and an archive of them staged beside the folder, which the rule above does
+# not cover: a `git add -A` swept 382 MB into a commit once.
+apps/geolibre-desktop/public/objects*.zip
 
 # Local Android Gradle cache for the vendored Tauri geolocation plugin.
 apps/geolibre-desktop/src-tauri/vendor/tauri-plugin-geolocation/android/.gradle/

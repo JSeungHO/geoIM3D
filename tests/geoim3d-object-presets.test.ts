@@ -217,3 +217,47 @@ describe("placementBounds", () => {
     assert.ok(east - west < 1);
   });
 });
+
+describe("parseBundledManifest asset locations", () => {
+  const entry = {
+    file: "park.sog",
+    name: "Park",
+    longitude: 127,
+    latitude: 37,
+    altitude: 0,
+    scale: 1,
+    rotation: [0, 0, 0],
+    tileset: "park/tileset.json",
+  };
+
+  it("resolves against the app's objects folder by default", () => {
+    const [preset] = parseBundledManifest(
+      JSON.stringify({ objects: [entry] }),
+      "http://localhost:5173/",
+    );
+    assert.equal(preset?.source, "http://localhost:5173/objects/park.sog");
+    assert.equal(preset?.tileset, "http://localhost:5173/objects/park/tileset.json");
+  });
+
+  it("resolves against a file server when the manifest names one", () => {
+    // The binaries are tens of megabytes and gitignored, so an installer
+    // carried to another machine arrives without them unless they are served.
+    const [preset] = parseBundledManifest(
+      JSON.stringify({ baseUrl: "http://files.example/3d", objects: [entry] }),
+      "http://localhost:5173/",
+    );
+    assert.equal(preset?.source, "http://files.example/3d/park.sog");
+    assert.equal(preset?.tileset, "http://files.example/3d/park/tileset.json");
+  });
+
+  it("leaves an entry that names its own host alone", () => {
+    const [preset] = parseBundledManifest(
+      JSON.stringify({
+        baseUrl: "http://files.example/3d/",
+        objects: [{ ...entry, file: "https://cdn.example/one.sog" }],
+      }),
+      "http://localhost:5173/",
+    );
+    assert.equal(preset?.source, "https://cdn.example/one.sog");
+  });
+});

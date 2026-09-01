@@ -1,7 +1,8 @@
 {
+  "baseUrl": "http://remote.ejbt.co.kr:45673/files/",
   "objects": [
     {
-      "file": "gogiri_park.sog",
+      "file": "3d_object/gogiri_park.sog",
       "name": "고기리 공원",
       "longitude": 127.07029,
       "latitude": 37.35718,
@@ -12,7 +13,7 @@
         296,
         0
       ],
-      "tileset": "gogiri/tileset.json",
+      "tileset": "3d_tiles/gogiri/tileset.json",
       "tilesetTransform": {
         "longitude": 127.07029,
         "latitude": 37.35711,
@@ -26,7 +27,7 @@
       }
     },
     {
-      "file": "kict_future.sog",
+      "file": "3d_object/kict_future.sog",
       "name": "kict 미래융합관",
       "longitude": 126.7379,
       "latitude": 37.668635,
@@ -37,7 +38,7 @@
         297,
         0
       ],
-      "tileset": "kict/tileset.json",
+      "tileset": "3d_tiles/kict/tileset.json",
       "tilesetTransform": {
         "longitude": 126.73792,
         "latitude": 37.66868,
@@ -51,7 +52,7 @@
       }
     },
     {
-      "file": "crbase-20260817.sog",
+      "file": "3d_object/crbase-20260817.sog",
       "name": "청라 돔 야구장",
       "longitude": 126.612968,
       "latitude": 37.5486,
@@ -62,7 +63,7 @@
         220.5,
         0
       ],
-      "tileset": "crbase/tileset.json",
+      "tileset": "3d_tiles/crbase/tileset.json",
       "tilesetTransform": {
         "longitude": 126.612968,
         "latitude": 37.5486,
