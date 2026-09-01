@@ -1159,6 +1159,29 @@ async function resolveReadableUrl(source: string): Promise<{ url: string; revoca
  * @param name - What to call it in the list.
  * @param prepared - An already-readable URL (a picked local file), if any.
  */
+/**
+ * Waits for a just-loaded splat to finish streaming.
+ *
+ * `maplibre-gl-splat`'s `loadSplat` returns the moment the `SplatMesh` is
+ * constructed; the mesh then downloads and unpacks for several seconds with
+ * nothing on screen — the same "reads as nothing happening" the globe's tileset
+ * bar solves. (`loadModel` already awaits its GLTF fetch, so models are fine.)
+ * The control has no public handle to the mesh, so reach it through the same
+ * private registry the 3D Tiles restore reaches into. Best-effort: a build that
+ * renames `_splatLayers`, or a mesh with no `initialized` promise, just
+ * resolves, and a stream that fails resolves too — the empty scene reads as the
+ * failure, as it did before.
+ */
+async function whenObjectRendered(control: SplatControlLike, loaderId: string): Promise<void> {
+  const registry = (
+    control as unknown as {
+      _splatLayers?: Map<string, { mesh?: { initialized?: Promise<unknown> } }>;
+    }
+  )._splatLayers;
+  const ready = registry?.get(loaderId)?.mesh?.initialized;
+  if (ready) await ready.catch(() => {});
+}
+
 async function loadObject(
   app: GeoLibreAppAPI,
   source: string,
@@ -1253,6 +1276,9 @@ async function loadObject(
     app.getMap?.()?.once("idle", raiseSplatScene);
     useAppStore.getState().addLayer(createObjectStoreLayer(object));
     state.urlDraft = "";
+    // The layer is listed above at once; hold `busy` (and its progress bar)
+    // until the splat has actually streamed in, not just been queued.
+    await whenObjectRendered(control, loaderId);
   } catch (error) {
     // A blob made for a load that then failed would otherwise be held until
     // the tab closes, and these are hundreds of megabytes.
@@ -1390,6 +1416,7 @@ async function applyTransform(object: LoadedObject, transform: ObjectTransform):
         rotation: transform.rotation,
         scale: transform.scale,
       });
+      await whenObjectRendered(control, object.loaderId);
     }
     object.transform = transform;
     // The zoom button reads the layer's bounds, so a moved object needs its
