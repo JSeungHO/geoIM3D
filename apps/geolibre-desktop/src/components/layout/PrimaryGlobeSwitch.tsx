@@ -203,6 +203,7 @@ export function PrimaryGlobeSwitch({ children }: PrimaryGlobeSwitchProps) {
           role="tablist"
           aria-label={t("primaryGlobe.tablist")}
           className="pointer-events-auto flex overflow-hidden rounded-md border border-input bg-background/90 shadow-sm"
+          style={{ display: "none" }}
         >
           <ViewTab
             active={!showGlobe}

@@ -6,6 +6,7 @@ import {
   getCesiumSwipeState,
   subscribeCesiumSwipe,
 } from "./geoim3d-cesium-swipe";
+import { setTilesetLoadProgress } from "./geoim3d-tileset-loading";
 import { readTilesetPlacement, tilesetPlacementMatrix } from "./geoim3d-tileset-placement";
 
 // Reconciles the store's `GeoLibreLayer[]` onto a Cesium globe, mirroring what
@@ -611,6 +612,12 @@ export class CesiumLayerSync {
       }
       viewer.scene.primitives.add(tileset);
       entry.handle = tileset;
+      // A tileset streams: the layer is listed at once and the model arrives
+      // over the next seconds, which reads as nothing happening. Report the
+      // outstanding work so the panel that opened it can show progress.
+      tileset.loadProgress.addEventListener((pending: number, processing: number) => {
+        setTilesetLoadProgress(layer.id, { pending, processing });
+      });
       if (!this.applyTilesetPlacement(entry)) {
         this.applyTilesetAltitude(tileset, Number(layer.source.altitudeOffset));
       }
@@ -773,6 +780,9 @@ export class CesiumLayerSync {
     } else if (entry.kind === "geojson") {
       this.viewer.dataSources.remove(handle as DataSource, true);
     } else {
+      // Its progress goes with it; a tileset removed mid-stream would otherwise
+      // leave the panel waiting on tiles nothing is fetching.
+      setTilesetLoadProgress(entry.layer.id, null);
       this.viewer.scene.primitives.remove(handle as Cesium3DTileset);
     }
   }

@@ -157,6 +157,32 @@ export interface PickedObject {
   path?: string;
 }
 
+/**
+ * How the host reports a 3D Tiles layer's streaming progress.
+ *
+ * The counts come from the Cesium sync, which lives in `@geolibre/map` —
+ * importing that package here would pull MapLibre's stylesheet into this
+ * module's graph, which the Node test runner cannot load. Injected instead, the
+ * way the fetcher and the view bridge are.
+ */
+export interface TilesetLoadingSource {
+  /** Outstanding tile requests and processing for a layer, or null when idle. */
+  progressOf: (layerId: string) => { pending: number; processing: number } | null;
+  /** Notifies on every change. */
+  subscribe: (listener: () => void) => () => void;
+}
+
+let tilesetLoadingSource: TilesetLoadingSource | null = null;
+
+/**
+ * Installs the progress source, or clears it.
+ *
+ * @param source - The host's reporter, or null.
+ */
+export function setTilesetLoadingSource(source: TilesetLoadingSource | null): void {
+  tilesetLoadingSource = source;
+}
+
 /** Reopens a file a preset recorded by path. Null when it can no longer be read. */
 export type LocalObjectResolver = (path: string) => Promise<PickedObject | null>;
 
@@ -293,6 +319,7 @@ export interface Geoim3dObjectLabels {
   scale: string;
   rotation: string;
   tilesetBadge: string;
+  tilesetLoading: string;
   tilesetHint: string;
   apply: string;
   remove: string;
@@ -335,6 +362,7 @@ let labels: Geoim3dObjectLabels = {
   scale: "Scale",
   rotation: "Rotation (°)",
   tilesetBadge: "3D Tiles",
+  tilesetLoading: "Loading tiles",
   tilesetHint: "These values place the 3D Tiles version, not the splat.",
   apply: "Apply",
   remove: "Remove",
@@ -531,6 +559,16 @@ const GEOIM3D_OBJECT_SOURCE_KIND = "geoim3d-object";
 const GEOIM3D_TILESET_SOURCE_KIND = "geoim3d-object-tileset";
 
 /**
+ * Whether opening a preset also puts its 3D Tiles version on the map.
+ *
+ * Off while the Cesium tab is hidden: a Gaussian splat tileset draws on the
+ * globe and nowhere else, so with no way to reach the globe the layer is a row
+ * in the list that can never show anything. The manifest keeps its `tileset`
+ * and `tilesetTransform`; this is the only thing to flip when the tab is back.
+ */
+const TILESET_COMPANION_ENABLED = false;
+
+/**
  * The layer record for a preset's 3D Tiles companion.
  *
  * Only what the globe reads: `type` and `source.url` are what
@@ -659,6 +697,7 @@ function ensureTilesetLayer(preset: ObjectPreset): boolean {
       createTilesetStoreLayer(id, preset.name, preset.tileset, initialTilesetTransform(preset)),
     );
   }
+  watchTilesetLoading();
   return true;
 }
 
@@ -694,6 +733,7 @@ function loadTileset(app: GeoLibreAppAPI, url: string, name: string): void {
   };
   const layerId = `${GEOIM3D_TILESET_SOURCE_KIND}-${nextObjectSequence++}`;
   useAppStore.getState().addLayer(createTilesetStoreLayer(layerId, name, url, transform));
+  watchTilesetLoading();
   state.objects.push({
     layerId,
     loaderId: "",
@@ -744,6 +784,7 @@ function isObjectLayer(layer: GeoLibreLayer): boolean {
 }
 
 let unsubscribeStore: (() => void) | null = null;
+let unsubscribeTilesetLoading: (() => void) | null = null;
 let detachPitchSync: (() => void) | null = null;
 
 /** Counter behind the stable layer ids. Uniqueness within a session is enough. */
@@ -922,6 +963,12 @@ function layerIdsChanged(
  * would work and the layer panel's would not, which is worse than not listing
  * it at all.
  */
+/** Repaints the panel as tiles arrive, so the bar tracks the stream. */
+function watchTilesetLoading(): void {
+  if (!tilesetLoadingSource) return;
+  unsubscribeTilesetLoading ??= tilesetLoadingSource.subscribe(() => rerenderPanel());
+}
+
 function watchLayerList(): void {
   unsubscribeStore ??= useAppStore.subscribe((store, previous) => {
     // Only when a layer was added or removed — not on every property change.
@@ -1536,7 +1583,7 @@ async function loadPreset(app: GeoLibreAppAPI, preset: ObjectPreset): Promise<vo
   // preset that has one is opened in either view: the tileset draws on the
   // globe, the splat on the 2D map, and both are listed either way so switching
   // views does not need the preset opened again.
-  const hasTileset = ensureTilesetLayer(preset);
+  const hasTileset = TILESET_COMPANION_ENABLED && ensureTilesetLayer(preset);
 
   // A recorded path is a file, not a URL: it has to be reauthorized and turned
   // into something the webview can read before the loader sees it.
@@ -1697,6 +1744,28 @@ function renderPanel(container: HTMLElement): void {
   if (!app) return;
   container.textContent = "";
   container.className = "geolibre-plugin-panel";
+
+  // A tileset streams after its layer is listed, so the panel keeps showing
+  // progress once the object itself has finished loading.
+  const streaming = state.objects
+    .map((object) =>
+      object.tilesetLayerId
+        ? (tilesetLoadingSource?.progressOf(object.tilesetLayerId) ?? null)
+        : null,
+    )
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+  if (!state.busy && streaming.length > 0) {
+    const outstanding = streaming.reduce((sum, one) => sum + one.pending + one.processing, 0);
+    const progress = element("div", "geoim3d-progress");
+    progress.setAttribute("role", "status");
+    progress.appendChild(
+      element("p", "geoim3d-progress__label", `${labels.tilesetLoading} (${outstanding})`),
+    );
+    const track = element("div", "geoim3d-progress__track");
+    track.appendChild(element("div", "geoim3d-progress__bar"));
+    progress.appendChild(track);
+    container.appendChild(progress);
+  }
 
   if (state.busy) {
     // Indeterminate on purpose. The renderer does the fetching and reports no
@@ -2006,6 +2075,8 @@ export const geoim3dObjectsPlugin: GeoLibrePlugin = {
     // the panel that hid it.
     state.hideBasemapBuildings = false;
     applyBasemapBuildingVisibility();
+    unsubscribeTilesetLoading?.();
+    unsubscribeTilesetLoading = null;
     unsubscribeStore?.();
     unsubscribeStore = null;
     const store = useAppStore.getState();

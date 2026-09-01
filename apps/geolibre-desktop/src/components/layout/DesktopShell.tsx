@@ -2,7 +2,13 @@
 import { useAppStore, type GeoLibreLayer } from "@geolibre/core";
 import type { FeatureCollection } from "geojson";
 import type { MapController, MapDiagnosticEvent } from "@geolibre/map";
-import { getLayerBounds, MapCanvas, setExternalDeckLayerOrderHandler } from "@geolibre/map";
+import {
+  getLayerBounds,
+  getTilesetLoadProgress,
+  MapCanvas,
+  setExternalDeckLayerOrderHandler,
+  subscribeTilesetLoading,
+} from "@geolibre/map";
 import { useTranslation } from "react-i18next";
 import {
   addDroppedObject,
@@ -39,6 +45,7 @@ import {
   setLocalObjectResolver,
   setPrimaryViewBridge,
   setObjectFetcher,
+  setTilesetLoadingSource,
   setNonTiledRasterHandler,
   setKmlFileImportHandler,
   setTerrainMeasureBodyNames,
@@ -1150,6 +1157,13 @@ export function DesktopShell({
     setLocalObjectPicker(pickLocalObjects);
     setLocalObjectResolver(resolveLocalObject);
     if (isTauri()) setObjectFetcher(fetchObjectAsBlobUrl);
+    // A tileset streams after its layer is listed; the panel shows a bar while
+    // it does. Wired here because the counts come from the Cesium sync and the
+    // panel is a plugin, and neither imports the other.
+    setTilesetLoadingSource({
+      progressOf: getTilesetLoadProgress,
+      subscribe: subscribeTilesetLoading,
+    });
     // The objects are drawn by a MapLibre control, so they are invisible while
     // the globe tab is up. This lets the plugin withdraw its menu there rather
     // than offer actions whose result cannot be seen.

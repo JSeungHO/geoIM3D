@@ -653,6 +653,7 @@ export {
   GEOIM3D_OBJECTS_PLUGIN_ID,
   setGeoim3dObjectLabels,
   setObjectFetcher,
+  setTilesetLoadingSource,
   setLocalObjectPicker,
   addDroppedObject,
   MAX_LOCAL_OBJECT_BYTES,

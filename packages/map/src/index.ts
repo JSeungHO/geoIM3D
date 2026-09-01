@@ -11,6 +11,12 @@ export { SecondaryMapCanvas, type SecondaryMapCanvasProps } from "./SecondaryMap
 export { CesiumCanvas, type CesiumCanvasProps } from "./CesiumCanvas";
 export { isCesiumSupportedLayerType, setCesiumTileUrlResolver } from "./cesium-layer-sync";
 export {
+  getTilesetLoadProgress,
+  isAnyTilesetLoading,
+  subscribeTilesetLoading,
+  type TilesetLoadProgress,
+} from "./geoim3d-tileset-loading";
+export {
   cesiumSwipeSides,
   setCesiumSwipeState,
   type CesiumSwipeSide,
