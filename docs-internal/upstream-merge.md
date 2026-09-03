@@ -3,8 +3,26 @@
 geoIM3D는 [opengeos/GeoLibre](https://github.com/opengeos/GeoLibre)의 포크입니다.
 원본에 새 릴리스가 나오면 이 순서대로 가져옵니다.
 
-마지막 수행: **v2.7.0 → v2.8.0 (61커밋, 310파일)**. 충돌 11개 파일, 전부
-해결. 아래 내용은 실제로 쓴 명령과 부딪힌 문제를 적은 것입니다.
+마지막 수행: **v2.8.0 → v2.9.0 (48커밋, 228파일)**. 충돌 8개 파일 + git이
+표시하지 않은 의미 충돌 1개(`CesiumCanvas.tsx`). 아래 내용은 실제로 쓴 명령과
+부딪힌 문제를 적은 것입니다.
+
+v2.9.0에서 겪은 것:
+
+- **Cesium가 `cesium` → `@cesium/engine`, `Viewer` → `CesiumWidget`으로 바뀜.**
+  `cesium-layer-sync.ts`는 충돌로 잡혀서 손으로 타입만 바꾸면 됐지만,
+  `CesiumCanvas.tsx`는 **자동 병합이 조용히 성공**하면서 존재하지 않는 `Viewer`
+  참조와 중복 선언된 basemap 상태를 남겼습니다. 상위 파일을 통째로 받고
+  (`git checkout upstream/main -- <파일>`) 아직 필요한 `onViewerChange` 훅만 다시
+  얹었습니다.
+- **상위가 지구본 basemap 미러링을 흡수함.** 우리가 그걸 하려고 만든
+  `CesiumLayerSync.syncBasemap` + `rasterBasemapTiles`는 이제 상위의
+  `core/src/cesium-imagery.ts` + `map/src/cesium-basemap.ts`가 대신합니다.
+  호출부(`CesiumCanvas`)는 지웠고, `rasterBasemapTiles`는 아직 export + 테스트가
+  살아 있으니 다음 정리 때 함께 제거 후보입니다. 지역 basemap(VWorld 등)은
+  상위의 `getRegionalBasemapByStyleUrl` 경로가 커버합니다.
+- `bincode`, `tauri-plugin-single-instance`가 `Cargo.toml`에 추가됨 —
+  `npm run check:rust`가 잠금 파일까지 확인해 줍니다.
 
 ---
 
