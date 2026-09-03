@@ -110,6 +110,10 @@ import { KeyboardShortcutsDialog } from "../command/KeyboardShortcutsDialog";
 import { useGlobalShortcuts } from "../../hooks/useGlobalShortcuts";
 import { useViewportHistory } from "../../hooks/useViewportHistory";
 import type { Command } from "../../lib/commands";
+import {
+  filterCommandsByCapabilities,
+  filterCommandsByPrivileges,
+} from "../../lib/deployment-gates";
 import { IS_MAS_BUILD } from "../../lib/build-flags";
 import { pluginDisplayName } from "../../lib/plugin-display-name";
 import { masHidesDataSource } from "../../lib/mas-build";
@@ -221,6 +225,8 @@ export function TopToolbar({
   viewer = false,
 }: TopToolbarProps) {
   const { t, i18n } = useTranslation();
+  const deploymentCapabilities = useAppStore((state) => state.deploymentCapabilities);
+  const appPrivileges = useAppStore((state) => state.capabilities.privileges);
   // The reverse-geocode plugin lives in the framework-agnostic plugins package
   // and cannot call t() itself, so push the translated popup strings into it
   // here and refresh them whenever the active language changes.
@@ -259,6 +265,10 @@ export function TopToolbar({
       },
       deleteLast: t("annotations.deleteLast"),
       clearAll: t("annotations.clearAll"),
+      newLayer: t("annotations.newLayer"),
+      edit: t("annotations.edit"),
+      move: t("annotations.move"),
+      moveToLayer: t("annotations.moveToLayer"),
       textPlaceholder: t("annotations.textPlaceholder"),
       pinTitlePrompt: t("annotations.pinTitlePrompt"),
       pinDescPrompt: t("annotations.pinDescPrompt"),
@@ -885,6 +895,8 @@ export function TopToolbar({
     setStacLabels({
       title: t("stacPlugin.title"),
       getTitle: () => i18n.t("stacPlugin.title"),
+      planetTitle: t("toolbar.plugin.geolibre-planet-open-data"),
+      getPlanetTitle: () => i18n.t("toolbar.plugin.geolibre-planet-open-data"),
       footprintLayerName: t("stacPlugin.footprintLayerName"),
       catalogSearch: t("stacPlugin.catalogSearch"),
       catalogSearchPlaceholder: t("stacPlugin.catalogSearchPlaceholder"),
@@ -1122,6 +1134,19 @@ export function TopToolbar({
       {} as Record<ToolbarMapControl, boolean>,
     ),
   );
+  const terrainEnabled = useAppStore((state) => state.preferences.map.terrainEnabled);
+
+  // Terrain is project state, unlike the other optional map chrome. Restore it
+  // after both project loads and controller/style initialization so reopening a
+  // saved project brings back the control and its active terrain surface.
+  useEffect(() => {
+    const controller = mapControllerRef.current;
+    if (!controller) return;
+    controller.setBuiltInControlVisible("terrain", terrainEnabled);
+    setControlsVisible((current) =>
+      current.terrain === terrainEnabled ? current : { ...current, terrain: terrainEnabled },
+    );
+  }, [mapControllerRef, mapReadyGeneration, projectGeneration, terrainEnabled]);
   const [initialService, setInitialService] = useState(() =>
     viewer || typeof window === "undefined" ? null : serviceUrlParameter(window.location.search),
   );
@@ -1247,11 +1272,17 @@ export function TopToolbar({
   const handleOpenPlanetaryComputer = () => openPlanetaryComputerPanel(appApi);
 
   const toggleMapControl = (control: ToolbarMapControl) => {
-    setControlsVisible((current) => {
-      const visible = !current[control];
-      const updated = mapControllerRef.current?.setBuiltInControlVisible(control, visible) ?? false;
-      return updated ? { ...current, [control]: visible } : current;
-    });
+    const visible = !controlsVisible[control];
+    const updated = mapControllerRef.current?.setBuiltInControlVisible(control, visible) ?? false;
+    if (!updated) return;
+    setControlsVisible((current) => ({ ...current, [control]: visible }));
+    if (control === "terrain") {
+      const { preferences, setPreferences } = useAppStore.getState();
+      setPreferences({
+        ...preferences,
+        map: { ...preferences.map, terrainEnabled: visible },
+      });
+    }
   };
 
   // The Maptoolkit logo is Maptoolkit-basemap attribution, required by their
@@ -1891,9 +1922,29 @@ export function TopToolbar({
   // keyless. Everything else carrying a `shortcut` authors the project
   // (`project.*`, `add.comment`), so filtering to `view.*` drops exactly the
   // authoring keyboard surface.
+  //
+  // Independently of the viewer preset, a withheld capability is withheld
+  // everywhere: the menu gates below only hide or disable menu entries, while
+  // the palette, the cheat sheet, and the shortcut layer call `run()` directly.
+  // Filtering the registry once here is what keeps those three from advertising
+  // and invoking what was denied — and it has to apply both vocabularies, the
+  // deployment's (issue #1673) and the session role's (issue #1672), or the
+  // model gated by whichever one is missing is a UI convention rather than an
+  // access control.
+  const allowedCommands = useMemo(
+    () =>
+      filterCommandsByPrivileges(
+        filterCommandsByCapabilities(commands, deploymentCapabilities),
+        appPrivileges,
+      ),
+    [commands, deploymentCapabilities, appPrivileges],
+  );
   const shortcutCommands = useMemo(
-    () => (viewer ? commands.filter((command) => command.id.startsWith("view.")) : commands),
-    [commands, viewer],
+    () =>
+      viewer
+        ? allowedCommands.filter((command) => command.id.startsWith("view."))
+        : allowedCommands,
+    [allowedCommands, viewer],
   );
   useGlobalShortcuts({
     commands: shortcutCommands,
@@ -2010,7 +2061,7 @@ export function TopToolbar({
         onSaveCurrentProject={projectFiles.handleSave}
         onProjectCreated={resetRuntimeControlsForNewProject}
       />
-      {!viewer && isMenuVisible(uiProfile, "addData") && (
+      {!viewer && isMenuVisible(uiProfile, "addData") && deploymentCapabilities.has("data:add") && (
         <AddDataMenu
           chrome={chrome}
           addLayer={addLayer}
@@ -2023,15 +2074,17 @@ export function TopToolbar({
           onOpenOsmPbfDialog={() => osmPbf.setDialogOpen(true)}
         />
       )}
-      {!viewer && isMenuVisible(uiProfile, "processing") && (
-        <ProcessingMenu
-          chrome={chrome}
-          earthEnginePanel={panels.earthEngine}
-          onOpenNetworkTool={consent.openNetworkTool}
-          onOpenPlanetaryComputer={handleOpenPlanetaryComputer}
-          onOpenGeoreferencer={() => setGeoreferencerOpen(true)}
-        />
-      )}
+      {!viewer &&
+        isMenuVisible(uiProfile, "processing") &&
+        deploymentCapabilities.has("processing:run") && (
+          <ProcessingMenu
+            chrome={chrome}
+            earthEnginePanel={panels.earthEngine}
+            onOpenNetworkTool={consent.openNetworkTool}
+            onOpenPlanetaryComputer={handleOpenPlanetaryComputer}
+            onOpenGeoreferencer={() => setGeoreferencerOpen(true)}
+          />
+        )}
       {isMenuVisible(uiProfile, "controls") && (
         <ControlsMenu
           chrome={chrome}
@@ -2061,23 +2114,27 @@ export function TopToolbar({
           onOpenRecordVideo={() => setRecordVideoOpen(true)}
         />
       )}
-      {!viewer && isMenuVisible(uiProfile, "plugins") && (
-        <PluginsMenu
-          chrome={chrome}
-          appApi={appApi}
-          plugins={plugins}
-          isActive={isActive}
-          toggle={toggle}
-          getMapControlPosition={getMapControlPosition}
-          setMapControlPosition={setMapControlPosition}
-          hiddenPluginIds={hiddenPluginIds}
-        />
-      )}
+      {!viewer &&
+        isMenuVisible(uiProfile, "plugins") &&
+        deploymentCapabilities.has("plugins:install") && (
+          <PluginsMenu
+            chrome={chrome}
+            appApi={appApi}
+            plugins={plugins}
+            isActive={isActive}
+            toggle={toggle}
+            getMapControlPosition={getMapControlPosition}
+            setMapControlPosition={setMapControlPosition}
+            hiddenPluginIds={hiddenPluginIds}
+          />
+        )}
       {/* Top-level toolbar menus registered by built-in plugins via
           app.registerToolbarMenu(); external plugin menus render after Help
           (below). Renders nothing when none exist. */}
-      {!viewer ? <PluginToolbarMenus chrome={chrome} placement="builtin" /> : null}
-      {!viewer ? (
+      {!viewer && deploymentCapabilities.has("plugins:install") ? (
+        <PluginToolbarMenus chrome={chrome} placement="builtin" />
+      ) : null}
+      {!viewer && deploymentCapabilities.has("settings:manage") ? (
         <SettingsDialog
           buttonClassName={toolbarButtonClass}
           buttonSize={toolbarButtonSize}
@@ -2118,6 +2175,7 @@ export function TopToolbar({
           open={fieldCollectionOpen}
           onOpenChange={setFieldCollectionOpen}
           mapControllerRef={mapControllerRef}
+          mapReadyGeneration={mapReadyGeneration}
         />
       )}
       {!viewer && (
@@ -2200,7 +2258,9 @@ export function TopToolbar({
       )}
       {/* External plugin toolbar menus render after Help so third-party menus
           sit at the end of the banner, past the built-in menus. */}
-      {!viewer ? <PluginToolbarMenus chrome={chrome} placement="external" /> : null}
+      {!viewer && deploymentCapabilities.has("plugins:install") ? (
+        <PluginToolbarMenus chrome={chrome} placement="external" />
+      ) : null}
       <AddDataDialog
         kind={addDataKind}
         mapControllerRef={mapControllerRef}
@@ -2245,14 +2305,14 @@ export function TopToolbar({
       {!viewer && (
         <CommandPalette
           open={commandPaletteOpen}
-          commands={commands}
+          commands={allowedCommands}
           onOpenChange={setCommandPaletteOpen}
         />
       )}
       {!viewer && (
         <KeyboardShortcutsDialog
           open={shortcutsOpen}
-          commands={commands}
+          commands={allowedCommands}
           onOpenChange={setShortcutsOpen}
         />
       )}

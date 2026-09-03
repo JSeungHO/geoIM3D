@@ -240,11 +240,13 @@ export {
 export { isRecoverableNonTiledRasterError } from "./plugins/non-tiled-raster-error";
 export {
   addRasterToMap,
+  setRasterRenderEngine,
   prepareRasterControl,
   applyRasterLayerOrder,
   closeRasterLayerPanel,
   openRasterLayerPanel,
   restoreRasterLayers,
+  readRasterPixel,
   setLocalRasterFileReader,
   setLocalRasterPicker,
   setNonTiledRasterHandler,
@@ -485,7 +487,10 @@ export {
   type OpenAerialMapSearchOptions,
 } from "./plugins/openaerialmap-api";
 export {
+  maplibrePlanetOpenDataPlugin,
   maplibreStacCatalogsPlugin,
+  PLANET_DISASTER_DATA_CATALOG_URL,
+  PLANET_OPEN_DATA_PLUGIN_ID,
   setStacLabels,
   STAC_PLUGIN_ID,
   type StacLabels,
@@ -551,6 +556,7 @@ export {
   type GeoLensLabels,
   type GeoLensSampleServer,
 } from "./plugins/maplibre-geolens";
+export { maplibreVantorPlugin, VANTOR_PLUGIN_ID } from "./plugins/maplibre-vantor";
 export {
   buildListObjectsUrl,
   buildObjectUrl,

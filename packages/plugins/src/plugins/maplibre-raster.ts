@@ -5,6 +5,7 @@ import type {
   RasterControlEventHandler,
   RasterLayerState,
   RasterSampleDataset,
+  PixelReading,
   RenderEngine,
 } from "maplibre-gl-raster";
 import type { GeoLibreAppAPI, GeoLibreCogRenderEngine, GeoLibreMapControlPosition } from "../types";
@@ -410,6 +411,16 @@ export async function addRasterToMap(
   return id;
 }
 
+/** Switch the shared COG renderer, including rasters already on the map. */
+export async function setRasterRenderEngine(
+  app: GeoLibreAppAPI,
+  engine: RasterRenderEngine,
+): Promise<void> {
+  const control = await ensureRasterControl(app);
+  if (!control) throw new Error("The raster control could not be initialized.");
+  if (control.getEngine() !== engine) control.setEngine(engine);
+}
+
 /**
  * Mount and warm the raster control without opening its panel.
  *
@@ -571,6 +582,23 @@ export function setRasterPixelInspect(layerId: string, enabled: boolean): void {
     }
     rasterInspectPriorSelection = null;
   }
+}
+
+/**
+ * Read one managed raster at a WGS84 coordinate without opening the control's
+ * own inspector popup.
+ *
+ * @param layerId Raster/COG layer id.
+ * @param lngLat WGS84 longitude and latitude.
+ * @param options Optional cancellation signal.
+ * @returns Pixel values, or null when the layer or coordinate has no data.
+ */
+export function readRasterPixel(
+  layerId: string,
+  lngLat: [number, number],
+  options?: { signal?: AbortSignal },
+): Promise<PixelReading | null> {
+  return rasterControl?.readRasterPixel(layerId, lngLat, options) ?? Promise.resolve(null);
 }
 
 /**

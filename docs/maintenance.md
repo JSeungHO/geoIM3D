@@ -106,6 +106,20 @@ it, so only the `line-pattern` entry is a mirror a test can guard; the other two
 rest on how MapLibre renders them. A class using any of them is not imported as
 black — it declines the stack.
 
+### Web Services control packages (`packages/plugins/package.json`)
+
+- **Docked panel DOM bridge.** `dockable-map-control.ts` adapts
+  `maplibre-gl-fema-wms`, `maplibre-gl-nasa-earthdata`,
+  `maplibre-gl-enviroatlas`, and `maplibre-gl-national-map` by calling the
+  control lifecycle directly and moving the panel element that `onAdd()`
+  appends to the map container into GeoLibre's native right-panel host. Vantor
+  returns a wrapper instead, so the bridge selects its `.vantor-panel`
+  descendant. The scoped CSS in `index.css` mirrors each package's panel,
+  header, toggle, close, and resize-handle class names. After bumping any of
+  these packages, activate every migrated Web Services plugin and verify that
+  its catalog renders, resizing the GeoLibre dock preserves the content, and
+  no vendor panel remains under the map container.
+
 ### `maplibre-gl-components` (`packages/plugins/package.json`)
 
 - **`MAP_PANEL_SELECTOR`**
@@ -193,6 +207,23 @@ assignability against the real imported type, so a renamed or dropped engine
 identifier fails `npm run typecheck`. Nothing extra to do on a bump beyond letting
 the build run.
 
+### `tauri-plugin-persisted-scope` — private on-disk format
+
+`PersistedScopeState` (`apps/geolibre-desktop/src-tauri/src/lib.rs`) mirrors the
+plugin's private bincode `Scope` structure so GeoLibre can remove legacy
+per-photo grants before the plugin synchronously replays them at startup. On a
+`tauri-plugin-persisted-scope` bump, compare the upstream struct's field order
+and types against this mirror and run the Rust scope-cleanup tests. Bincode
+encodes fields positionally, so an upstream layout change is not compiler
+checked.
+
+The `bincode` dependency itself is pinned to the **1.x** line and Dependabot is
+configured (`.github/dependabot.yml`) to skip its major bumps: the plugin writes
+the file with bincode 1, so GeoLibre must decode and re-encode it with the same
+wire format. Only move when `tauri-plugin-persisted-scope` moves. (bincode 3.0.0
+is additionally a deliberately unbuildable release — its whole source is
+`compile_error!("https://xkcd.com/2347/")`.)
+
 ### `@tauri-apps/plugin-http` — two upstream *behaviors*, not APIs
 
 `createNativeSidecarFetch`
@@ -227,6 +258,46 @@ careless edit here but cannot exercise the Rust side. On a plugin bump, re-check
 both behaviors against the sources above; the failure modes are a leaked token and
 a sidecar that is unreachable only for proxied users, neither of which shows up in
 CI or on an unproxied dev machine.
+
+### `cesium` / `@cesium/engine` — runtime assets fetched by URL
+
+The 3D globe pane loads its code from **`@cesium/engine`** but its runtime
+assets from the **`cesium`** wrapper. Both are dependencies and both must move
+together: `cesium@1.x` pins the matching `@cesium/engine`, and the prebuilt
+Workers/Assets staged from the wrapper have to match the engine running them.
+
+The code imports the engine directly because the `cesium` barrel re-exports
+`@cesium/widgets` as well, and that defeats tree-shaking — the base-layer
+picker, geocoder, info box and Knockout all shipped in the lazy chunk even
+though the pane builds a bare `CesiumWidget`. Reverting to `import("cesium")`
+adds ~340 KB back with no build error and no test failure.
+
+After a bump, check all four — none of these fail the build:
+
+- **Asset copy.** `vite-plugins/copy-cesium-assets.ts` copies `Assets`,
+  `ThirdParty`, `Widgets` and `Workers` out of `cesium/Build/Cesium` into
+  `public/cesium/`, keyed on the installed version. The copy is gitignored, so a
+  stale one is refreshed automatically. A directory *renamed or removed*
+  upstream fails loudly — `cpSync` throws `ENOENT` from `buildStart`, so the dev
+  server and the build both stop. The silent case is the opposite one: a runtime
+  directory *added* upstream is simply not in `RUNTIME_DIRS`, so it is never
+  copied and only surfaces as a 404 when the globe reaches for it.
+- **`CESIUM_BASE_URL`.** `CesiumCanvas.tsx` derives it from the app's
+  `BASE_URL`, not a hardcoded `/cesium`, so a sub-path deploy (the `/demo/`
+  build) still resolves. Cesium reads it at import time; if the Workers 404 the
+  render loop dies with no error boundary.
+- **The stylesheet.** The pane links `Widgets/CesiumWidget/CesiumWidget.css`,
+  not the 32 KB `Widgets/widgets.css` — it only needs the canvas sizing, credit
+  container and error panel. If upstream moves that file the globe still mounts
+  but its canvas stops filling the pane, which no assertion catches.
+- **PWA globs.** `**/cesium-*` / `**/Cesium-*` in `vite.config.ts` keep the
+  chunk out of the app-shell precache and CacheFirst-cache it instead. A chunk
+  renamed out of that pattern would be precached, adding megabytes to first load.
+
+`e2e/cesium-globe.spec.ts` mounts the real engine keyless and drags the globe,
+so it catches a broken `CESIUM_BASE_URL` or a dead chunk. It cannot catch the
+CSS regression or the bundle-size one — check those by eye and in the build
+output.
 
 ## Adding a blend mode
 
@@ -406,8 +477,9 @@ and every guard below blocks one of them.
 Each stripped credential resolves through `getRuntimeEnvironment()`, which
 overlays `window.__GEOLIBRE_RUNTIME_ENV__` from Settings → Environment variables.
 So a wheel user supplies their own token and the affected surfaces degrade as
-documented: Mapbox prompts in the basemap API-keys view, the 3D globe is not
-offered, Protomaps basemaps are hidden.
+documented: Mapbox prompts in the basemap API-keys view, the 3D globe loses
+terrain and Ion imagery (the pane itself still works), Protomaps basemaps are
+hidden.
 
 ### The scan
 

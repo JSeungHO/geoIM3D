@@ -165,19 +165,35 @@ export class PluginManager {
     const pendingResult = this.activationResults.get(id);
     if (pendingResult) return pendingResult;
     if (this.active.has(id)) return true;
+    const displaced = this.deactivateExclusiveSiblings(id, plugin, app);
+    const restoreDisplaced = () => {
+      for (const displacedId of displaced) this.activate(displacedId, app);
+    };
     const scopedApp = scopeAppToPlugin(app, id);
     this.activating.add(id);
     let activated: ReturnType<GeoLibrePlugin["activate"]>;
     try {
       activated = plugin.activate(scopedApp);
+    } catch (error) {
+      restoreDisplaced();
+      throw error;
     } finally {
       this.activating.delete(id);
     }
-    if (activated === false) return false;
+    if (activated === false) {
+      restoreDisplaced();
+      return false;
+    }
     const generation = this.nextActivationGeneration(id);
     this.active.add(id);
     this.notify();
-    const result = this.watchAsyncActivation(id, activated, scopedApp, generation);
+    const result = this.watchAsyncActivation(
+      id,
+      activated,
+      scopedApp,
+      generation,
+      restoreDisplaced,
+    );
     if (!result) return true;
     this.trackActivationResult(id, result);
     return result;
@@ -199,6 +215,7 @@ export class PluginManager {
     activated: boolean | void | PromiseLike<boolean | void>,
     app: GeoLibreAppAPI,
     generation: number,
+    onFailure?: () => void,
   ): Promise<boolean> | null {
     // An async plugin (e.g. one mounted behind a dynamic import) reports
     // failure after the fact by resolving false or rejecting. Roll back so the
@@ -208,13 +225,13 @@ export class PluginManager {
     return Promise.resolve(activated).then(
       (result) => {
         if (result === false) {
-          this.rollbackFailedActivation(id, app, generation);
+          if (this.rollbackFailedActivation(id, app, generation)) onFailure?.();
           return false;
         }
         return this.active.has(id) && this.activationGenerations.get(id) === generation;
       },
       (error) => {
-        this.rollbackFailedActivation(id, app, generation, error);
+        if (this.rollbackFailedActivation(id, app, generation, error)) onFailure?.();
         return false;
       },
     );
@@ -230,9 +247,9 @@ export class PluginManager {
     app: GeoLibreAppAPI,
     generation: number,
     error?: unknown,
-  ): void {
+  ): boolean {
     if (!this.active.has(id) || this.activationGenerations.get(id) !== generation) {
-      return;
+      return false;
     }
     if (error !== undefined) {
       console.warn(`Plugin '${id}' failed to activate; reverting.`, error);
@@ -251,6 +268,7 @@ export class PluginManager {
       }
     }
     this.notify();
+    return true;
   }
 
   private trackActivationResult(id: string, result: Promise<boolean>): void {
@@ -267,6 +285,27 @@ export class PluginManager {
     this.active.delete(id);
     this.activationResults.delete(id);
     this.notify();
+  }
+
+  /** Deactivate and return active siblings that conflict with `plugin`. */
+  private deactivateExclusiveSiblings(
+    id: string,
+    plugin: GeoLibrePlugin,
+    app: GeoLibreAppAPI,
+  ): string[] {
+    if (!plugin.exclusiveGroup) return [];
+    const displaced: string[] = [];
+    for (const [otherId, otherPlugin] of this.plugins) {
+      if (
+        otherId !== id &&
+        this.active.has(otherId) &&
+        otherPlugin.exclusiveGroup === plugin.exclusiveGroup
+      ) {
+        displaced.push(otherId);
+        this.deactivate(otherId, app);
+      }
+    }
+    return displaced;
   }
 
   toggle(id: string, app: GeoLibreAppAPI): void {
@@ -400,7 +439,16 @@ export class PluginManager {
     app: GeoLibreAppAPI,
     options: { resetMissingSettings?: boolean } = {},
   ): void {
-    const targetActive = new Set(state?.activePluginIds ?? Array.from(this.defaultActive));
+    const requestedActive = state?.activePluginIds ?? Array.from(this.defaultActive);
+    const targetActive = new Set<string>();
+    const exclusiveTargets = new Map<string, string>();
+    for (const id of requestedActive) {
+      const group = this.plugins.get(id)?.exclusiveGroup;
+      const previous = group ? exclusiveTargets.get(group) : undefined;
+      if (previous) targetActive.delete(previous);
+      if (group) exclusiveTargets.set(group, id);
+      targetActive.add(id);
+    }
     let changed = false;
 
     // Plugins pop their control panel open when activated so a user who just
@@ -425,6 +473,9 @@ export class PluginManager {
         setTimeout(() => collapsible.collapse?.(), 0);
       }, 0);
     };
+    const collapseRestoredRightPanel = (panelId: string): void => {
+      app.collapseRightPanel?.(panelId);
+    };
     // A plugin that persists its own collapsed state is exempt: the saved
     // project already says whether its panel should be open, and collapsing it
     // here would both override that and (since collapse() mutates the control)
@@ -432,7 +483,10 @@ export class PluginManager {
     const scopeForRestore = (id: string): GeoLibreAppAPI =>
       this.plugins.get(id)?.restoresPanelCollapseState
         ? scopeAppToPlugin(app, id)
-        : scopeAppToPlugin(app, id, { onControlAdded: collapseRestoredPanel });
+        : scopeAppToPlugin(app, id, {
+            onControlAdded: collapseRestoredPanel,
+            onRightPanelOpened: collapseRestoredRightPanel,
+          });
 
     // Deactivate first so plugins that should be inactive tear down their live
     // controls before we touch positions or settings. This keeps the order of
@@ -538,6 +592,8 @@ interface ScopeAppOptions {
    * collapsed (#952).
    */
   onControlAdded?: (control: IControl) => void;
+  /** Called when a plugin opens a native right panel during project restore. */
+  onRightPanelOpened?: (panelId: string) => void;
 }
 
 function scopeAppToPlugin(
@@ -545,11 +601,13 @@ function scopeAppToPlugin(
   pluginId: string,
   options: ScopeAppOptions = {},
 ): GeoLibreAppAPI {
-  const { onControlAdded } = options;
+  const { onControlAdded, onRightPanelOpened } = options;
   const register = app.registerToolbarMenu;
+  const registerRightPanel = app.registerRightPanel;
   const activatePlugin = app.activatePlugin;
   const deactivatePlugin = app.deactivatePlugin;
-  if (!register && !onControlAdded && !activatePlugin && !deactivatePlugin) return app;
+  if (!register && !onControlAdded && !onRightPanelOpened && !activatePlugin && !deactivatePlugin)
+    return app;
 
   const scoped: GeoLibreAppAPI = { ...app };
 
@@ -564,12 +622,39 @@ function scopeAppToPlugin(
     scoped.registerToolbarMenu = (menu) => registerWithOwner(menu, pluginId);
   }
 
+  if (registerRightPanel && deactivatePlugin) {
+    scoped.registerRightPanel = (panel) =>
+      registerRightPanel(
+        panel.deactivatePluginOnClose
+          ? {
+              ...panel,
+              onExplicitClose: () => {
+                try {
+                  panel.onExplicitClose?.();
+                } finally {
+                  setTimeout(() => deactivatePlugin(pluginId), 0);
+                }
+              },
+            }
+          : panel,
+      );
+  }
+
   if (onControlAdded) {
     const addMapControl = app.addMapControl;
     scoped.addMapControl = (control, position) => {
       const added = addMapControl(control, position);
       if (added !== false) onControlAdded(control);
       return added;
+    };
+  }
+
+  if (onRightPanelOpened && app.openRightPanel) {
+    const openRightPanel = app.openRightPanel;
+    scoped.openRightPanel = (panelId) => {
+      const opened = openRightPanel(panelId);
+      if (opened) onRightPanelOpened(panelId);
+      return opened;
     };
   }
 

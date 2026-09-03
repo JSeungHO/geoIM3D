@@ -405,6 +405,12 @@ export interface GeoLibreAppAPI {
    */
   addCogLayer?: (name: string, url: string, options?: GeoLibreCogLayerOptions) => Promise<string>;
   /**
+   * Change the host's control-wide COG renderer and re-render existing COG
+   * layers. Typed optional for forward compatibility with hosts that expose
+   * {@link addCogLayer} but not runtime engine switching.
+   */
+  setCogRenderEngine?: (engine: GeoLibreCogRenderEngine) => Promise<void>;
+  /**
    * Add a Zarr layer rendered by the **host's own** `@carbonplan/zarr-layer`
    * instance, returning a promise for the new layer's id. The Zarr counterpart
    * of {@link addCogLayer}: it reads the store directly (Zarr v2/v3 over HTTP),
@@ -977,6 +983,13 @@ export interface GeoLibreRightPanelRegistration {
    */
   defaultWidth?: number;
   /**
+   * Deactivate the owning plugin when the user closes this panel. Use for a
+   * plugin whose panel is its entire UI, so panel and Plugins-menu state stay
+   * in sync. The host defers deactivation until after `onExplicitClose`
+   * returns; displacement by another panel does not deactivate the plugin.
+   */
+  deactivatePluginOnClose?: boolean;
+  /**
    * Populate the panel body. Called once with an empty container when the panel
    * first becomes active; the plugin appends its own DOM. The container is kept
    * mounted across collapse so plugin state persists. May return a cleanup
@@ -989,6 +1002,8 @@ export interface GeoLibreRightPanelRegistration {
   onCollapse?: () => void;
   /** Called after the panel closes (releases the workspace). */
   onClose?: () => void;
+  /** Called only when explicitly closed, not when another panel displaces it. */
+  onExplicitClose?: () => void;
 }
 
 export interface GeoLibrePlugin {
@@ -996,6 +1011,8 @@ export interface GeoLibrePlugin {
   name: string;
   version: string;
   activeByDefault?: boolean;
+  /** Plugins in the same group cannot be active at the same time. */
+  exclusiveGroup?: string;
   /** At least one name is required for handleUrlParameters to be called. */
   urlParameterNames?: string[];
   /**

@@ -56,6 +56,7 @@ import { PHOTO_IMAGE_EXTENSIONS, isPhotoDropFileName, isPhotoFileName } from "./
 import { projectedGeoJsonCrs } from "./crs-utils";
 import { nativeFileDialogFilters, type FileDialogFilter } from "./file-dialog-filters";
 import { parseGpxLayer } from "./gpx";
+import { isDesktopRuntime } from "./is-mobile";
 import { isTauri } from "./is-tauri";
 import { SHAPEFILE_COMPANION_EXTENSIONS, shapefileCompanionPathsFromSelection } from "./mas-build";
 import {
@@ -86,7 +87,7 @@ import { tiffBytesToPngBytes } from "./tiff-image";
 export { isTauri };
 
 function browserSafeFileName(path: string): string {
-  return path.split(/[/\\]/).pop() || "project.geolibre.json";
+  return path.split(/[/\\]/).pop() || "project.geolibre";
 }
 
 export type { FileDialogFilter } from "./file-dialog-filters";
@@ -154,6 +155,12 @@ const GEOLIBRE_PROJECT_FILE_TYPES: BrowserFilePickerType[] = [
     },
   },
 ];
+
+/** Project extension handled as a workspace switch by drag-and-drop. */
+export function isGeoLibreProjectFileName(path: string): boolean {
+  const name = browserSafeFileName(path).toLowerCase();
+  return name.endsWith(".geolibre") || name.endsWith(".geolibre.json");
+}
 
 interface SaveTextFileOptions {
   defaultName: string;
@@ -438,13 +445,8 @@ function pathWithoutExtension(path: string): string {
   return path.replace(/\.[^.\\/]+$/, "");
 }
 
-function isGeoLibreProjectFile(path: string): boolean {
-  const name = browserSafeFileName(path).toLowerCase();
-  return name.endsWith(".geolibre") || name.endsWith(".geolibre.json");
-}
-
 function isVectorFileName(path: string): boolean {
-  if (isGeoLibreProjectFile(path)) return false;
+  if (isGeoLibreProjectFileName(path)) return false;
   if (browserSafeFileName(path).toLowerCase().endsWith(".shp.xml")) return false;
   // Rasters are handled by the raster drop path, not the DuckDB vector loader.
   if (isRasterFileName(path)) return false;
@@ -608,7 +610,7 @@ export async function readLocalFileBytes(path: string): Promise<Uint8Array<Array
  * @param path - Absolute local path to read.
  * @returns The file's decoded UTF-8 text.
  */
-async function readLocalFileText(path: string): Promise<string> {
+export async function readLocalFileText(path: string): Promise<string> {
   try {
     return await readTextFile(path);
   } catch (error) {
@@ -2623,7 +2625,7 @@ async function saveProjectFileBrowser(
   content: string,
   defaultName?: string,
 ): Promise<string | null> {
-  const fileName = browserSafeFileName(defaultName ?? "project.geolibre.json");
+  const fileName = browserSafeFileName(defaultName ?? "project.geolibre");
   const pickerWindow = window as BrowserFilePickerWindow;
 
   if (pickerWindow.showSaveFilePicker) {
@@ -3191,7 +3193,7 @@ export async function saveProjectFile(
 
   const path = await save({
     filters: [{ name: "GeoLibre Project", extensions: ["geolibre", "json"] }],
-    defaultPath: defaultName ?? "project.geolibre.json",
+    defaultPath: defaultName ?? "project.geolibre",
   });
   if (!path) return null;
   await writeTextFile(path, content);
@@ -3542,10 +3544,16 @@ export async function pickLocalRasterFiles(): Promise<{ file: File | string; pat
  */
 export async function pickImageFilesWithFallback(): Promise<File[]> {
   if (isTauri()) {
-    const selected = await open({
-      multiple: true,
-      filters: [{ name: "Images", extensions: [...PHOTO_IMAGE_EXTENSIONS] }],
-    });
+    // Desktop uses a native picker and one-shot reader, so selected photos do
+    // not enter either persisted scope. Mobile keeps the plugin picker because
+    // its selections can be content URIs.
+    const desktop = isDesktopRuntime();
+    const selected = desktop
+      ? await invoke<string[]>("pick_image_paths")
+      : await open({
+          multiple: true,
+          filters: [{ name: "Images", extensions: [...PHOTO_IMAGE_EXTENSIONS] }],
+        });
     if (!selected) return [];
     const paths = (Array.isArray(selected) ? selected : [selected]).filter(isPhotoFileName);
     const files: File[] = [];
@@ -3553,7 +3561,10 @@ export async function pickImageFilesWithFallback(): Promise<File[]> {
       // Read each pick independently so one unreadable file does not abandon the
       // rest of the selection.
       try {
-        files.push(new File([toArrayBuffer(await readFile(path))], browserSafeFileName(path)));
+        const bytes = desktop
+          ? await invoke<ArrayBuffer>("read_selected_image", { path })
+          : await readFile(path);
+        files.push(new File([bytes], browserSafeFileName(path)));
       } catch (error) {
         console.warn(`Could not read the selected image "${path}".`, error);
       }

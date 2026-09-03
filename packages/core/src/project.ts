@@ -81,6 +81,10 @@ export interface CreateProjectOptions {
   ellipsoidId?: string;
 }
 
+export function normalizeBlankBackgroundColor(value: unknown): string | null {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value : null;
+}
+
 export function createDefaultMapView(): MapViewState {
   return {
     center: [...DEFAULT_MAP_CENTER],
@@ -101,6 +105,7 @@ export function createEmptyProject(
     basemapStyleUrl: options.basemapStyleUrl ?? DEFAULT_BASEMAP,
     basemapVisible: true,
     basemapOpacity: 1,
+    blankBackgroundColor: null,
     layers: [],
     layerGroups: [],
     styles: {},
@@ -345,6 +350,7 @@ export function parseProject(json: string): GeoLibreProject {
   const basemapStyleUrl = data.basemapStyleUrl ?? DEFAULT_BASEMAP;
   const basemapVisible = data.basemapVisible ?? true;
   const basemapOpacity = data.basemapOpacity ?? 1;
+  const blankBackgroundColor = normalizeBlankBackgroundColor(data.blankBackgroundColor);
   // Secondary panes already go through normalizeMapViewState; the primary
   // camera must too so a hand-edited project cannot store an out-of-range
   // view that MapLibre would silently clamp, leaving saved state wrong.
@@ -363,6 +369,7 @@ export function parseProject(json: string): GeoLibreProject {
     basemapStyleUrl,
     basemapVisible,
     basemapOpacity,
+    blankBackgroundColor,
     layers,
     ...(selectedLayerId !== undefined ? { selectedLayerId } : {}),
     ...(layerGroups.length > 0 ? { layerGroups } : {}),
@@ -1270,6 +1277,11 @@ function normalizeProjectPreferences(preferences: unknown): ProjectPreferences {
         (map as Partial<ProjectPreferences["map"]>).showPointerElevation,
         DEFAULT_PROJECT_PREFERENCES.map.showPointerElevation,
       ),
+      // Older projects omit this field and continue to open with terrain off.
+      terrainEnabled: normalizeBoolean(
+        (map as Partial<ProjectPreferences["map"]>).terrainEnabled,
+        DEFAULT_PROJECT_PREFERENCES.map.terrainEnabled,
+      ),
       // Kept as a free string here; the app coerces an unknown notation to
       // decimal degrees when it renders, so a hand-edited project cannot break
       // the readout.
@@ -1598,6 +1610,7 @@ export function projectFromStore(state: {
   basemapStyleUrl: string;
   basemapVisible: boolean;
   basemapOpacity: number;
+  blankBackgroundColor?: string | null;
   layers: GeoLibreLayer[];
   selectedLayerId?: string | null;
   layerGroups?: LayerGroup[];
@@ -1668,6 +1681,7 @@ export function projectFromStore(state: {
     basemapStyleUrl: state.basemapStyleUrl,
     basemapVisible: state.basemapVisible,
     basemapOpacity: state.basemapOpacity,
+    ...(state.blankBackgroundColor ? { blankBackgroundColor: state.blankBackgroundColor } : {}),
     layers: state.layers.map(prepareLayerForSave),
     ...(selectedLayerId !== undefined ? { selectedLayerId } : {}),
     ...(layerGroups.length > 0 ? { layerGroups } : {}),
@@ -1759,6 +1773,15 @@ function prepareLayerForSave(layer: GeoLibreLayer): GeoLibreLayer {
     layer = rest;
   }
 
+  if (layer.type === "wms") {
+    const tiles = layer.source.tiles;
+    if (!Array.isArray(tiles)) return layer;
+    const portableTiles = tiles.map((tile) => portableWmsTileUrl(tile));
+    return portableTiles.some((tile, index) => tile !== tiles[index])
+      ? { ...layer, source: { ...layer.source, tiles: portableTiles } }
+      : layer;
+  }
+
   if (layer.type !== "xyz") return layer;
 
   const originalUrl =
@@ -1783,12 +1806,27 @@ function prepareLayerForSave(layer: GeoLibreLayer): GeoLibreLayer {
   };
 }
 
+function portableWmsTileUrl(tile: unknown): unknown {
+  // Keep this protocol prefix in sync with WMS_TILE_PROTOCOL in the desktop
+  // app, which packages/core cannot import without reversing dependencies.
+  if (typeof tile !== "string" || !tile.startsWith("geolibre-wms://")) return tile;
+  try {
+    const url = new URL(tile).searchParams.get("url");
+    if (!url) return tile;
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? url : tile;
+  } catch {
+    return tile;
+  }
+}
+
 export function applyProjectToStore(project: GeoLibreProject): {
   projectName: string;
   mapView: MapViewState;
   basemapStyleUrl: string;
   basemapVisible: boolean;
   basemapOpacity: number;
+  blankBackgroundColor: string | null;
   layers: GeoLibreLayer[];
   layerGroups: LayerGroup[];
   preferences: ProjectPreferences;
@@ -1807,10 +1845,14 @@ export function applyProjectToStore(project: GeoLibreProject): {
   comments: ProjectComment[];
   metadata: Record<string, unknown>;
 } {
+  // Legacy and externally-authored projects can carry a partial top-level
+  // style alongside newer fields on the layer itself. Preserve those layer
+  // fields while keeping the top-level copy authoritative where it explicitly
+  // supplies a value.
   const layers = project.layers.map((layer) => ({
     ...layer,
     style: project.styles[layer.id]
-      ? { ...DEFAULT_LAYER_STYLE, ...project.styles[layer.id] }
+      ? { ...DEFAULT_LAYER_STYLE, ...layer.style, ...project.styles[layer.id] }
       : { ...DEFAULT_LAYER_STYLE, ...layer.style },
   }));
   // Re-normalize here (even though `parseProject` already did) because
@@ -1831,6 +1873,7 @@ export function applyProjectToStore(project: GeoLibreProject): {
   const basemapStyleUrl = project.basemapStyleUrl;
   const basemapVisible = project.basemapVisible ?? true;
   const basemapOpacity = project.basemapOpacity ?? 1;
+  const blankBackgroundColor = normalizeBlankBackgroundColor(project.blankBackgroundColor);
   // Reconcile the (possibly hand-edited or programmatic) grid so the store's
   // invariant `secondaryMapViews.length === rows * cols - 1` always holds.
   const mapView = normalizeMapViewState(project.mapView);
@@ -1886,6 +1929,7 @@ export function applyProjectToStore(project: GeoLibreProject): {
     basemapStyleUrl,
     basemapVisible,
     basemapOpacity,
+    blankBackgroundColor,
     layers: normalizedLayers,
     layerGroups,
     preferences: normalizeProjectPreferences(project.preferences),

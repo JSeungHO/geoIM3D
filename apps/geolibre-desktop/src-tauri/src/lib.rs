@@ -64,7 +64,6 @@ use flate2::read::{GzDecoder, ZlibDecoder};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-#[cfg(not(feature = "mas"))]
 use std::collections::{HashSet, VecDeque};
 use std::env;
 #[cfg(not(feature = "mas"))]
@@ -83,12 +82,74 @@ use std::process::{Child, Command, Stdio};
 #[cfg(not(feature = "mas"))]
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::{AtomicU64, Ordering};
+use tauri_plugin_dialog::DialogExt;
+
+const PERSISTED_SCOPE_FILES: [&str; 2] = [".persisted-scope", ".persisted-scope-asset"];
+const PERSISTED_PHOTO_EXTENSIONS: [&str; 6] =
+    [".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"];
+const IMAGE_PICKER_EXTENSIONS: [&str; 8] =
+    ["jpg", "jpeg", "png", "webp", "heic", "heif", "tif", "tiff"];
+
+#[derive(Deserialize, Serialize)]
+struct PersistedScopeState {
+    allowed_paths: Vec<String>,
+    forbidden_patterns: Vec<String>,
+}
+
+#[derive(Default)]
+struct SelectedImagePaths(Mutex<HashSet<PathBuf>>);
+
+fn is_persisted_image_file(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    PERSISTED_PHOTO_EXTENSIONS
+        .iter()
+        .any(|extension| lower.ends_with(extension))
+}
+
+fn is_image_picker_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            IMAGE_PICKER_EXTENSIONS
+                .iter()
+                .any(|allowed| extension.eq_ignore_ascii_case(allowed))
+        })
+}
+
+/// Remove legacy per-image grants before persisted-scope synchronously replays
+/// them. Photo workflows consume or embed image bytes during the current
+/// session, so these grants are not needed after restart.
+fn prune_persisted_image_scopes(app: &tauri::AppHandle) {
+    let Ok(app_data_dir) = app.path().app_data_dir() else {
+        return;
+    };
+    for file_name in PERSISTED_SCOPE_FILES {
+        let path = app_data_dir.join(file_name);
+        let Ok(bytes) = fs::read(&path) else {
+            continue;
+        };
+        let Ok(mut state) = bincode::deserialize::<PersistedScopeState>(&bytes) else {
+            continue;
+        };
+        let original_len = state.allowed_paths.len();
+        state
+            .allowed_paths
+            .retain(|allowed| !is_persisted_image_file(allowed));
+        if state.allowed_paths.len() == original_len {
+            continue;
+        }
+        if let Ok(compacted) = bincode::serialize(&state) {
+            let _ = fs::write(path, compacted);
+        }
+    }
+}
 #[cfg(not(feature = "mas"))]
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::Mutex;
 #[cfg(not(feature = "mas"))]
 use std::thread;
 use std::time::Duration;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri_plugin_fs::FsExt;
 
 // OAuth popups are a desktop-only, multi-window concept; Android/iOS have no
@@ -141,6 +202,10 @@ const URL_RESOLVE_TIMEOUT_SECS: u64 = 15;
 /// tile; callers that download a whole dataset (Add Vector Layer) ask for more,
 /// but not without bound, so a bad value cannot wedge a request indefinitely.
 const MAX_FETCH_TIMEOUT_SECS: u64 = 600;
+const OPEN_PROJECT_FILES_EVENT: &str = "open-project-files";
+
+#[derive(Default)]
+struct PendingProjectPaths(Mutex<VecDeque<String>>);
 
 #[cfg(all(unix, not(feature = "mas")))]
 const SIGTERM: i32 = 15;
@@ -271,9 +336,39 @@ impl Drop for JupyterProcess {
 pub fn run() {
     configure_linux_webkit();
 
-    let builder = tauri::Builder::default()
+    let pending_project_paths = PendingProjectPaths(Mutex::new(VecDeque::from(
+        project_paths_from_args(env::args_os().skip(1), &current_working_directory()),
+    )));
+    let builder = tauri::Builder::default();
+
+    // Windows and Linux deliver a file-association launch by starting another
+    // process with the document path in argv. Keep one workspace and forward
+    // that path to it. Register this first, as required by the plugin.
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+        let paths = project_paths_from_args(
+            args.into_iter().skip(1).map(std::ffi::OsString::from),
+            Path::new(&cwd),
+        );
+        enqueue_project_paths(app, paths);
+        focus_main_window(app);
+    }));
+
+    let builder = builder
+        .manage(pending_project_paths)
+        .manage(SelectedImagePaths::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        // Runs before persisted-scope's setup hook so legacy photo grants are
+        // removed before its synchronous restore can delay window creation.
+        .plugin(
+            tauri::plugin::Builder::<tauri::Wry>::new("photo-scope-cleanup")
+                .setup(|app, _api| {
+                    prune_persisted_image_scopes(app);
+                    Ok(())
+                })
+                .build(),
+        )
         // Must init after the fs plugin: it restores previously-granted fs
         // scope (e.g. Browser-panel pinned folders) so they survive a restart.
         //
@@ -313,7 +408,7 @@ pub fn run() {
             startup: Mutex::new(()),
         });
 
-    builder
+    let app = builder
         .invoke_handler(tauri::generate_handler![
             close_oauth_popups,
             credential_store::credential_load,
@@ -326,8 +421,11 @@ pub fn run() {
             install_external_plugin_archive,
             native_duckdb::load_native_vector_file,
             load_external_plugin_bundles,
+            pick_image_paths,
+            read_selected_image,
             read_admin_profile,
             read_env_vars,
+            take_pending_project_paths,
             allow_raster_asset,
             allow_object_asset,
             read_local_file,
@@ -349,8 +447,108 @@ pub fn run() {
             create_main_window(app)?;
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running GeoLibre Desktop");
+        .build(tauri::generate_context!())
+        .expect("error while building GeoLibre Desktop");
+
+    app.run(|_app, _event| {
+        // macOS delivers associated files as native open events instead
+        // of argv. Queue them through the same path as a second desktop launch.
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Opened { urls } = _event {
+            let paths = project_paths_from_args(
+                urls.into_iter()
+                    .filter_map(|url| url.to_file_path().ok())
+                    .map(std::ffi::OsString::from),
+                Path::new("/"),
+            );
+            enqueue_project_paths(_app, paths);
+            focus_main_window(_app);
+        }
+    });
+}
+
+fn current_working_directory() -> PathBuf {
+    env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+}
+
+fn has_geolibre_project_extension(path: &Path) -> bool {
+    let lower = path.to_string_lossy().to_ascii_lowercase();
+    lower.ends_with(".geolibre") || lower.ends_with(".geolibre.json")
+}
+
+fn project_path_string(path: &Path) -> String {
+    let value = path.to_string_lossy();
+    #[cfg(target_os = "windows")]
+    if let Some(unprefixed) = value.strip_prefix(r"\\?\") {
+        return unprefixed.to_string();
+    }
+    value.into_owned()
+}
+
+/// Resolve existing GeoLibre project files supplied by the operating system.
+///
+/// Other CLI flags are deliberately ignored. Resolving the path before it
+/// reaches the webview both handles a relative command-line path correctly and
+/// prevents a symlink with a project-looking name from bypassing the existing
+/// `read_project_file` extension check.
+fn project_paths_from_args<I>(args: I, cwd: &Path) -> Vec<String>
+where
+    I: IntoIterator<Item = std::ffi::OsString>,
+{
+    args.into_iter()
+        .filter_map(|argument| {
+            let candidate = PathBuf::from(argument);
+            if !has_geolibre_project_extension(&candidate) {
+                return None;
+            }
+            let absolute = if candidate.is_absolute() {
+                candidate
+            } else {
+                cwd.join(candidate)
+            };
+            let canonical = fs::canonicalize(absolute).ok()?;
+            if !canonical.is_file() || !has_geolibre_project_extension(&canonical) {
+                return None;
+            }
+            let path = project_path_string(&canonical);
+            is_allowed_project_path(&path).then_some(path)
+        })
+        .collect()
+}
+
+fn enqueue_project_paths(app: &tauri::AppHandle, paths: Vec<String>) {
+    if paths.is_empty() {
+        return;
+    }
+    app.state::<PendingProjectPaths>()
+        .0
+        .lock()
+        .expect("pending project path lock poisoned")
+        .extend(paths);
+    let _ = app.emit(OPEN_PROJECT_FILES_EVENT, ());
+}
+
+fn focus_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        // `unminimize` is desktop-only in Tauri v2: there is no minimized state
+        // on mobile, and referencing it fails to compile for both
+        // aarch64-linux-android and aarch64-apple-ios.
+        #[cfg(desktop)]
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+/// Drain project paths that arrived through argv or an OS file-open event.
+#[tauri::command]
+fn take_pending_project_paths(state: tauri::State<'_, PendingProjectPaths>) -> Vec<String> {
+    state
+        .0
+        .lock()
+        .expect("pending project path lock poisoned")
+        .drain(..)
+        .collect()
 }
 
 /// Whether `read_project_file` may read `path`: an absolute local path (POSIX
@@ -498,6 +696,67 @@ fn read_local_file(path: String) -> Result<tauri::ipc::Response, String> {
     fs::read(&path)
         .map(tauri::ipc::Response::new)
         .map_err(|error| format!("Could not read local file: {error}"))
+}
+
+/// Pick images without adding them to Tauri's filesystem or asset scopes. The
+/// returned paths enter a short-lived native allowlist and can only be consumed
+/// by `read_selected_image`.
+#[tauri::command]
+async fn pick_image_paths(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let dialog_app = app.clone();
+    let selected = tauri::async_runtime::spawn_blocking(move || {
+        dialog_app
+            .dialog()
+            .file()
+            .add_filter("Images", &IMAGE_PICKER_EXTENSIONS)
+            .blocking_pick_files()
+    })
+    .await
+    .map_err(|error| format!("Could not open the image picker: {error}"))?
+    .unwrap_or_default();
+
+    let mut paths = Vec::with_capacity(selected.len());
+    for file in selected {
+        let path = file
+            .into_path()
+            .map_err(|error| format!("Could not resolve a selected image path: {error}"))?;
+        if is_image_picker_path(&path) {
+            paths.push(path);
+        }
+    }
+    app.state::<SelectedImagePaths>()
+        .0
+        .lock()
+        .map_err(|_| "Could not lock the selected-image allowlist".to_string())?
+        .extend(paths.iter().cloned());
+    Ok(paths
+        .into_iter()
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect())
+}
+
+/// Read one image explicitly selected by `pick_image_paths`, then remove its
+/// path from the allowlist. This avoids both persistent grants and access to
+/// unselected sibling files.
+#[tauri::command]
+fn read_selected_image(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<tauri::ipc::Response, String> {
+    let path = PathBuf::from(path);
+    let selected = app.state::<SelectedImagePaths>();
+    {
+        let mut allowed = selected
+            .0
+            .lock()
+            .map_err(|_| "Could not lock the selected-image allowlist".to_string())?;
+        if !allowed.remove(&path) {
+            return Err("Refusing to read an image that was not selected".to_string());
+        }
+    }
+    fs::read(&path)
+        .map(tauri::ipc::Response::new)
+        .map_err(|error| format!("Could not read selected image: {error}"))
 }
 
 /// Add one GeoTIFF to the asset-protocol scope. The filesystem and asset scopes
@@ -4226,8 +4485,10 @@ mod tests {
     use super::{
         client_cert_is_pkcs12, client_cert_password_without_path, ensure_fetchable_url,
         is_allowed_local_vector_path, is_allowed_project_path, is_disallowed_ip,
-        is_safe_absolute_path, is_ssrf_guard_error, path_is_under, resolve_fetch_timeout_secs,
-        tcp_table_port, MAX_FETCH_TIMEOUT_SECS, REMOTE_TILE_TIMEOUT_SECS, SSRF_BLOCKED_MESSAGE,
+        is_image_picker_path, is_persisted_image_file,
+        is_safe_absolute_path, is_ssrf_guard_error, path_is_under, project_path_string,
+        project_paths_from_args, resolve_fetch_timeout_secs, tcp_table_port,
+        MAX_FETCH_TIMEOUT_SECS, REMOTE_TILE_TIMEOUT_SECS, SSRF_BLOCKED_MESSAGE,
     };
     #[cfg(target_os = "linux")]
     use super::{
@@ -4246,7 +4507,7 @@ mod tests {
     #[cfg(not(feature = "mas"))]
     use std::env;
     #[cfg(not(feature = "mas"))]
-    use std::ffi::OsStr;
+    use std::ffi::{OsStr, OsString};
     #[cfg(not(feature = "mas"))]
     use std::io::{Cursor, Write};
     use std::net::IpAddr;
@@ -4307,6 +4568,49 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[cfg(not(feature = "mas"))]
+    #[test]
+    fn resolves_only_existing_project_arguments() {
+        let root = ScratchDir::new("project-arguments");
+        let short = root.path().join("short.geolibre");
+        let legacy = root.path().join("legacy.geolibre.json");
+        let ordinary_json = root.path().join("ordinary.json");
+        std::fs::write(&short, "{}").unwrap();
+        std::fs::write(&legacy, "{}").unwrap();
+        std::fs::write(&ordinary_json, "{}").unwrap();
+
+        let paths = project_paths_from_args(
+            [
+                OsString::from("--verbose"),
+                OsString::from("short.geolibre"),
+                legacy.clone().into_os_string(),
+                ordinary_json.into_os_string(),
+                OsString::from("missing.geolibre"),
+            ],
+            root.path(),
+        );
+
+        assert_eq!(
+            paths,
+            [
+                project_path_string(&short.canonicalize().unwrap()),
+                project_path_string(&legacy.canonicalize().unwrap()),
+            ]
+        );
+    }
+
+    #[cfg(all(unix, not(feature = "mas")))]
+    #[test]
+    fn rejects_project_named_symlinks_to_other_file_types() {
+        let root = ScratchDir::new("project-argument-symlink");
+        let target = root.path().join("private.json");
+        let link = root.path().join("looks-safe.geolibre");
+        std::fs::write(&target, "{}").unwrap();
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        assert!(project_paths_from_args([link.into_os_string()], root.path()).is_empty());
     }
 
     #[cfg(all(target_os = "linux", not(feature = "mas")))]
@@ -5026,6 +5330,35 @@ mod tests {
             resolve_fetch_timeout_secs(Some(u64::MAX)),
             MAX_FETCH_TIMEOUT_SECS
         );
+    }
+
+    #[test]
+    fn recognizes_only_persisted_image_file_grants() {
+        assert!(is_persisted_image_file(
+            r"\\?\UNC\server\drone photos\IMG_0042.JPEG"
+        ));
+        // TIFF grants may belong to persistent GeoTIFF raster layers, so the
+        // startup migration must leave them intact even though the photo
+        // importer also accepts TIFF images.
+        assert!(!is_persisted_image_file(r"X:\survey\ortho.tif"));
+        // Directory patterns must survive even when their names contain an
+        // image-looking segment, as must unrelated project and vector grants.
+        assert!(!is_persisted_image_file(r"X:\survey\photos\**"));
+        assert!(!is_persisted_image_file(r"X:\survey\map.geolibre"));
+        assert!(!is_persisted_image_file(r"X:\survey\points.geojson"));
+    }
+
+    #[test]
+    fn native_image_picker_rejects_paths_outside_its_filter() {
+        assert!(is_image_picker_path(std::path::Path::new(
+            r"X:\survey\PHOTO.JPEG"
+        )));
+        assert!(is_image_picker_path(std::path::Path::new(
+            r"X:\survey\ortho.tiff"
+        )));
+        assert!(!is_image_picker_path(std::path::Path::new(
+            r"X:\survey\notes.txt"
+        )));
     }
 
     // The image-path guard is what keeps the reaper from killing a Jupyter the

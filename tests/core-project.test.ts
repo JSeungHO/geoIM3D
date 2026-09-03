@@ -22,6 +22,98 @@ import {
 import { geojsonLayer } from "./helpers/layer-fixtures";
 
 describe("project parsing", () => {
+  it("restores portable WMS URLs when saving a desktop-routed layer", () => {
+    const tile = "https://example.com/wms?BBOX={bbox-epsg-3857}";
+    const routed = `geolibre-wms://tile?url=${encodeURIComponent(tile).replaceAll(
+      "%7Bbbox-epsg-3857%7D",
+      "{bbox-epsg-3857}",
+    )}`;
+    const layer = {
+      ...geojsonLayer({ id: "wms" }),
+      type: "wms" as const,
+      source: { type: "raster" as const, tiles: [routed] },
+      geojson: undefined,
+    };
+
+    const saved = projectFromStore({
+      projectName: "Portable WMS",
+      mapView: { center: [0, 0], zoom: 2, bearing: 0, pitch: 0 },
+      basemapStyleUrl: DEFAULT_BASEMAP,
+      basemapVisible: true,
+      basemapOpacity: 1,
+      layers: [layer],
+      preferences: createEmptyProject().preferences,
+      metadata: {},
+    });
+
+    assert.equal(saved.layers[0].source.tiles?.[0], tile);
+    assert.equal(layer.source.tiles[0], routed);
+  });
+
+  it("does not save an invalid URL extracted from a desktop WMS route", () => {
+    const routed = "geolibre-wms://tile?url=https%3A%2F%2F";
+    const layer = {
+      ...geojsonLayer({ id: "wms" }),
+      type: "wms" as const,
+      source: { type: "raster" as const, tiles: [routed] },
+      geojson: undefined,
+    };
+    const saved = projectFromStore({
+      projectName: "Invalid routed WMS",
+      mapView: { center: [0, 0], zoom: 2, bearing: 0, pitch: 0 },
+      basemapStyleUrl: DEFAULT_BASEMAP,
+      basemapVisible: true,
+      basemapOpacity: 1,
+      layers: [layer],
+      preferences: createEmptyProject().preferences,
+      metadata: {},
+    });
+
+    assert.equal(saved.layers[0].source.tiles?.[0], routed);
+  });
+
+  it("preserves layer style fields missing from a legacy top-level style", () => {
+    const base = createEmptyProject("Partial legacy style");
+    const layer = geojsonLayer({
+      id: "cities",
+      style: {
+        ...DEFAULT_LAYER_STYLE,
+        markerEnabled: true,
+        markerShape: "triangle",
+        markerColor: "#ef4444",
+        markerSize: 24,
+      },
+    });
+    const applied = applyProjectToStore({
+      ...base,
+      layers: [layer],
+      styles: {
+        cities: { fillColor: "#22c55e" } as typeof DEFAULT_LAYER_STYLE,
+      },
+    });
+
+    assert.equal(applied.layers[0].style.fillColor, "#22c55e");
+    assert.equal(applied.layers[0].style.markerEnabled, true);
+    assert.equal(applied.layers[0].style.markerShape, "triangle");
+    assert.equal(applied.layers[0].style.markerColor, "#ef4444");
+    assert.equal(applied.layers[0].style.markerSize, 24);
+  });
+
+  it("round-trips a custom blank background color and defaults legacy projects", () => {
+    const base = createEmptyProject("Blank background");
+    const customized = parseProject(serializeProject({ ...base, blankBackgroundColor: "#1f2937" }));
+    assert.equal(customized.blankBackgroundColor, "#1f2937");
+
+    const legacy = { ...base };
+    delete legacy.blankBackgroundColor;
+    assert.equal(parseProject(serializeProject(legacy)).blankBackgroundColor, null);
+    assert.equal(
+      parseProject(serializeProject({ ...base, blankBackgroundColor: "not-a-color" }))
+        .blankBackgroundColor,
+      null,
+    );
+  });
+
   it("preserves a valid selected layer and drops a dangling selection", () => {
     const base = createEmptyProject("Selection");
     const layer = geojsonLayer({ id: "chosen" });
@@ -148,6 +240,25 @@ describe("project parsing", () => {
     };
     const reloaded = parseProject(serializeProject(mercator));
     assert.equal(reloaded.preferences.map.projection, "mercator");
+  });
+
+  it("round-trips terrain and defaults legacy projects to terrain off", () => {
+    const base = createEmptyProject("Terrain");
+    assert.equal(base.preferences.map.terrainEnabled, false);
+    const enabled = {
+      ...base,
+      preferences: {
+        ...base.preferences,
+        map: { ...base.preferences.map, terrainEnabled: true },
+      },
+    };
+    assert.equal(parseProject(serializeProject(enabled)).preferences.map.terrainEnabled, true);
+
+    const legacy = structuredClone(base) as unknown as {
+      preferences: { map: Record<string, unknown> };
+    };
+    delete legacy.preferences.map.terrainEnabled;
+    assert.equal(parseProject(JSON.stringify(legacy)).preferences.map.terrainEnabled, false);
   });
 
   it("round-trips the scale unit preference and defaults unknown values to metric", () => {
@@ -899,6 +1010,13 @@ describe("multi-map grid persistence", () => {
 });
 
 describe("app store", () => {
+  it("normalizes Blank background colors written through the store", () => {
+    useAppStore.getState().setBlankBackgroundColor("#123abc");
+    assert.equal(useAppStore.getState().blankBackgroundColor, "#123abc");
+    useAppStore.getState().setBlankBackgroundColor("invalid");
+    assert.equal(useAppStore.getState().blankBackgroundColor, null);
+  });
+
   beforeEach(() => {
     useAppStore.getState().newProject({ name: "Test Project" });
     useAppStore.getState().clearRecentProjects();

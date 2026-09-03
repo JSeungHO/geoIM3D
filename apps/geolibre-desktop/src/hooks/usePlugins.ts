@@ -4,8 +4,10 @@ import {
   useAppStore,
 } from "@geolibre/core";
 import { buildProjectEgressSnapshot } from "../lib/build-project-snapshot";
+import { nativeWmsTileUrl } from "../lib/native-wms-url";
 import {
   addRasterToMap,
+  setRasterRenderEngine,
   addZarrRasterLayer,
   buildSelectorTimeBinding,
   queryZarrLayer,
@@ -45,6 +47,8 @@ import {
   maplibreNaturalEarthPlugin,
   maplibreHuggingFacePlugin,
   maplibreGeoLensPlugin,
+  maplibreVantorPlugin,
+  maplibrePlanetOpenDataPlugin,
   maplibreOvertureMapsPlugin,
   queryOvertureFeatures,
   maplibreGraticulePlugin,
@@ -98,6 +102,7 @@ import {
 import type { MapController } from "@geolibre/map";
 import type {
   GeoLibreCogLayerOptions,
+  GeoLibreCogRenderEngine,
   GeoLibreDeckGL,
   GeoLibreExternalNativeLayerRegistration,
   GeoLibreFileDialogOptions,
@@ -135,6 +140,7 @@ import { openExternalLink } from "../lib/open-external";
 import { fetchUrlBytes } from "../lib/native-http";
 import {
   dedupeVectorUrlFetch,
+  fetchBrowserShapefileZip,
   isBlockedUrlError,
   vectorDownloadFileName,
 } from "../lib/vector-url-fetch";
@@ -201,6 +207,8 @@ manager.registerAll([
   maplibreNasaEarthdataPlugin,
   maplibreEnviroAtlasPlugin,
   maplibreNationalMapPlugin,
+  maplibreVantorPlugin,
+  maplibrePlanetOpenDataPlugin,
   maplibreEarthdataGisPlugin,
   maplibreOpenAerialMapPlugin,
   maplibreArcGisHubPlugin,
@@ -928,7 +936,7 @@ export function createAppAPI(mapControllerRef?: RefObject<MapController | null>)
         name,
         {
           type: "wms",
-          tiles: [tileUrl],
+          tiles: [isTauriRuntime() ? nativeWmsTileUrl(tileUrl) : tileUrl],
           url,
           // Persist the WMS request parameters so the layer round-trips through
           // a saved project, mirroring the Add Data dialog's WMS source.
@@ -971,6 +979,7 @@ export function createAppAPI(mapControllerRef?: RefObject<MapController | null>)
         ...(options?.beforeLayerId ? { beforeId: options.beforeLayerId } : {}),
       });
     },
+    setCogRenderEngine: (engine: GeoLibreCogRenderEngine) => setRasterRenderEngine(api, engine),
     // Zarr goes through the components plugin's shared @carbonplan/zarr-layer
     // control for the same reason as addCogLayer: the host owns the renderer, so
     // a plugin does not bundle (and fail to activate) a second copy.
@@ -1109,6 +1118,23 @@ export function createAppAPI(mapControllerRef?: RefObject<MapController | null>)
           }
         }
         const proxyUrl = githubRawVectorProxyUrl(url);
+        if (!isTauriRuntime()) {
+          // DuckDB-WASM cannot read `/vsizip//vsicurl/` in a browser. Download
+          // remote Shapefile archives first so maplibre-gl-vector receives the
+          // same File shape as a working local drop and can unzip/register its
+          // components itself. Leave every non-ZIP URL alone so formats such as
+          // GeoParquet retain their direct range-read path.
+          try {
+            const archive = await fetchBrowserShapefileZip(url, budget());
+            if (archive) return archive;
+          } catch (error) {
+            // GitHub's /raw route rejects browser CORS, so its existing guarded
+            // proxy gets one chance below. For every other origin, preserve the
+            // browser's real download/CORS failure instead of falling through to
+            // DuckDB's misleading "does not exist in the file system" error.
+            if (!proxyUrl) throw error;
+          }
+        }
         if (!proxyUrl) return null;
         const response = await fetch(proxyUrl, { signal: budget() });
         if (!response.ok) {

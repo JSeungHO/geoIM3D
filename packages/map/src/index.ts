@@ -1,4 +1,11 @@
-export { MapCanvas, type MapCanvasProps, type MapDiagnosticEvent } from "./MapCanvas";
+export {
+  MapCanvas,
+  type MapCanvasIdentifyAllLabels,
+  type MapCanvasProps,
+  type MapCanvasRasterIdentify,
+  type MapCanvasRasterIdentifyResult,
+  type MapDiagnosticEvent,
+} from "./MapCanvas";
 export {
   FEATURE_SELECTION_EVENT,
   featuresIntersectingPolygon,
@@ -7,6 +14,7 @@ export {
   type FeatureSelectionRequest,
   type FeatureSelectionShape,
 } from "./feature-selection";
+export { PANEL_RESIZE_END_EVENT, PANEL_RESIZE_START_EVENT } from "./map-resize";
 export { SecondaryMapCanvas, type SecondaryMapCanvasProps } from "./SecondaryMapCanvas";
 export { CesiumCanvas, type CesiumCanvasProps } from "./CesiumCanvas";
 export { isCesiumSupportedLayerType, setCesiumTileUrlResolver } from "./cesium-layer-sync";
@@ -36,6 +44,7 @@ export {
 export {
   MapController,
   createMapController,
+  defaultBlankBackgroundColor,
   type BuiltInMapControl,
   DEFAULT_BUILT_IN_CONTROL_VISIBILITY,
   TERRAIN_SETTINGS_EVENT,
@@ -55,6 +64,7 @@ export {
 export {
   detectGeometryProfile,
   getLayerBounds,
+  nativeLayerIdPrefix,
   sourceId,
   fillLayerId,
   lineLayerId,

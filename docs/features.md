@@ -28,7 +28,7 @@ kepler.gl, see the [Comparison](comparison.md).
 ## Map workspace and basemaps
 
 - MapLibre map workspace
-    - **Basemaps**: OpenFreeMap, Protomaps, EOX Sentinel-2 cloudless, and Openbasiskaart, with stacking of multiple raster basemaps, blank background support, and double-click to swap the core basemap from the layer panel
+    - **Basemaps**: OpenFreeMap, Protomaps, EOX Sentinel-2 cloudless, and Openbasiskaart, with stacking of multiple raster basemaps, blank background support (which takes a custom color that follows the theme by default and survives a style reload, without bleeding into the planetary and regional styles that carry their own), and double-click to swap the core basemap from the layer panel
     - **Regional basemaps**: a collapsed Regional section in both the New Project and Change Basemap panels for providers with local coverage the global defaults lack, starting with five keyless Chinese basemaps (高德地图, 高德卫星, 高德混合, 腾讯地图, 腾讯深色), with the same providers plus Tianditu available through the Basemaps control plugin
     - **A remembered basemap**: an empty startup workspace opens on the basemap you last selected, while a project's own basemap stays authoritative
     - **Previews, not just names**: each raster entry in the Basemaps panel shows a z=2 tile of itself, and each keyless style entry shows its background color and then a small offscreen MapLibre snapshot once the row scrolls into view, so a basemap can be told apart before it is applied
@@ -40,7 +40,7 @@ kepler.gl, see the [Comparison](comparison.md).
     - **Status bar readouts**: the pointer coordinate in decimal degrees, DMS, DDM, or UTM (click to cycle, or set it in Settings; UTM reuses the projection that draws the Gridlines grid, and falls back to degrees outside its valid latitude band), the ground elevation under the pointer, camera altitude above sea level as Google Earth-style **Eye alt** — scaled to the active celestial body, so it stays right on a Mars or Moon basemap — plus zoom, bearing, pitch, and the view bounding box
     - **Pointer elevation** resolved from the map's own 3D terrain whenever a usable sample is available there (instant, offline, nothing leaves the device), and from a public elevation API when terrain has no value to give — after the pointer settles, cached per cell, Earth-only, off by default, and gated behind an explicit consent notice, so declining is what keeps the readout off the network
     - **View menu**: viewport history navigation, a reset pitch and bearing control, a distinct north arrow, and View in Google Maps and View in Google Earth actions
-- Multi-map grid that splits the workspace into a grid of synchronized map views, so you can compare basemaps, layers, or time steps side by side, with any **secondary** pane switchable to an optional CesiumJS 3D globe via its 2D/3D toggle — the primary map is always MapLibre (camera-synced with the 2D maps; requires a Cesium Ion token — see [Optional 3D globe credentials](getting-started.md#optional-3d-globe-credentials-cesium-ion))
+- Multi-map grid that splits the workspace into a grid of synchronized map views, so you can compare basemaps, layers, or time steps side by side, with any **secondary** pane switchable to an optional CesiumJS 3D globe via its 2D/3D toggle — the primary map is always MapLibre (camera-synced with the 2D maps, and drawing the project's own basemap; a Cesium Ion token is optional and adds terrain plus Ion World Imagery as the fallback for a basemap with no raster form — see [Optional 3D globe credentials](getting-started.md#optional-3d-globe-credentials-cesium-ion))
 - Timelapse mode that animates annual cloudless basemaps — EOX Sentinel-2 and NASA GIBS providers (Landsat/WELD and MODIS land cover) — with a provider picker and legend
 - Weather menu with live cloud and precipitation radar overlays (RainViewer), a Clouds overlay in the Controls menu, and a Google Earth-style sun position simulation that lights the scene for a given date and time
 - Wikipedia knowledge cards: click a place on the map to pull up its Wikipedia summary and info card
@@ -67,6 +67,7 @@ kepler.gl, see the [Comparison](comparison.md).
     - Entries can be renamed, removed, and exported or imported as a JSON bundle to share with a team
     - Entries store the source specification rather than the data, so a saved COG, PostGIS table, or remote GeoParquet always reflects its source's current contents
     - Layers whose features exist only in memory or in a local file embed them behind a size cap
+- A GeoParquet's `geo` metadata block is read in full — `version`, `primary_column`, `encoding`, `geometry_types`, `bbox`, `covering`, and `edges` — alongside the CRS a Parquet 2.0 file records only on its geometry column's GEOMETRY/GEOGRAPHY logical type. A 3D `bbox` is read minima-first rather than mistaking its ymax for an elevation, and a lon/lat table carrying no geometry column is recognized as one
 - Deck.gl Layer builder for composing deck.gl overlays from uploaded files or remote URLs
 - Cloud data integrations through the Planetary Computer and Earth Engine panels, the Overture Maps plugin, and federal Web Services plugins
 - Manual and automatic refresh for WFS, GeoJSON URL, and Add Vector Layer URL layers, with the cadence, last-synchronized time, last error, and on-failure policy persisted with the project as a `connection` record — so a reopened project keeps refreshing on schedule and the Layers panel can show each live layer's synchronization status
@@ -113,6 +114,7 @@ kepler.gl, see the [Comparison](comparison.md).
     - Title the popup from a field or an expression, or replace the rows entirely with an expression-built sentence, and show or hide the feature id
     - Independent click and hover switches, so a layer can carry a full popup, a light tooltip that follows the pointer, both, or neither
     - Saved with the project, so a shared map, a `layout=viewer` embed, and a story-map chapter show the reader the fields that were meant to be read rather than join artifacts, editor-tracking columns, and internal ids. See [Project format](project-format.md)
+- **Identify every visible layer at once**, folding vector features and raster pixel values from all visible queryable layers into one grouped, expandable popup with expand-all and collapse-all, instead of picking a layer first and clicking again
 - Single-band pseudocolor with classification, reversed and custom color ramps, the full colormap list shown as inline gradient swatches in the Color ramp picker, a Legend populated automatically from a paletted raster's embedded color table, and RGB band combination for styling raster layers, plus COG pixel-value inspection from the Identify icon
 - NetCDF and HDF grids are first-class raster layers rather than a single grey band
     - Local grids are colormapped in the browser from the same colormap catalog the Style panel uses, added as image overlays, and fitted to the camera on add, so Zoom to layer has a real extent to fly to
@@ -166,6 +168,7 @@ kepler.gl, see the [Comparison](comparison.md).
 ## Field data collection
 
 - Field Collection tool for capturing point, line, and polygon observations with a per-layer custom form (text, number, date, and choice fields plus an optional photo), placed by device GPS or by tapping the map, written to a GeoJSON layer that flows into the attribute table, export, and offline use
+    - Runs as a session: **Controls → Field Collection...** starts or resumes one, a floating quick-open pill on the map names the layer the next observation lands in, and **Done** ends the session and retires the pill without touching any collection layer or captured feature. Closing the dialog with its X, `Esc`, or a click outside keeps the session running, and the target layer can be switched at the top of the dialog without losing your place
 - Live GPS tracking with a moving position marker, a recorded track log, and digitizing new features directly from the GPS feed. See [GPS tracking](user-guide/map-controls.md#gps-tracking)
     - Reads either the device's own geolocation or an external **NMEA** GPS/GNSS receiver over Web Serial or Web Bluetooth, with a baud-rate picker and a live sentence and fix counter
 
@@ -189,6 +192,7 @@ kepler.gl, see the [Comparison](comparison.md).
     - The web build embeds a self-hosted JupyterLite site with an in-browser Pyodide kernel; the desktop build launches a uv-managed JupyterLab server
     - Notebook cells drive the map through an auto-loaded `geolibre` client, and external Jupyter frontends attached to that server (VS Code's Jupyter extension, `jupyter console`, nbclient) drive the map too
 - Python package (`geolibre`) that embeds the full app in Jupyter notebooks as an [anywidget](https://anywidget.dev), with two-way project sync. See the [Python package guide](python.md)
+    - A `DashMap` component embeds the same app in a [Plotly Dash](https://dash.plotly.com) application, pushing project changes into a mounted iframe after the ready handshake so a callback can drive the map
     - An expanded leafmap-style API: local raster, marker/cluster, and choropleth layers; `split_map`, `add_legend`, and `add_colorbar` helpers; typed read-back of selected and drawn features; and `to_html` export
     - Layer management and camera control as plain project mutations on `Map` and `Layer` — reorder, duplicate, rename, and remove layers, read attribute values, and frame the map — with the project authoring helpers exported for scripts that never display a widget, and credentials swept out of the layer records and basemap URLs a notebook cell prints back
     - The bundled Whitebox WASM catalog runs from the widget through `list_whitebox_tools` and `run_whitebox_tool`, resolving `Layer` handles to layer ids and adding both vector and raster outputs back to the map, so terrain and raster work no longer means leaving the notebook for the UI
@@ -222,7 +226,7 @@ kepler.gl, see the [Comparison](comparison.md).
     - **Engines**: Turf.js in the browser, an optional GeoPandas sidecar engine for every tool, and an in-browser GeoPandas engine via Pyodide (no server, same results as the sidecar)
 - Raster menu with hillshade, slope, aspect, reproject, resample, clip by extent, clip by mask layer, polygonize, contour, zonal statistics, raster calculator, reclassify, mosaic, and focal statistics
     - Backed by a rasterio Python sidecar, with a client-side fallback so core tools also run in the browser when no sidecar is available
-    - Plus in-browser extraction of COG, WMS, and XYZ bounding-box subsets, and a normalized-difference index builder for any HTTP COG
+    - Plus in-browser extraction of COG, WMS, and XYZ bounding-box subsets, a keyless global DEM downloader under Processing → GeoLibre Toolbox → Raster (public AWS Terrain Tiles; current-view or drawn extent), and a normalized-difference index builder for any HTTP COG
 - Spectral Index toolbox (NDVI, GNDVI, NDWI, NDMI, NDBI, NBR, EVI, SAVI) with Sentinel-2, Landsat 8-9, NAIP, and custom band layouts, evaluated client-side with geotiff.js or on the rasterio sidecar
 - Spatial Statistics toolbox, including Emerging Hot Spot Analysis that builds a space-time cube from timestamped points, runs Getis-Ord Gi\* per time slice, and classifies each cell as a new, intensifying, persistent, diminishing, sporadic, oscillating, or historical hot or cold spot
     - Plus a Composite score builder for suitability and index analysis: normalize, weight, and combine several numeric fields into one index, 0-100 by default or 0-1, with an explicit choice of how features missing a value are treated, and the result styled by the score on arrival
@@ -243,7 +247,7 @@ kepler.gl, see the [Comparison](comparison.md).
 
 ## Projects and sharing
 
-- Project menu to create, open, save, and Save As `.geolibre.json` projects, export a project to a single standalone interactive HTML file that runs offline with no server, and a project gallery for browsing and opening shared projects with one click
+- Project menu to create, open, save, and Save As `.geolibre` projects, with legacy `.geolibre.json` support, desktop file association (double-clicking a project in the file manager opens it, using native project events on macOS) and drag-and-drop of a project file onto the map, which switches projects while keeping the unsaved-work prompt and reports a bad file as a project error rather than a failed layer, standalone interactive HTML export that runs offline with no server, and a project gallery for browsing and opening shared projects with one click
 - Share-readiness check in the Share dialog: before the upload, every data source the project references is classified and probed anonymously from the browser, and the ones a recipient could not load are listed with a plain-language reason and a fix, covering credential-gated services, hosts with no cross-origin headers, expired or moved links, and local or private-network sources. It informs rather than blocks. See [Projects](user-guide/projects.md#share-readiness-check)
 - Autosave with a browsable project history. See [Projects](user-guide/projects.md#project-history-and-crash-recovery)
     - Snapshots are written to local device storage a few seconds after each change settles, and listed newest first with their layer count and zoom
@@ -259,13 +263,17 @@ kepler.gl, see the [Comparison](comparison.md).
 ## Plugins
 
 - Built-in plugins for the map surface: basemap, layer control, MapLibre components, and swipe
+- Web Services plugins dock in the shared panel host rather than floating over the map, so a catalog browser resizes, collapses, and sits alongside the Layers and Style panels while keeping its own MapLibre control lifecycle and layer sync
 - Imagery and street level: street view, Mapillary coverage and street-level image viewer, OpenAerialMap open-aerial-imagery search, and Historical Imagery
 - Data catalog browsers:
     - **Natural Earth** and **Source Cooperative**, including opening or streaming large GeoParquet from Source Cooperative
     - **STAC catalogs**, which discovers catalogs from STAC Index, connects to both static catalogs and STAC APIs, searches a collection's items, and adds any visualizable asset as a layer (COG, PMTiles, GeoParquet, and Zarr with a variable picker), including an Icechunk repository read through its own manifest and Azure-hosted assets signed at add time so private Planetary Computer containers open like public ones. A static catalog can also be walked as a tree, opening a folder to read it and starting a search from whatever you picked
     - **Earthdata GIS**, which searches NASA's EOSDIS ArcGIS portal and renders its imagery, map, and feature services and published web maps as first-class layers
+    - **Planet Open Data**, which opens Planet's disaster releases through the STAC browser with the public catalog preselected
+    - **Vantor Open Data**, a STAC explorer for pre-event and post-event imagery that filters by event and phase, takes the map extent or a drawn bounding box, and picks its own COG rendering engine (GPU, WebAssembly, or TiTiler)
     - **Hugging Face**, for searching the Hub, walking a dataset repo's folders, adding its vector and raster files to the map, and creating and uploading dataset repos
     - **[GeoLens](https://github.com/geolens-io/geolens)**, which connects to a self-hosted GeoLens server and adds datasets as signed vector tiles, OGC API Features GeoJSON, or server-rendered raster tiles — and writes edits to a GeoJSON-loaded dataset back to the GeoLens server, feature by feature, when the server allows it
+    - Catalog plugins that share panel state are mutually exclusive, and a failed switch reactivates the plugin it displaced rather than leaving both off
 - Analysis and editing integrations: Elevation Profile, Overture Maps, USGS LiDAR, GeoAgent, and GeoEditor
     - Elevation Profile charts a drawn line or the line features currently selected on a layer, so a route already on the map does not have to be traced again
     - USGS LiDAR clips a point cloud to an area of interest and downloads the result as COPC
@@ -308,12 +316,14 @@ See the [Plugin API](plugin-api.md) to build your own.
     - An activity log: a project owner can read who opened and edited a shared project, and a session host can download the session log, bounded in both entry count and stored bytes and read through a bearer token rather than a URL query
     - `GEOLIBRE_SHARE_URL` and `GEOLIBRE_COLLAB_URL` repoint a published web image at those servers at container runtime instead of requiring a rebuilt fork; `off` removes Share and the Project Gallery from the UI entirely, and a malformed value stops the container at boot rather than falling back to the public hosted service
 - Optional Clerk access gate for a hosted deployment that needs individual sign-in, with an optional waitlist screen, loaded on demand and kept out of the default PWA precache. The gate is decided by the build target rather than by a client-controlled query parameter, so public, native, and embedded builds stay unchanged. See [Getting started](getting-started.md)
+- `VITE_GEOLIBRE_CAPABILITIES` build for a kiosk, exhibit terminal, or classroom instance: naming a subset of `project:edit`, `data:add`, `processing:run`, `export:data`, `plugins:install`, and `settings:manage` (or `none`) withholds the rest from every interface surface at once — the toolbar menus, the command palette and cheat sheet, keyboard shortcuts including undo/redo, drag-and-drop, and the embed API — rather than one menu item at a time. Unset grants everything, so existing deployments are unchanged, and the parse fails closed so an unrecognized value grants nothing. It removes affordances rather than restricting the server, so it complements the server-side protections instead of replacing them. See [Deployment capabilities](deployment-capabilities.md)
 - `GEOLIBRE_NO_EXTERNAL_CDN=1` build for deployments that cannot load from untrusted third-party hosts: it strips the GeoLibre-controlled CDN references, vendors the PGlite and CereusDB engines into the build rather than dropping them, and makes the few features that genuinely need a remote host (GDAL export, ONNX object detection and Segment Everything, story map HTML export, Pyodide without a configured mirror) report that up front instead of failing at the end of a run. See [Self-hosting](self-hosting.md)
 - Versioned `postMessage` API for a host page that frames the app. See [Talking to the map at runtime](user-guide/embedding.md#talking-to-the-map-at-runtime)
     - **Commands**: load a project, move the camera, highlight features, open a processing tool, toggle and list layers, apply filters, read the viewport, add a layer, and export the map as a PNG at runtime
     - **Events back out**: `ready`, `ack`, `projectLoaded`, `selectionChanged`, `viewChanged`, `toolCompleted`, and `serverFileWritten`
     - Protocol v2 is current, and v1 hosts stay supported
     - Off unless the deployment names its trusted origins (`GEOLIBRE_EMBED_ORIGINS`), which are enforced in both directions
+    - The origin allowlist decides who may send commands; [deployment capabilities](deployment-capabilities.md) decide which commands exist, so a trusted host page can be granted a narrow slice rather than the whole API
 - Dependency-free `@geolibre/embed` npm client for that protocol: `connect()` resolves once the app is ready, each typed command returns a promise settled from its correlated acknowledgement, and events are subscribed by name. Published from each GeoLibre release, so its version tracks the app. See [The typed client](user-guide/embedding.md#the-typed-client)
 - `@geolibre/core` and `@geolibre/map` published to npm alongside it, so another application can build on GeoLibre's Zustand store, `.geolibre.json` project schema, and MapLibre layer-sync engine without vendoring the monorepo. See [Maintenance](maintenance.md)
 - Desktop app capabilities

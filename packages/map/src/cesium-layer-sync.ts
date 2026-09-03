@@ -1,5 +1,5 @@
 import { resolveThreeDTilesRequestHeaders, type GeoLibreLayer } from "@geolibre/core";
-import type { Cesium3DTileset, DataSource, ImageryLayer, Viewer } from "cesium";
+import type { Cesium3DTileset, CesiumWidget, DataSource, ImageryLayer } from "@cesium/engine";
 import type { StyleSpecification } from "maplibre-gl";
 import {
   cesiumSplitDirectionFor,
@@ -16,11 +16,11 @@ import { readTilesetPlacement, tilesetPlacementMatrix } from "./geoim3d-tileset-
 // Cesium3DTileset). Other kinds are skipped on the globe (they still render in
 // the 2D panes); the exported `isCesiumSupportedLayerType` lets the UI flag them.
 //
-// The engine is injected (the `Cesium` namespace + a `Viewer`) so this module
+// The engine is injected (the `Cesium` namespace + a `CesiumWidget`) so this module
 // carries only type-only Cesium imports and never pulls the engine into the
 // build graph itself.
 
-type CesiumNs = typeof import("cesium");
+type CesiumNs = typeof import("@cesium/engine");
 
 /** Layer kinds this pass renders on the globe. */
 const IMAGERY_TYPES = new Set(["raster", "xyz", "wms", "wmts"]);
@@ -324,7 +324,7 @@ export class CesiumLayerSync {
 
   constructor(
     private readonly Cesium: CesiumNs,
-    private readonly viewer: Viewer,
+    private readonly viewer: CesiumWidget,
   ) {
     this.applySwipe();
     this.unsubscribeSwipe = subscribeCesiumSwipe(() => this.applySwipe());
@@ -342,7 +342,7 @@ export class CesiumLayerSync {
   private applySwipe(): void {
     // Reached from a subscription as well as the constructor, so nothing here
     // assumes a live viewer with every method a real one has.
-    const scene = this.viewer.scene as Viewer["scene"] | undefined;
+    const scene = this.viewer.scene as CesiumWidget["scene"] | undefined;
     if (!scene) return;
     const swipe = getCesiumSwipeState();
     // Cesium's default is 0.5, and a scene with nothing split ignores it.

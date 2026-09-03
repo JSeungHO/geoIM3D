@@ -21,6 +21,112 @@ function testPlugin(patch: Partial<GeoLibrePlugin> = {}): GeoLibrePlugin {
   };
 }
 
+describe("PluginManager exclusive groups", () => {
+  it("deactivates the active sibling before activating another group member", () => {
+    const calls: string[] = [];
+    const manager = new PluginManager();
+    manager.register(
+      testPlugin({
+        id: "stac-catalogs",
+        exclusiveGroup: "stac-browser",
+        activate: () => {
+          calls.push("activate:stac");
+        },
+        deactivate: () => {
+          calls.push("deactivate:stac");
+        },
+      }),
+    );
+    manager.register(
+      testPlugin({
+        id: "planet-open-data",
+        exclusiveGroup: "stac-browser",
+        activate: () => {
+          calls.push("activate:planet");
+        },
+        deactivate: () => {
+          calls.push("deactivate:planet");
+        },
+      }),
+    );
+
+    manager.activate("stac-catalogs", app);
+    manager.activate("planet-open-data", app);
+
+    assert.equal(manager.isActive("stac-catalogs"), false);
+    assert.equal(manager.isActive("planet-open-data"), true);
+    assert.deepEqual(calls, ["activate:stac", "deactivate:stac", "activate:planet"]);
+  });
+
+  it("restores the displaced sibling after activation failures", async () => {
+    for (const failure of ["false", "throw", "reject"] as const) {
+      const manager = new PluginManager();
+      let siblingActivations = 0;
+      manager.register(
+        testPlugin({
+          id: "working",
+          exclusiveGroup: "viewer",
+          activate: () => {
+            siblingActivations += 1;
+          },
+        }),
+      );
+      manager.register(
+        testPlugin({
+          id: "failing",
+          exclusiveGroup: "viewer",
+          activate: () => {
+            if (failure === "false") return false;
+            if (failure === "throw") throw new Error("sync failure");
+            return Promise.reject(new Error("async failure"));
+          },
+        }),
+      );
+      manager.activate("working", app);
+
+      if (failure === "throw") {
+        assert.throws(() => manager.activate("failing", app), /sync failure/);
+      } else {
+        assert.equal(await manager.activate("failing", app), false);
+      }
+
+      assert.equal(manager.isActive("working"), true);
+      assert.equal(manager.isActive("failing"), false);
+      assert.equal(siblingActivations, 2);
+    }
+  });
+
+  it("keeps only the last requested group member active during project restore", () => {
+    const manager = new PluginManager();
+    const activations: string[] = [];
+    for (const id of ["stac", "planet"]) {
+      manager.register(
+        testPlugin({
+          id,
+          exclusiveGroup: "stac-browser",
+          activate: () => {
+            activations.push(id);
+          },
+        }),
+      );
+    }
+
+    manager.restoreProjectState(
+      {
+        manifestUrls: [],
+        activePluginIds: ["stac", "planet"],
+        mapControlPositions: {},
+        settings: {},
+      },
+      app,
+    );
+
+    assert.equal(manager.isActive("stac"), false);
+    assert.equal(manager.isActive("planet"), true);
+    assert.deepEqual(activations, ["planet"]);
+  });
+});
+
 describe("PluginManager URL parameters", () => {
   it("runs matching active plugin URL parameter handlers once per context", async () => {
     const calls: string[] = [];
@@ -796,6 +902,114 @@ describe("PluginManager panel auto-expand on restore", () => {
       true,
       "a project restore must not leave plugin panels expanded over the map",
     );
+  });
+
+  it("keeps restored native right panels collapsed", async () => {
+    const manager = new PluginManager();
+    let collapsed = false;
+    const mockApp = {
+      registerRightPanel: () => () => undefined,
+      openRightPanel: () => true,
+      collapseRightPanel: () => {
+        collapsed = true;
+      },
+    } as unknown as GeoLibreAppAPI;
+    manager.register(
+      testPlugin({
+        id: "native-panel",
+        activate: (api) => {
+          api.registerRightPanel?.({
+            id: "native-panel-content",
+            title: "Native panel",
+            render: () => undefined,
+          });
+          api.openRightPanel?.("native-panel-content");
+        },
+      }),
+    );
+
+    manager.restoreProjectState(
+      {
+        manifestUrls: [],
+        activePluginIds: ["native-panel"],
+        mapControlPositions: {},
+        settings: {},
+      },
+      mockApp,
+    );
+
+    await flushTimers();
+    assert.equal(collapsed, true, "a restored native right panel must remain collapsed");
+  });
+
+  it("deactivates an opted-in plugin when its native panel closes", async () => {
+    const manager = new PluginManager();
+    let registeredPanel: Parameters<NonNullable<GeoLibreAppAPI["registerRightPanel"]>>[0] | null =
+      null;
+    const mockApp = {
+      registerRightPanel: (panel: NonNullable<typeof registeredPanel>) => {
+        registeredPanel = panel;
+        return () => undefined;
+      },
+      deactivatePlugin: (id: string) => manager.deactivate(id, mockApp as GeoLibreAppAPI),
+    } as unknown as GeoLibreAppAPI;
+    manager.register(
+      testPlugin({
+        id: "close-with-panel",
+        activate: (api) => {
+          api.registerRightPanel?.({
+            id: "close-with-panel-content",
+            title: "Close with panel",
+            deactivatePluginOnClose: true,
+            render: () => undefined,
+          });
+        },
+      }),
+    );
+
+    manager.activate("close-with-panel", mockApp);
+    assert.ok(registeredPanel);
+    registeredPanel.onClose?.();
+    await flushTimers(1);
+    assert.equal(manager.isActive("close-with-panel"), true);
+    registeredPanel.onExplicitClose?.();
+    await flushTimers(1);
+    assert.equal(manager.isActive("close-with-panel"), false);
+  });
+
+  it("deactivates an opted-in plugin when its panel close hook throws", async () => {
+    const manager = new PluginManager();
+    let registeredPanel: Parameters<NonNullable<GeoLibreAppAPI["registerRightPanel"]>>[0] | null =
+      null;
+    const mockApp = {
+      registerRightPanel: (panel: NonNullable<typeof registeredPanel>) => {
+        registeredPanel = panel;
+        return () => undefined;
+      },
+      deactivatePlugin: (id: string) => manager.deactivate(id, mockApp as GeoLibreAppAPI),
+    } as unknown as GeoLibreAppAPI;
+    manager.register(
+      testPlugin({
+        id: "throwing-close-panel",
+        activate: (api) => {
+          api.registerRightPanel?.({
+            id: "throwing-close-panel-content",
+            title: "Throwing close panel",
+            deactivatePluginOnClose: true,
+            render: () => undefined,
+            onExplicitClose: () => {
+              throw new Error("close failed");
+            },
+          });
+        },
+      }),
+    );
+
+    manager.activate("throwing-close-panel", mockApp);
+    assert.ok(registeredPanel);
+    assert.throws(() => registeredPanel.onExplicitClose?.(), /close failed/);
+    await flushTimers(1);
+    assert.equal(manager.isActive("throwing-close-panel"), false);
   });
 
   it("leaves a plugin that persists its own collapsed state expanded", async () => {
