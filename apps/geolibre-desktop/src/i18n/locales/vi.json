@@ -274,6 +274,10 @@
         "label": "Mặt Trăng",
         "description": "Thêm dịch vụ WMS GetMap dưới dạng lớp raster xếp chồng."
       },
+      "csw": {
+        "label": "Tìm kiếm danh mục CSW",
+        "description": "Tìm kiếm tập dữ liệu trong dịch vụ danh mục OGC và thêm các tài nguyên web được hỗ trợ vào bản đồ."
+      },
       "wfs": {
         "label": "Thêm lớp WFS",
         "description": "Thêm các tính năng WFS bằng cách yêu cầu GeoJSON từ dịch vụ GetFeature."
@@ -341,6 +345,18 @@
       "polyline": {
         "label": "Thêm lớp polyline mã hóa",
         "description": "Nhập các chuỗi polyline mã hóa (Google, OSRM, Valhalla) từ văn bản hoặc tệp dưới dạng đường vector."
+      },
+      "cesiumIon": {
+        "label": "Thêm tài sản Cesium Ion",
+        "description": "Thêm bộ ô 3D Tiles hoặc hình ảnh từ Cesium Ion theo id tài sản. Được kết xuất trên quả địa cầu 3D bằng mã thông báo Cesium Ion của bạn."
+      },
+      "czml": {
+        "label": "Thêm lớp 3D động CZML",
+        "description": "Tải tài liệu Cesium Language (CZML) động mô tả quỹ đạo, đường bay, lộ trình phương tiện và các cảnh 3D thay đổi theo thời gian trên địa cầu."
+      },
+      "kml": {
+        "label": "KML / KMZ",
+        "description": "Tải KML hoặc KMZ lên địa cầu với kiểu gốc, lớp phủ và liên kết mạng."
       }
     },
     "shared": {
@@ -396,6 +412,37 @@
       "errorRead": "Không thể đọc tệp đó dưới dạng thư viện dịch vụ.",
       "imported_other": "Đã nhập dịch vụ {{count}}."
     },
+    "cesiumIon": {
+      "defaultName": "Tài sản Cesium Ion",
+      "assetId": "ID tài sản",
+      "kindTileset": "3D Tiles",
+      "kindImagery": "Hình ảnh",
+      "altitudeOffset": "Độ lệch cao độ (m)",
+      "quickPicks": "Chọn nhanh",
+      "hint": "Tìm id tài sản trong mục My Assets tại ion.cesium.com. Tài sản phải được chia sẻ với mã thông báo đã cấu hình trong Cài đặt.",
+      "errorAssetId": "Nhập id tài sản Cesium Ion (một số nguyên dương).",
+      "errorAltitude": "Nhập độ lệch cao độ dưới dạng số mét.",
+      "tokenMissing": "Chưa cấu hình mã thông báo Cesium Ion. Hãy thêm trong Cài đặt → Biến môi trường (VITE_CESIUM_TOKEN), nếu không tài sản sẽ không tải được."
+    },
+    "czml": {
+      "defaultName": "Cảnh động CZML",
+      "url": "URL CZML",
+      "sourceModeUrl": "URL",
+      "sourceModeFile": "Tệp cục bộ",
+      "file": "Tệp",
+      "quickPicks": "Cảnh động mẫu",
+      "hint": "Luồng hoặc tệp CZML định nghĩa vị trí 3D động, hoạt ảnh và quỹ đạo được đồng bộ với đồng hồ của địa cầu.",
+      "errorUrl": "Nhập URL điểm cuối CZML hợp lệ.",
+      "errorChooseFile": "Chọn tệp CZML (.czml hoặc .json) để tải.",
+      "errorFileMissing": "Không thể đọc tệp đã chọn.",
+      "errorInvalidCzml": "Tệp không chứa tài liệu CZML hợp lệ (cần mảng JSON hoặc đối tượng gói).",
+      "readError": "Không đọc được dữ liệu CZML."
+    },
+    "kml": {
+      "defaultName": "KML / KMZ",
+      "url": "URL KML / KMZ",
+      "errorSource": "Nhập URL KML/KMZ hoặc chọn một tệp."
+    },
     "xyz": {
       "defaultName": "Lớp XYZ",
       "sampleLabel": "Hình ảnh USGS",
@@ -421,6 +468,21 @@
       "noLayersFound": "Không có lớp nào được tìm thấy cho dịch vụ này.",
       "retrieveError": "Không thể truy xuất các lớp từ dịch vụ này.",
       "version": "Phiên bản WMS"
+    },
+    "csw": {
+      "defaultName": "Danh mục CSW",
+      "urlPlaceholder": "https://example.com/csw",
+      "keyword": "Từ khóa",
+      "search": "Tìm kiếm",
+      "searching": "Đang tìm kiếm…",
+      "results": "Kết quả danh mục",
+      "errorUrl": "Hãy nhập URL dịch vụ CSW hợp lệ theo HTTP hoặc HTTPS.",
+      "searchError": "Không thể tìm kiếm trong danh mục này.",
+      "noResults": "Không tìm thấy tập dữ liệu nào phù hợp.",
+      "invalidGeoJson": "Tài nguyên đã chọn không phải là FeatureCollection GeoJSON.",
+      "addError": "Không thể thêm tài nguyên danh mục này.",
+      "addResource": "Thêm {{kind}}",
+      "noSupportedResources": "Không có tài nguyên WMS, WFS, ArcGIS hoặc GeoJSON nào được hỗ trợ được công bố."
     },
     "wfs": {
       "urlPlaceholder": "https://example.com/geoserver/wfs",
@@ -616,6 +678,7 @@
       "errorRetrieveColumns": "Đường ống",
       "url": "URL văn bản được phân cách",
       "file": "__PH0__ ảnh đã bị bỏ qua (không có vị trí GPS).",
+      "fileFilter": "CSV / TSV / TXT / Excel",
       "urlPlaceholder": "https://example.com/data.csv",
       "retrieving": "Đang truy xuất...",
       "retrieveColumns": "Truy xuất cột",
@@ -863,6 +926,15 @@
       "lineWidth": "Chiều rộng đường",
       "extrusion": "đùn 3D",
       "modelUrlPlaceholder": "https://example.com/model.glb",
+      "chooseModelFile": "Chọn mô hình cục bộ",
+      "sampleDataset": "Tập dữ liệu mẫu",
+      "sampleCustom": "Mô hình tùy chỉnh",
+      "sampleAirplane": "Máy bay — San Francisco",
+      "sampleShanghai": "Thượng Hải — trung tâm thành phố",
+      "modelFileHint": "Chọn tệp GLB hoặc tệp glTF khép kín. Mô hình cục bộ được nhúng vào dự án đã lưu, làm tăng kích thước dự án.",
+      "modelExternalResources": "Mô hình này tham chiếu đến các tệp riêng. Hãy xuất nó thành GLB có nhúng kết cấu và bộ đệm, rồi thử lại.",
+      "modelTooLarge": "Mô hình này vượt quá giới hạn {{limit}} MB để nhúng vào dự án. Hãy lưu trữ trên máy chủ và thêm bằng URL.",
+      "modelFileError": "Không thể đọc mô hình này. Hãy chọn tệp glTF 2.0 hoặc GLB hợp lệ.",
       "loadedColumns_other": "{{count}} cột",
       "loadedTabular": "Đã tải {{rows}} · {{columns}}.",
       "errorLoad": "Không thể tải dữ liệu.",
@@ -1301,6 +1373,11 @@
     "readinessAdviceNotFound": "Cập nhật hoặc thay thế nguồn của lớp này trước khi chia sẻ.",
     "readinessAdviceLocal": "Chuyển đổi nó thành nguồn được lưu trữ hoặc mong đợi người nhận nhìn thấy một lớp trống.",
     "openAccountSettings": "Mở cài đặt tài khoản",
+    "shareAnyway": "Vẫn chia sẻ",
+    "localWarningTitle_other": "{{count}} lớp sẽ bị thiếu trong bản đồ được chia sẻ",
+    "localWarningBody": "{{shareHost}} chỉ lưu tệp dự án, không bao giờ lưu các tệp trên máy tính của bạn. Người nhận mở dự án trong trình duyệt, vốn không đọc được ổ đĩa của bạn, nên các lớp này sẽ trống với tất cả mọi người trừ bạn.",
+    "localWarningAdvice": "Để đưa chúng vào, hãy chuyển raster sang Cloud Optimized GeoTIFF và vector sang PMTiles hoặc GeoParquet, lưu trữ tệp trên máy chủ HTTPS công khai như GitHub hoặc Hugging Face, thêm vào bản đồ bằng URL rồi chia sẻ lại. Các lớp vector cục bộ nhỏ được nhúng vào dự án tự động.",
+    "localWarningLearnMore": "Tìm hiểu thêm",
     "readinessChecking": "Đang kiểm tra xem người nhận có thể tải dữ liệu của bạn hay không…",
     "readinessUnavailable": "Kiểm tra nguồn dữ liệu không thể chạy.",
     "readinessAllReachable_other": "Tất cả nguồn dữ liệu {{count}} đều có thể truy cập được đối với người nhận.",
@@ -1375,7 +1452,7 @@
   },
   "printLayout": {
     "title": "Bố cục in",
-    "description": "Soạn bản đồ sẵn sàng để in với tiêu đề, chú giải, thanh tỷ lệ và mũi tên hướng bắc, sau đó xuất bản đồ đó sang PNG hoặc PDF.",
+    "description": "Soạn bản đồ sẵn sàng để in với tiêu đề, chú giải, thanh tỷ lệ và mũi tên hướng bắc, sau đó xuất bản đồ đó sang PNG, PDF hoặc SVG.",
     "preview": "Xem trước",
     "resizeControls": "Thay đổi kích thước bảng điều khiển",
     "resizeDialog": "Thay đổi kích thước hộp thoại",
@@ -1383,6 +1460,7 @@
     "copyToClipboard": "Sao chép vào Clipboard",
     "copied": "Đã sao chép",
     "exportPng": "Xuất PNG",
+    "exportSvg": "Xuất SVG",
     "exportPdf": "Xuất PDF",
     "titleLabel": "Tiêu đề",
     "titlePlaceholder": "Tiêu đề bản đồ",
@@ -1803,7 +1881,22 @@
     "show3d": "Hiển thị bản đồ {{number}} dưới dạng quả địa cầu 3D",
     "show2d": "Hiển thị bản đồ {{number}} dưới dạng bản đồ 2D",
     "only2d": "chỉ 2D",
+    "only3d": "chỉ 3D",
     "cesiumTokenHint": "Thêm mã thông báo Cesium Ion trong Cài đặt để dùng địa hình và ảnh vệ tinh Ion"
+  },
+  "renderer": {
+    "basemap": "Sơ đồ cơ sở",
+    "imagery": "Hình ảnh",
+    "projectBasemap": "Sơ đồ cơ sở của dự án",
+    "layerUnsupported": "Không được kết xuất trên quả địa cầu 3D",
+    "layerCesiumOnly": "Chỉ được kết xuất trên quả địa cầu 3D",
+    "resetView": "Đặt lại chế độ xem",
+    "scene3D": "Quả địa cầu 3D",
+    "scene2D": "Bản đồ 2D",
+    "sceneColumbus": "Chế độ xem Columbus",
+    "fullscreenEnter": "Toàn màn hình",
+    "fullscreenExit": "Thoát toàn màn hình",
+    "fullscreenUnavailable": "Không hỗ trợ toàn màn hình"
   },
   "mapContextMenu": {
     "zoomInHere": "Phóng to ở đây",
@@ -2390,6 +2483,7 @@
       "mbtiles": "Lớp MBTiles",
       "xyz": "Lớp XYZ",
       "wms": "Lớp WMS",
+      "csw": "Danh mục CSW",
       "wfs": "Lớp WFS",
       "wmts": "Lớp WMTS",
       "ogcFeatures": "API OGC - Tính năng",
@@ -2398,6 +2492,8 @@
       "georss": "Lớp GeoRSS",
       "video": "Lớp video",
       "deckglViz": "Chuyển đổi đã hoàn tất; việc lưu đã bị hủy.",
+      "cesiumIon": "Tài sản Cesium Ion",
+      "czml": "Cảnh 3D động CZML",
       "gltfModel": "Mô hình 3D (glTF)",
       "postgres": "Lớp PostgreSQL",
       "iceberg": "Lớp Apache Iceberg"
@@ -2653,6 +2749,9 @@
       "splitViewGrid2x3": "Lưới 2 × 3",
       "splitViewGrid3x3": "Lưới 3 × 3",
       "splitViewSync": "Đồng bộ hóa lượt xem",
+      "renderingEngine": "Bộ kết xuất",
+      "rendererMapLibre": "MapLibre",
+      "rendererCesium": "Cesium",
       "viewInGoogleMaps": "Xem trên Google Maps",
       "viewInGoogleEarth": "Xem trong Google Earth",
       "zoomIn": "Phóng to",
@@ -2802,6 +2901,7 @@
       "saveProjectAsTitle": "Lưu dự án dưới dạng",
       "saveProjectAsDesc": "Xuất dưới dạng HTML tương tác",
       "embedVectorTitle": "Nhúng dữ liệu vectơ cục bộ?",
+      "embedEditedGeometryDesc": "Dự án này chứa các hình học đã chỉnh sửa. Nhúng dữ liệu vectơ (khoảng {{size}}) để giữ lại các thay đổi. Nếu không nhúng, các lớp tham chiếu sẽ mở lại với hình học gốc và dữ liệu cục bộ có thể không khả dụng.",
       "embedVectorDesc": "Dự án này có {{count}} lớp vectơ cục bộ được tải từ máy tính của bạn. Trình duyệt không thể đọc lại chúng khi dự án được mở lại, do đó dữ liệu của chúng phải được nhúng vào tệp dự án để được khôi phục. Việc nhúng sẽ thêm khoảng {{size}} vào tệp.",
       "embedVectorDescDesktop": "Dự án này có {{count}} lớp vectơ cục bộ được tải từ máy tính của bạn. Nhúng dữ liệu của họ để làm cho dự án trở nên độc lập (thêm khoảng {{size}}) hoặc lưu các tham chiếu tệp sẽ tải lại từ đĩa khi dự án được mở lại. Các tham chiếu giữ cho tệp có kích thước nhỏ nhưng sẽ bị hỏng nếu tệp nguồn sau đó bị di chuyển hoặc xóa.",
       "embedVectorDescMas": "Dự án này có {{count}} lớp vectơ cục bộ được tải từ máy tính của bạn. Hộp cát Mac App Store không thể duy trì quyền truy cập vào các tệp đó sau khi GeoLibre đóng, vì vậy dữ liệu phải được nhúng vào tệp dự án để có thể khôi phục. Việc nhúng sẽ thêm khoảng {{size}} vào tệp.",
@@ -2851,6 +2951,7 @@
       "batchTools": "Công cụ hàng loạt"
     },
     "plugin": {
+      "maplibre-gl-dimensions": "Kích thước",
       "maplibre-gl-directions": "Chỉ đường",
       "maplibre-gl-earthdata-gis": "GIS dữ liệu trái đất",
       "maplibre-gl-enviroatlas": "EPA Hoa Kỳ EnviroAtlas",
@@ -3019,6 +3120,7 @@
     "byLocationTitle": "Chọn theo vị trí",
     "needTwoLayers": "Việc chọn theo vị trí cần có hai lớp vectơ với các tính năng.",
     "summary": "{{selected}} trong số {{total}} tính năng đã chọn ({{matched}} khớp).",
+    "filterSummary": "Đã áp dụng bộ lọc lớp: {{matched}} trong số {{total}} đối tượng khớp.",
     "evaluationErrors": "{{count}} tính năng không thể được đánh giá và không khớp.",
     "unevaluableDisjoint": "{{count}} đặc điểm đã bị loại trừ vì không thể đánh giá hình học của chúng.",
     "tooManyPairs": "Sự so sánh này cần {{pairs}} thử nghiệm cặp tính năng (giới hạn {{limit}}). Thay vào đó, hãy sử dụng Xử lý → GeoLibre → Vector → Chọn theo vị trí bằng công cụ Sidecar.",
@@ -3032,6 +3134,10 @@
     "openBuilder": "Trình tạo biểu thức...",
     "invalidExpression": "Nhập một biểu thức boolean hợp lệ.",
     "select": "Chọn tính năng",
+    "applyLayerFilter": "Lọc lớp",
+    "clearLayerFilter": "Xóa bộ lọc lớp",
+    "layerFilteredHint": "Một bộ lọc lâu dài đang ẩn bớt các đối tượng của lớp này.",
+    "layerFilteredBothHint": "Một bộ lọc lâu dài và một bộ lọc nhanh đang ẩn bớt các đối tượng của lớp này.",
     "noLayers": "Thêm một lớp vectơ với các tính năng để tạo vùng lựa chọn.",
     "byLocationDescription": "Chọn các tính năng theo mối quan hệ không gian của chúng với các tính năng của lớp khác.",
     "targetLayer": "Chọn các tính năng từ",
@@ -3451,6 +3557,7 @@
     "search": "Tìm kiếm",
     "searchCurrentView": "Tìm kiếm khu vực bản đồ hiện tại",
     "enterKeyword": "Nhập từ khóa để bắt đầu.",
+    "viewUnavailable": "Không có phạm vi bản đồ hiện tại; hãy tắt bộ lọc phạm vi bản đồ để tìm kiếm.",
     "loadMore": "Tải thêm",
     "searching": "Đang tìm kiếm…",
     "loadingMore": "Đang tải thêm tập dữ liệu…",
@@ -3493,10 +3600,14 @@
     "title": "Danh mục STAC",
     "footprintLayerName": "Dấu chân tìm kiếm STAC",
     "catalogSearch": "Tìm danh mục công khai từ STAC Index",
+    "portolanCatalogSearch": "Tìm danh mục công khai từ Portolan Registry",
     "catalogSearchPlaceholder": "Tìm kiếm tên danh mục…",
     "indexLoading": "Đang tải chỉ mục STAC…",
+    "portolanIndexLoading": "Đang tải Portolan Registry…",
     "indexUnavailable": "Chỉ mục STAC không có sẵn - hãy nhập URL",
+    "portolanIndexUnavailable": "Portolan Registry không có sẵn: hãy nhập URL",
     "indexLoadFailed": "Không thể tải chỉ mục STAC",
+    "portolanIndexLoadFailed": "Không thể tải Portolan Registry",
     "urlLabel": "Danh mục STAC hoặc URL API",
     "connect": "Kết nối",
     "connecting": "Đang kết nối với STAC…",
@@ -3843,6 +3954,27 @@
       "thick": "Dày"
     },
     "deleteLast": "Xóa chú thích cuối cùng"
+  },
+  "dimensions": {
+    "toolbar": "Công cụ ghi kích thước",
+    "layerName": "Kích thước",
+    "tools": {
+      "linear": "Kích thước thẳng",
+      "angular": "Kích thước góc"
+    },
+    "unit": "Đơn vị",
+    "snap": "Bắt dính vào đỉnh",
+    "color": "Màu kích thước",
+    "width": "Chiều rộng đường",
+    "widthOptions": {
+      "thin": "Mảnh",
+      "medium": "Trung bình",
+      "thick": "Dày"
+    },
+    "deleteLast": "Xóa kích thước cuối cùng",
+    "clearAll": "Xóa tất cả kích thước",
+    "newLayer": "Lớp kích thước mới",
+    "confirmClearAll_other": "Xóa toàn bộ {{count}} kích thước trong lớp này? Thao tác này không thể hoàn tác."
   },
   "pythonConsole": {
     "runScript": "__PH0__ tiện ích",
@@ -4438,6 +4570,15 @@
                 "kilometers": "Kilômét",
                 "meters": "Mét",
                 "miles": "Dặm"
+              }
+            },
+            "side": {
+              "label": "Phía vùng đệm",
+              "description": "Bên ngoài mở rộng từng đối tượng, Bên trong thu nhỏ nó, và Cả hai phía chỉ giữ vùng nằm trong khoảng cách đó ở hai bên ranh giới. Bên trong cần lớp vùng — điểm hoặc đường không có phần bên trong.",
+              "options": {
+                "outside": "Bên ngoài (mở rộng)",
+                "inside": "Bên trong (thu nhỏ)",
+                "both": "Cả hai phía"
               }
             }
           }
@@ -6261,6 +6402,7 @@
     "description": "Lưu kiểu",
     "searchPlaceholder": "Tìm kiếm kiểu và thẻ…",
     "presetsSection": "Cài đặt trước tích hợp",
+    "presetActions": "Hành động cài đặt trước",
     "librarySection": "Thư viện của tôi",
     "projectSection": "Dự án này",
     "empty": "Ẩn trường",
@@ -6350,7 +6492,6 @@
       "remove": "Xóa tham gia",
       "enabledTitle": "Áp dụng sự tham gia này",
       "missingLayer": "__PH0__ trường",
-      "noCandidates": "Không có lớp nào khác có bảng thuộc tính để tham gia",
       "statsMatched": "{{matched}} trong số {{total}} tính năng phù hợp"
     },
     "virtualFields": {
@@ -6420,6 +6561,11 @@
         "sizeTarget": "Biểu thức kích thước nhãn",
         "colorTarget": "Biểu hiện màu nhãn"
       },
+      "numberFormat": "Định dạng số",
+      "numberFormatHint": "Giá trị số được hiển thị với dấu phân cách hàng nghìn và dấu thập phân, ví dụ {{sample}}. Giá trị văn bản giữ nguyên, còn biểu thức nhãn tự định dạng kết quả của nó.",
+      "numberDecimals": "Số chữ số thập phân",
+      "numberLocale": "Dấu phân cách",
+      "numberLocaleApp": "Theo ngôn ngữ ứng dụng",
       "transform": "Biểu thức MapLibre (JSON). Ghi đè trường khi được đặt.",
       "transformNone": "Như đã nhập",
       "transformUppercase": "CHỮ HOA",
@@ -6548,6 +6694,7 @@
       "schemeQuantile": "lượng tử",
       "schemeNaturalBreaks": "Nghỉ giải lao tự nhiên",
       "classColorPick": "Chọn màu cho hạng {{index}}",
+      "classOpacity": "Lớp {{index}} độ mờ",
       "classValue": "Giá trị hạng {{index}}",
       "colorExpression": "Biểu hiện màu sắc",
       "applyStyleType": "Áp dụng kiểu kiểu",
@@ -6557,6 +6704,8 @@
       "pointRendererClustered": "Được nhóm lại",
       "heatmapRadius": "Bán kính bản đồ nhiệt",
       "heatmapIntensity": "Cường độ bản đồ nhiệt",
+      "heatmapWeightField": "Trường trọng số",
+      "heatmapEqualWeight": "Không có (trọng số bằng nhau)",
       "fillPatterns": {
         "none": "Không có (điền đặc)",
         "hatch": "nở",
@@ -6602,10 +6751,12 @@
     "mode2d": "biểu hiện chiều cao",
     "mode3dExtrusion": "đùn 3D",
     "noControls": "Điều khiển kiểu chưa có sẵn cho loại lớp này.",
+    "tilesetSymbology": "Màu sắc và bộ lọc áp dụng cho tập ô này trên quả địa cầu 3D.",
     "selectedLayerType": "Loại lớp đã chọn: {{type}}",
     "footerDeck": "Các thay đổi áp dụng trực tiếp cho kiểu dáng lớp DuckDB deck.gl.",
     "footerMaplibre": "Các thay đổi áp dụng trực tiếp cho thuộc tính sơn MapLibre.",
     "pluginPaintedFooter": "Lớp này được vẽ bởi plugin của nó, cung cấp các điều khiển kiểu dáng riêng.",
+    "serviceStyledFooter": "Lớp này giữ nguyên kiểu riêng của dịch vụ; độ mờ, thứ tự, phạm vi thu phóng và bộ lọc vẫn được áp dụng.",
     "extrusion": {
       "color": "Màu đùn",
       "opacity": "Chiều rộng hào quang văn bản",
@@ -6671,6 +6822,7 @@
         "upcase": "Tạo màu từ đỏ, lục và lam (0-255).",
         "downcase": "Chuyển đổi một chuỗi thành chữ thường.",
         "slice": "Trả về một phần của chuỗi hoặc mảng.",
+        "numberFormat": "Định dạng một số thành văn bản bằng dấu phân cách hàng nghìn và dấu thập phân của một ngôn ngữ và khu vực, có thể cố định số chữ số thập phân.",
         "toNumber": "Chuyển đổi một giá trị thành một số.",
         "toString": "Chuyển đổi một giá trị thành một chuỗi.",
         "toBoolean": "Chuyển đổi một giá trị thành true hoặc false.",
@@ -6861,6 +7013,7 @@
     "allFieldsUsed": "Mọi trường đều đã có bộ lọc",
     "removeAll": "Xóa tất cả",
     "clearAll": "Xóa các bộ lọc",
+    "clearAllWithExpression": "Xóa các bộ lọc và biểu thức đã lưu",
     "clearOne": "Xóa bộ lọc này",
     "clearOneNamed": "Xóa bộ lọc trên {{field}}",
     "remove": "Xóa bộ lọc",
@@ -6993,6 +7146,8 @@
     "saveEditsSuccess": "Đã lưu {{count}} tính năng vào tệp nguồn.",
     "saveEditsNoFeatures": "Lớp này không có tính năng để lưu.",
     "saveEditsError": "Không thể lưu các chỉnh sửa vào tệp nguồn.",
+    "saveEditsToArcgis": "Lưu các chỉnh sửa vào dịch vụ ArcGIS",
+    "saveEditsArcgisSuccess": "Đã lưu vào ArcGIS: {{inserted}} đã chèn, {{updated}} đã cập nhật, {{deleted}} đã xóa.",
     "saveEditsToPostgis": "Lưu các chỉnh sửa vào bảng PostGIS",
     "saveEditsPostgisSuccess": "Đã lưu vào {{table}}: {{inserted}} đã chèn, {{updated}} đã cập nhật, {{deleted}} đã xóa.",
     "saveEditsPostgisSkippedFields": "Các trường không có cột bảng phù hợp sẽ không được lưu: {{fields}}.",
@@ -7142,6 +7297,18 @@
     "stretchLinear": "tuyến tính",
     "stretchLog": "logarit",
     "stretchSqrt": "căn bậc hai",
+    "viewportStretch": "Kéo dài theo khung nhìn",
+    "viewportMinMax": "Tối thiểu / tối đa của khung nhìn",
+    "viewportPercentile": "Phân vị 5–95 của khung nhìn",
+    "viewportStddev": "Trung bình của khung nhìn ± 2 độ lệch chuẩn",
+    "viewportApply": "Áp dụng cho khung nhìn",
+    "viewportStretching": "Đang đọc khung nhìn…",
+    "viewportStretchApplied": "Đã áp dụng kéo dài theo khung nhìn",
+    "viewportAuto": "Tự động cập nhật khi bản đồ di chuyển",
+    "viewportStretchNoView": "Chế độ xem bản đồ không khả dụng.",
+    "viewportStretchNoValues": "Không tìm thấy giá trị raster trong khung nhìn.",
+    "viewportStretchNoRange": "Các giá trị trong khung nhìn không xác định được một khoảng.",
+    "viewportStretchMoved": "Bản đồ đã di chuyển trước khi đọc xong. Hãy áp dụng lại.",
     "index": "chỉ mục",
     "classifyToggle": "Phân loại thành các lớp riêng biệt",
     "method": "Phương pháp",
@@ -7646,5 +7813,65 @@
       "downloadsStarted": "Đã bắt đầu {{started}} lượt tải xuống. {{failed}} lượt thất bại.",
       "downloadCancelled": "Tải xuống đã bị hủy hoặc thất bại."
     }
+  },
+  "usgsNldi": {
+    "panelTitle": "USGS NLDI",
+    "title": "Công cụ mạng lưới USGS NLDI",
+    "hint": "Trước tiên hãy chọn hướng của đường dòng chảy rồi nhấp lên bản đồ. Sau đó chọn hướng dẫn hướng, nhấn nút được làm nổi bật để nạp các danh mục có sẵn, chọn một danh mục như trạm đo dòng chảy hoặc giếng nước, rồi nhấn lại để vẽ danh mục đó.",
+    "directionComplete": "Toàn bộ đường dòng chảy — trả về trọn đoạn sông NHD",
+    "directionUp": "Chỉ thượng lưu — trả về đoạn sông phía trên điểm đã chọn",
+    "directionDown": "Chỉ hạ lưu — trả về đoạn sông phía dưới điểm đã chọn",
+    "basinButton": "Lưu vực từ vị trí thủy văn",
+    "navigationPlaceholder": "Chọn hướng — bắt buộc trước khi vẽ",
+    "navigationUpstreamMain": "Dòng chính thượng lưu — đi theo lòng dẫn chính",
+    "navigationUpstreamTributaries": "Phụ lưu thượng lưu — tìm các nhánh đổ vào",
+    "navigationDownstreamMain": "Dòng chính hạ lưu — đi theo lòng dẫn chính",
+    "navigationDownstreamDiversions": "Phân lưu hạ lưu — đi theo các nhánh tách dòng",
+    "sourcePlaceholder": "Hãy nhấn “Nạp nguồn và vẽ” trước",
+    "distancePlaceholder": "Khoảng cách (km)",
+    "navigationButton": "1. Nạp nguồn và vẽ dẫn hướng",
+    "navigationButtonAgain": "Vẽ thêm một lớp dẫn hướng",
+    "exportButton": "Xuất kết quả đã vẽ sang GeoJSON",
+    "addLayersButton": "Thêm kết quả đã vẽ vào Lớp của GeoLibre",
+    "clearButton": "Xóa kết quả NLDI",
+    "noComid": "Không có COMID nào được trả về cho điểm này.",
+    "requestingBasin": "Đang yêu cầu lưu vực thượng lưu…",
+    "basinRendered": "Đã vẽ lưu vực thượng lưu cho COMID {{comid}}.",
+    "basinFailed": "Yêu cầu lưu vực thất bại.",
+    "selectNavigation": "Hãy chọn một phương thức dẫn hướng sau khi dò một điểm.",
+    "invalidDistance": "Khoảng cách phải nằm trong khoảng từ 1 đến 9999 km.",
+    "discoveringSources": "Đang dò tìm các nguồn dẫn hướng NLDI…",
+    "navigationUnavailable": "Phương thức dẫn hướng đó không khả dụng cho COMID này.",
+    "noPlottableSource": "NLDI không trả về nguồn dẫn hướng nào có thể vẽ được.",
+    "navigationEmpty": "{{source}} không trả về đối tượng nào có thể lập bản đồ cho lần dẫn hướng này.",
+    "navigationAdded": "Đã thêm {{source}} qua {{navigation}} cho COMID {{comid}} ({{km}} km). Các lớp dẫn hướng hiện có vẫn ở trên bản đồ.",
+    "navigationFailed": "Yêu cầu dẫn hướng thất bại.",
+    "tracing": "Đang dò tới đường dòng chảy NHD gần nhất…",
+    "flowline": "Đã vẽ đường dòng chảy.",
+    "flowlineComid": "Đã vẽ đường dòng chảy; COMID {{comid}} đã sẵn sàng cho quy trình lưu vực.",
+    "flowlineFallback": "Đã vẽ đường dòng chảy bằng phương án dự phòng vị trí thủy văn của NLDI.",
+    "flowlineFallbackComid": "Đã vẽ đường dòng chảy bằng phương án dự phòng vị trí thủy văn của NLDI; COMID {{comid}} đã sẵn sàng cho quy trình lưu vực.",
+    "requestFailed": "Yêu cầu NLDI thất bại.",
+    "nothingToAdd": "Không có đối tượng NLDI đã vẽ nào để thêm.",
+    "layersAdded_other": "Đã thêm {{count}} lớp NLDI vào một nhóm “Kết quả USGS NLDI”.",
+    "layerGroupName": "Kết quả USGS NLDI",
+    "layerFlowline": "Đường dòng chảy NLDI",
+    "layerRaindrop": "Đường đi hạt mưa NLDI",
+    "layerSelectedPoint": "Điểm đã chọn NLDI",
+    "layerBasin": "Lưu vực thượng lưu NLDI",
+    "layerNavigation": "Dẫn hướng NLDI {{index}}",
+    "resultCleared": "Đã xóa kết quả NLDI.",
+    "directionalUnavailable": "Không thể dò dòng chảy theo hướng khi tiến trình của USGS đang ngoại tuyến. Hãy chọn “Toàn bộ đường dòng chảy” hoặc thử lại sau.",
+    "noFlowlineNearby": "NLDI không tìm thấy đường dòng chảy nào gần điểm này.",
+    "httpError": "USGS NLDI trả về HTTP {{status}}",
+    "httpErrorDetail": "USGS NLDI trả về HTTP {{status}}: {{detail}}",
+    "noAttributes": "NLDI không trả về thuộc tính nào.",
+    "catalogCaGages": "Trạm đo dòng chảy California (ca_gages)",
+    "catalogNwisSite": "Trạm nước mặt NWIS (trạm đo dòng chảy)",
+    "catalogNwisGw": "Giếng nước ngầm NWIS",
+    "catalogGfv11Pois": "Điểm thuộc USGS Geospatial Fabric",
+    "catalogHuc12pp": "Điểm thoát nước HUC12",
+    "catalogNmwdiSt": "Trạm quan trắc nước New Mexico",
+    "catalogFlowlines": "Đường dòng chảy NHDPlus"
   }
 }

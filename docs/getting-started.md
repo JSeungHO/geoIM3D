@@ -61,12 +61,10 @@ See the [Python Package](python.md) reference to get started.
 ### In R
 
 The [`geolibre`](r.md) R package embeds GeoLibre as an interactive HTML widget
-in RStudio, Quarto, R Markdown, and Shiny. Install the development release from
-GitHub:
+in RStudio, Quarto, R Markdown, and Shiny. Install it from CRAN:
 
 ```r
-install.packages("pak")
-pak::pak("opengeos/geolibre-r")
+install.packages("geolibre")
 ```
 
 [Read the R package guide](r.md){ .md-button .md-button--primary }
@@ -96,6 +94,9 @@ See [iOS](ios.md) for what runs on mobile and for build details.
 - [Regularize Building Footprints in the Browser with GeoLibre](https://youtu.be/xjfPYxgEEEc)
 - [GeoLibre + GeoLens: A Modern GIS Stack for Self-Hosting Geospatial Data](https://youtu.be/kQqgrxXGd4o)
 - [Create Reusable GIS Workflows with GeoLibre Model Builder and AI Assistant](https://youtu.be/dzjNKM6slgs)
+- [Mapping the 2026 Nepal Floods with Free High-Resolution Satellite Imagery](https://youtu.be/UDO1BCwOAAc)
+- [Building Cloud-Native GIS Workflows with GeoLibre](https://youtu.be/RgNoKsvZ5Hk)
+- [Image Georeferencing Using GeoLibre in the Browser](https://youtu.be/lbioujkDSG0)
 
 All of them, with chapters and summaries, are on [Video Tutorials](tutorials/videos.md).
 
@@ -730,7 +731,7 @@ The optional **Cesium 3D-globe view** — a split-pane globe rendered with [Cesi
 CESIUM_TOKEN=your_cesium_ion_access_token
 ```
 
-`CESIUM_TOKEN` (or the `VITE_`-prefixed `VITE_CESIUM_TOKEN`) is read by `vite.config.ts` and baked into the build. You can **also set it at runtime** — with no rebuild — in the Settings dialog's **Environment Variables** section, which has a dedicated masked **Cesium Ion token** field. That token is stored locally on the device (in browser storage on the web build), **not** in the shared project file, and overrides the build-time value; it is how a web user brings their own Ion token. (A free-form `VITE_CESIUM_TOKEN` variable in the same section still works and takes precedence, as an override.) Without a token from any source the globe is still offered, showing a one-line hint about what a token would add. Ion access tokens are designed to ship in client bundles. See [Architecture](architecture.md#3d-globe-view-cesiumjs) for how the globe integrates.
+`CESIUM_TOKEN` (or the `VITE_`-prefixed `VITE_CESIUM_TOKEN`) is read by `vite.config.ts` and baked into the build. You can **also set it at runtime** — with no rebuild — in the Settings dialog's **Environment Variables** section, which has a dedicated masked **Cesium Ion token** field. That token is stored locally on the device (in browser storage on the web build), **not** in the shared project file, and overrides the build-time value; it is how a web user brings their own Ion token. (A free-form `VITE_CESIUM_TOKEN` variable in the same section still works and takes precedence, as an override.) Without a token from any source the globe is still offered, showing a one-line hint about what a token would add. Ion access tokens are designed to ship in client bundles. In CI/CD, pass the token as a build-time environment variable (the GitHub Pages, web, studio, and PR-preview workflows read it from the `CESIUM_TOKEN` repository secret, or `VITE_CESIUM_TOKEN` if you prefer the prefixed name), so visitors to your deployment get terrain and Ion imagery without entering a token of their own. Because the token ends up publicly readable in the served JS, scope it in the Ion dashboard to only the assets your deployment needs. The container image build deliberately does **not** bake one in: it is redistributed, so its users supply their own. See [Architecture](architecture.md#3d-globe-view-cesiumjs) for how the globe integrates.
 
 ## Optional runtime mirrors (offline and air-gapped)
 

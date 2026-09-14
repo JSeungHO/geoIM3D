@@ -1254,6 +1254,164 @@ body,
 }
 
 /*
+ * Dimension tools control. Same plain `.maplibregl-ctrl-group` chrome as the
+ * Annotation tools control above, plus the unit and "tie to layer" <select>
+ * elements the Dimension toolbar adds.
+ */
+.geolibre-dimensions-control {
+  --geolibre-dimensions-cell-size: 29px;
+  background-color: hsl(var(--background)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.geolibre-dimensions-control .geolibre-dimensions-tools {
+  display: flex;
+  flex-direction: column;
+}
+
+.geolibre-dimensions-control .geolibre-dimensions-tools[hidden] {
+  display: none;
+}
+
+.geolibre-dimensions-control button {
+  align-items: center;
+  background: transparent;
+  border: none;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  display: flex !important;
+  height: var(--geolibre-dimensions-cell-size);
+  justify-content: center;
+  padding: 0;
+  width: var(--geolibre-dimensions-cell-size);
+}
+
+.geolibre-dimensions-control button > svg {
+  display: block;
+  flex: 0 0 auto;
+  margin: 0 auto;
+}
+
+/* `!important`: MapLibre's own `.maplibregl-ctrl button:not(:disabled):hover`
+ * rule is *more* specific than a plain `.geolibre-dimensions-control button`
+ * rule (two pseudo-classes vs. none), so it otherwise wins outright and
+ * replaces this background with its own low-contrast `rgba(0,0,0,.05)`,
+ * making the icon nearly disappear on hover. */
+.geolibre-dimensions-control button:not(.is-active):hover {
+  background-color: hsl(var(--accent)) !important;
+  color: hsl(var(--accent-foreground)) !important;
+}
+
+.geolibre-dimensions-control button.is-active {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+/* Same fight as above, but for a button that's both active and hovered: the
+ * `:not(.is-active):hover` rule above deliberately excludes `.is-active`
+ * buttons (so hovering an active tool doesn't wash out its highlight color),
+ * but that also means nothing was countering MapLibre's own hover rule for
+ * them, and `.is-active` alone (no `!important`) is not specific enough to
+ * beat it. Confirmed in a real browser: without this, an active tool's solid
+ * `--primary` background reverted to MapLibre's near-transparent black the
+ * moment it was hovered. */
+.geolibre-dimensions-control button.is-active:hover {
+  background-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+}
+
+.geolibre-dimensions-control .geolibre-dimensions-collapse {
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.geolibre-dimensions-control.is-collapsed .geolibre-dimensions-collapse {
+  border-bottom: 0;
+}
+
+.geolibre-dimensions-control .geolibre-dimensions-tools button + button,
+.geolibre-dimensions-control .geolibre-dimensions-width,
+.geolibre-dimensions-control .geolibre-dimensions-color {
+  border-top: 1px solid hsl(var(--border));
+}
+
+.geolibre-dimensions-control .geolibre-dimensions-color {
+  border: none;
+  border-top: 1px solid hsl(var(--border));
+  cursor: pointer;
+  height: 24px;
+  /* Flush against the same left edge the tool icons sit at (they fill the
+   * full `--geolibre-dimensions-cell-size` column width and center their
+   * icon within it), not centered across the toolbar's full width — which
+   * is set by the wider unit `<select>` and made the swatch look adrift. */
+  margin: 2px 0 2px 2.5px;
+  padding: 0;
+  width: 24px;
+}
+
+.geolibre-dimensions-control .geolibre-dimensions-unit {
+  /* Matches @geolibre/ui's own <Input>: transparent fill + a `--input`
+   * border, not a filled surface color. An earlier attempt filled it with
+   * `--secondary`, but that token is nearly as dark as the panel itself in
+   * the dark theme (and in every color theme — only `--primary`/`--accent`
+   * shift with the user's theme choice, not the neutral surface tokens), so
+   * it still read as a stray black box. Transparent + a clearly visible
+   * border is both lighter-weight and what the rest of the app already does
+   * for a form control sitting on a themed surface. */
+  background-color: transparent;
+  border: 1px solid hsl(var(--input));
+  border-radius: 6px;
+  /* `!important`: with `color-scheme: dark` set below, Chromium/WebView2 can
+   * paint the select's own closed-state text (not the open <option> popup,
+   * which renders through a different, CSS-respecting path) from its native
+   * dark-mode "field text" color instead of this declaration, reading as
+   * near-black-on-transparent. Same class of cascade fight as the button
+   * hover fix above, same fix. */
+  color: hsl(var(--foreground)) !important;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  margin: 4px;
+  max-width: 160px;
+  min-width: 110px;
+  padding: 4px 28px 4px 8px;
+  /* Same technique as .maplibre-gl-zarr-layer-select: the native disclosure
+   * arrow's color is unreliable across webviews even with `color-scheme`
+   * set, so replace it with a CSS-drawn chevron tinted from `color`,
+   * guaranteeing it's visible regardless of theme. */
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, hsl(var(--foreground)) 50%),
+    linear-gradient(135deg, hsl(var(--foreground)) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) 50%,
+    calc(100% - 11px) 50%;
+  background-repeat: no-repeat;
+  background-size: 5px 5px;
+}
+
+/* The open <option> popup can't be transparent (it floats over whatever's
+ * behind it, not the toolbar), so give it a real surface: `--popover` /
+ * `--popover-foreground` are the tokens @geolibre/ui's own DropdownMenuContent
+ * uses for this exact floating-menu-surface role, matching the rest of the
+ * app's dropdowns instead of inventing a one-off color here. `color-scheme`
+ * alone is unreliable across webviews for this (see the graticule panel
+ * above), hence the explicit background/color. */
+.geolibre-dimensions-control .geolibre-dimensions-unit option {
+  background: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  font-weight: 500;
+}
+
+.dark .geolibre-dimensions-control .geolibre-dimensions-unit {
+  color-scheme: dark;
+}
+
+/*
  * The Measure, Bookmark and View State controls theme themselves purely via
  * `@media (prefers-color-scheme)`, so they follow the OS preference instead of
  * GeoLibre's in-app light/dark toggle (the `.dark` class on <html>). When the
@@ -1681,6 +1839,18 @@ body,
 
 .dark .geolibre-timelapse-panel select,
 .dark .geolibre-timelapse-panel input {
+  color-scheme: dark;
+}
+
+/* The NLDI panel uses native selects. Theme their option popups explicitly so
+   dropdown text remains visible when the app theme differs from the OS theme. */
+.geolibre-usgs-nldi-panel select option {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.dark .geolibre-usgs-nldi-panel select,
+.dark .geolibre-usgs-nldi-panel input {
   color-scheme: dark;
 }
 
@@ -2301,6 +2471,18 @@ body,
 }
 
 @media (max-width: 767px) {
+  /* Only the legacy Components grid needs a viewport-based fallback. The
+     standalone panels below calculate their own map-relative height limits. */
+  .geolibre-components-control .maplibre-gl-control-grid-floating-panel,
+  .geolibre-components-control .maplibre-gl-control-grid-relocated {
+    max-height: calc(100vh - 96px) !important;
+    max-height: calc(100dvh - 96px) !important;
+    overflow-y: auto;
+  }
+
+  /* Preserve mobile width bounds without overriding map-relative heights.
+     A viewport-based height cap ignores sidebar strips and the status bar,
+     leaving the bottom of these panels' scroll areas clipped. */
   .geolibre-components-control .maplibre-gl-control-grid-floating-panel,
   .geolibre-components-control .maplibre-gl-control-grid-relocated,
   .geolibre-pmtiles-control .maplibre-gl-pmtiles-layer-panel,
@@ -2309,11 +2491,7 @@ body,
   .maplibregl-map .layer-control-panel,
   .duckdb-control-panel {
     box-sizing: border-box;
-    /* 96px clears the mobile top toolbar plus the panel's own top offset */
-    max-height: calc(100vh - 96px) !important;
-    max-height: calc(100dvh - 96px) !important;
     max-width: calc(100vw - 20px) !important;
-    overflow-y: auto;
   }
 
   .duckdb-control-panel {
@@ -2347,7 +2525,8 @@ body,
 
 /* The draggable photo-placement pin's hint popup (manual placement of a
    non-geotagged photo). Themed to match the app's popover surface. */
-.geolibre-placement-popup-root .maplibregl-popup-content {
+.geolibre-placement-popup-root .maplibregl-popup-content,
+.maplibregl-ctrl.geolibre-placement-popup {
   background: hsl(var(--popover));
   border: 1px solid hsl(var(--border));
   border-radius: 0.5rem;
@@ -4154,4 +4333,205 @@ html.dark .maplibregl-popup-anchor-right:has(.vector-control-popup) .maplibregl-
 .geolibre-legend-panel.maplibregl-ctrl input::placeholder,
 .geolibre-legend-panel.maplibregl-ctrl textarea::placeholder {
   color: hsl(var(--muted-foreground)) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * Cesium's toolbar widgets on the globe (`cesium-widget-controls.ts`): the
+ * home button, the scene-mode picker, and the fullscreen button.
+ *
+ * Cesium ships them in its own dark-blue toolbar look — `#303336` on a `#444`
+ * border, a `#48b` hover with a white glow — which reads as a foreign control
+ * next to MapLibre's white buttons, and does so in both themes (GeoLibre keeps
+ * the map chrome white in dark mode too, see the graticule control above).
+ * These rules restyle the chrome to MapLibre's while leaving the widgets' own
+ * SVG icons and expand/collapse behaviour alone.
+ *
+ * Everything is scoped under `.geolibre-cesium-ctrl`, the wrapper the controls
+ * add, so Cesium's other DOM — the credit display, the render-error panel — is
+ * untouched. `29px` and the shadow are MapLibre's own control-button metrics.
+ * ------------------------------------------------------------------------- */
+.geolibre-cesium-ctrl {
+  /* MapLibre's control shadow, so the buttons sit on the map like their
+     neighbours rather than floating flat. */
+  box-shadow: 0 0 0 2px rgb(0 0 0 / 0.1);
+  border-radius: 4px;
+}
+
+.geolibre-cesium-ctrl .cesium-button {
+  background: #fff;
+  border: none;
+  border-radius: 4px;
+  /* `fill`, not `color`: the widgets draw their icons as SVG paths. */
+  fill: #333;
+  margin: 0;
+  padding: 0;
+}
+
+/* Two selectors because the widgets do not agree on a class. The home button
+   and the scene-mode picker are `cesium-toolbar-button`s, which Cesium leaves
+   unsized for a toolbar to place; the fullscreen button is not one, and
+   FullscreenButton.css sizes it to `100%` of a parent it expects `Viewer` to
+   have given a height. Sizing every button here covers both, and the wrapper
+   `<span>` the scene-mode picker nests its button in needs it too — it is not a
+   `<button>`, so the element-qualified selector alone would miss it. */
+.geolibre-cesium-ctrl .cesium-toolbar-button,
+.geolibre-cesium-ctrl button.cesium-button {
+  width: 29px;
+  height: 29px;
+}
+
+/* The scene-mode picker nests its button inside a wrapper `<span>` that
+   SceneModePicker.css gives `margin: 0 3px`. The controls are stacked in a
+   right-aligned corner, so that padding makes the picker's wrapper 6px wider
+   than the home button's and shifts the button itself 3px left of the one above
+   it — a visible misalignment in a vertical toolbar. The buttons are spaced by
+   the `.maplibregl-ctrl` margins already; this padding is pure offset. */
+.geolibre-cesium-ctrl .cesium-sceneModePicker-wrapper {
+  margin: 0;
+}
+
+/* Hover and focus.
+ *
+ * The specificity here is load-bearing, not decoration. MapLibre's own
+ * `.maplibregl-ctrl button:not(:disabled):hover` scores higher than a plain
+ * `.geolibre-cesium-ctrl .cesium-button:hover` (an extra element selector), so
+ * it wins and replaces the white background with its `rgba(0, 0, 0, .05)`.
+ * That colour is *translucent*: on the light 2D map it reads as a faint grey,
+ * but here it lets the globe show straight through the button, which over a
+ * night-side globe or dark imagery leaves a dark icon on a near-black square.
+ * Matching MapLibre's selector shape (`button` + `:not(:disabled)`) and adding
+ * the scoping class outranks it without reaching for `!important`. */
+/* Cesium's focused icon is white; keep it legible after pointer clicks. */
+.geolibre-cesium-ctrl button.cesium-button:not(:disabled):focus {
+  background: #fff;
+  border: none;
+  box-shadow: none;
+  fill: #333;
+  outline: none;
+}
+
+.geolibre-cesium-ctrl button.cesium-button:not(:disabled):hover {
+  background: #dbeafe;
+  border: none;
+  box-shadow: inset 0 0 0 2px #60a5fa;
+  fill: #1e40af;
+}
+
+.geolibre-cesium-ctrl button.cesium-button:not(:disabled):focus-visible {
+  outline: 2px solid #0096ff;
+  outline-offset: 2px;
+}
+
+.geolibre-cesium-ctrl button.cesium-button:not(:disabled):active {
+  background: #bfdbfe;
+  box-shadow: inset 0 0 0 2px #2563eb;
+  fill: #1e3a8a;
+}
+
+/* A disabled Cesium button (the fullscreen one, where the browser forbids
+   fullscreen) keeps Cesium's dark palette otherwise. */
+.geolibre-cesium-ctrl button.cesium-button:disabled {
+  background: #fff;
+  border: none;
+  box-shadow: none;
+  fill: #b0b0b0;
+}
+
+/* Expand left into the map instead of down over the fullscreen button.
+   Keep the wrapper one button wide so opening it never shifts the toolbar.
+   Flex lays out only the visible alternatives, regardless of the selected mode. */
+.geolibre-cesium-ctrl .cesium-sceneModePicker-wrapper {
+  display: inline-flex;
+  flex-direction: row-reverse;
+  gap: 6px;
+}
+
+.geolibre-cesium-ctrl .cesium-sceneModePicker-wrapper .cesium-button {
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.geolibre-cesium-ctrl .cesium-sceneModePicker-dropDown-icon {
+  box-shadow: 0 0 0 2px rgb(0 0 0 / 0.1);
+}
+
+.geolibre-cesium-ctrl-expands {
+  position: relative;
+  z-index: 1;
+}
+
+.geolibre-cesium-ctrl .cesium-sceneModePicker-hidden {
+  display: none;
+}
+
+/* The native basemap gallery opens beside the Cesium toolbar and stays inside
+   the map, including short split panes and fullscreen layouts. */
+.geolibre-cesium-basemap-picker {
+  position: relative;
+  z-index: 3;
+}
+
+.geolibre-cesium-basemap-picker button.cesium-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.geolibre-cesium-basemap-picker .cesium-baseLayerPicker-dropDown {
+  top: 0;
+  right: 39px;
+  margin-top: 0;
+  width: min(320px, calc(100vw - 90px));
+  max-height: min(500px, var(--cesium-picker-height, 60vh));
+  background: hsl(var(--popover) / 0.97);
+  font-family: var(--font-sans);
+  line-height: 1.35;
+  color: hsl(var(--popover-foreground));
+  border-color: hsl(var(--border));
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.2);
+}
+
+.geolibre-cesium-basemap-picker .cesium-baseLayerPicker-sectionTitle,
+.geolibre-cesium-basemap-picker .cesium-baseLayerPicker-categoryTitle,
+.geolibre-cesium-basemap-picker .cesium-baseLayerPicker-itemLabel {
+  color: inherit;
+  font-family: inherit;
+}
+
+.geolibre-cesium-basemap-picker .cesium-baseLayerPicker-choices {
+  border-color: hsl(var(--border));
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 8px;
+}
+
+.geolibre-cesium-basemap-picker .cesium-baseLayerPicker-item {
+  width: 100%;
+  margin: 0;
+}
+
+.geolibre-cesium-basemap-picker
+  .cesium-baseLayerPicker-selectedItem
+  .cesium-baseLayerPicker-itemIcon {
+  border-color: hsl(var(--primary));
+}
+
+.geolibre-cesium-basemap-picker .cesium-baseLayerPicker-item:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.geolibre-cesium-basemap-picker .cesium-baseLayerPicker-itemIcon {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.geolibre-cesium-basemap-picker
+  .cesium-baseLayerPicker-selectedItem
+  .cesium-baseLayerPicker-itemLabel {
+  color: hsl(var(--primary));
+  font-weight: 600;
 }

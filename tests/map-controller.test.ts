@@ -34,6 +34,10 @@ interface FakeMap {
   calls: { method: string; args: unknown[] }[];
   setDataCalls: { id: string; data: unknown }[];
   queueRenderedFeatures: (features: unknown[]) => void;
+  /** Move the camera without firing anything, as a jump before a sync would. */
+  setZoom: (zoom: number) => void;
+  /** Fire a map event at every handler the controller registered for it. */
+  emit: (event: string) => void;
 }
 
 /**
@@ -54,7 +58,9 @@ function makeFakeMap(initialBasemapLayers: string[] = ["basemap-bg"]): {
   const calls: { method: string; args: unknown[] }[] = [];
   const setDataCalls: { id: string; data: unknown }[] = [];
   const images = new Set<string>();
+  const handlers = new Map<string, Set<(event: unknown) => void>>();
   let pendingRenderedFeatures: unknown[] = [];
+  let zoom = 4;
 
   for (const id of initialBasemapLayers) {
     // Background layers participate in basemap visibility/opacity sync.
@@ -176,7 +182,7 @@ function makeFakeMap(initialBasemapLayers: string[] = ["basemap-bg"]): {
       getEast: () => -80,
       getNorth: () => 50,
     }),
-    getZoom: () => 4,
+    getZoom: () => zoom,
     getBearing: () => 0,
     getPitch: () => 0,
     getProjection: () => ({ type: "mercator" }),
@@ -195,8 +201,14 @@ function makeFakeMap(initialBasemapLayers: string[] = ["basemap-bg"]): {
     addControl: record("addControl"),
     removeControl: record("removeControl"),
     once: () => {},
-    on: () => {},
-    off: () => {},
+    on: (event: string, handler: (event: unknown) => void) => {
+      const existing = handlers.get(event) ?? new Set();
+      existing.add(handler);
+      handlers.set(event, existing);
+    },
+    off: (event: string, handler: (event: unknown) => void) => {
+      handlers.get(event)?.delete(handler);
+    },
   };
 
   const fake: FakeMap = {
@@ -207,6 +219,12 @@ function makeFakeMap(initialBasemapLayers: string[] = ["basemap-bg"]): {
     setDataCalls,
     queueRenderedFeatures: (features) => {
       pendingRenderedFeatures = features;
+    },
+    setZoom: (next) => {
+      zoom = next;
+    },
+    emit: (event) => {
+      for (const handler of [...(handlers.get(event) ?? [])]) handler({ type: event });
     },
   };
   return { map, fake };
@@ -533,6 +551,234 @@ describe("MapController.syncLayers reconciliation", () => {
     );
   });
 
+  it("filters inline point data before building clusters", () => {
+    const { map, fake } = makeFakeMap();
+    const controller = controllerWith(map);
+    const layer = pointLayer(
+      "filtered-clusters",
+      { filterExpression: ["==", ["get", "continent"], "Europe"] },
+      { pointRenderer: "cluster" },
+    );
+    layer.geojson = {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: { continent: "Europe" },
+          geometry: { type: "Point", coordinates: [0, 0] },
+        },
+        {
+          type: "Feature",
+          properties: { continent: "Asia" },
+          geometry: { type: "Point", coordinates: [100, 0] },
+        },
+      ],
+    };
+
+    controller.syncLayers([layer]);
+
+    const data = fake.sources.get(srcId(layer.id))?.data as GeoJSON.FeatureCollection;
+    assert.deepEqual(
+      data.features.map((feature) => feature.properties?.continent),
+      ["Europe"],
+    );
+  });
+
+  it("reuses the clustered filter result and re-derives it when the filter changes", () => {
+    const { map, fake } = makeFakeMap();
+    const controller = controllerWith(map);
+    const geojson: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: { continent: "Europe" },
+          geometry: { type: "Point", coordinates: [0, 0] },
+        },
+        {
+          type: "Feature",
+          properties: { continent: "Asia" },
+          geometry: { type: "Point", coordinates: [100, 0] },
+        },
+      ],
+    };
+    const filteredBy = (continent: string) => {
+      const layer = pointLayer(
+        "cluster-cache",
+        { filterExpression: ["==", ["get", "continent"], continent] },
+        { pointRenderer: "cluster" },
+      );
+      layer.geojson = geojson;
+      return layer;
+    };
+    const sourceData = () =>
+      fake.sources.get(srcId("cluster-cache"))?.data as GeoJSON.FeatureCollection;
+    const continents = () => sourceData().features.map((f) => f.properties?.continent);
+
+    controller.syncLayers([filteredBy("Europe")]);
+    const first = sourceData();
+    controller.syncLayers([filteredBy("Europe")]);
+    assert.equal(sourceData(), first, "an unchanged filter keeps a stable data reference");
+
+    // Only the current filter is cached, so switching away and back must
+    // re-derive the result rather than serve a stale or missing entry.
+    controller.syncLayers([filteredBy("Asia")]);
+    assert.deepEqual(continents(), ["Asia"]);
+    controller.syncLayers([filteredBy("Europe")]);
+    assert.deepEqual(continents(), ["Europe"]);
+  });
+
+  it("re-derives a zoom-dependent clustered filter as the camera moves", () => {
+    const { map, fake } = makeFakeMap();
+    const controller = controllerWith(map);
+    const geojson: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: { name: "a" },
+          geometry: { type: "Point", coordinates: [0, 0] },
+        },
+        {
+          type: "Feature",
+          properties: { name: "b" },
+          geometry: { type: "Point", coordinates: [10, 0] },
+        },
+      ],
+    };
+    // MapLibre clusters at the source, so this filter is applied to the source
+    // data rather than by the renderer: nothing re-evaluates it against the
+    // live camera unless the controller resyncs.
+    const layer = pointLayer(
+      "zoom-clusters",
+      { filterExpression: [">=", ["zoom"], 8] },
+      { pointRenderer: "cluster" },
+    );
+    layer.geojson = geojson;
+    const featureCount = () =>
+      (fake.sources.get(srcId("zoom-clusters"))?.data as GeoJSON.FeatureCollection).features.length;
+
+    fake.setZoom(4);
+    controller.syncLayers([layer]);
+    assert.equal(featureCount(), 0, "below the threshold the filter hides both points");
+
+    fake.setZoom(10);
+    fake.emit("zoomend");
+    assert.equal(featureCount(), 2, "crossing the threshold brings them back");
+
+    fake.setZoom(3);
+    fake.emit("zoomend");
+    assert.equal(featureCount(), 0, "and crossing back hides them again");
+  });
+
+  it("leaves no zoom listener behind for a filter that does not read the zoom", () => {
+    const { map, fake } = makeFakeMap();
+    const controller = controllerWith(map);
+    const clustered = (patch: Partial<GeoLibreLayer>) => {
+      const layer = pointLayer("plain-clusters", patch, { pointRenderer: "cluster" });
+      layer.geojson = {
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            properties: { keep: true },
+            geometry: { type: "Point", coordinates: [0, 0] },
+          },
+        ],
+      };
+      return layer;
+    };
+
+    controller.syncLayers([clustered({ filterExpression: ["==", ["get", "keep"], true] })]);
+    const before = fake.calls.length;
+    fake.emit("zoomend");
+    assert.equal(fake.calls.length, before, "no resync for a zoom-independent filter");
+
+    // Adding one attaches the listener; dropping it again detaches.
+    controller.syncLayers([clustered({ filterExpression: [">=", ["zoom"], 8] })]);
+    fake.setZoom(9);
+    fake.emit("zoomend");
+    assert.ok(fake.calls.length > before, "a zoom-dependent filter resyncs");
+
+    controller.syncLayers([clustered({ filterExpression: ["==", ["get", "keep"], true] })]);
+    const settled = fake.calls.length;
+    fake.emit("zoomend");
+    assert.equal(fake.calls.length, settled, "listener detached with the filter");
+  });
+
+  it("applies a restored layer filter once the vector control creates its layers", () => {
+    const { map, fake } = makeFakeMap();
+    const controller = controllerWith(map);
+    const filterExpression = ["==", ["get", "CONTINENT"], "Europe"];
+    const layer = controlVectorLayer("countries", { filterExpression });
+    const fillId = "countries-fill";
+
+    // Reopening a project: the store carries the saved layer, but the control
+    // has not replayed the file yet, so its native layers are not on the map.
+    controller.syncLayers([layer]);
+    assert.equal(fake.layers.has(fillId), false, "control has not added its layers yet");
+    assert.equal(
+      fake.calls.some((call) => call.method === "setFilter"),
+      false,
+      "nothing to filter yet",
+    );
+
+    // The control finishes loading and adds them. It reproduces the saved store
+    // layer exactly, so no store change follows to trigger another sync.
+    fake.layers.set(fillId, { id: fillId, type: "fill", paint: {} });
+    fake.layers.set("countries-outline", { id: "countries-outline", type: "line", paint: {} });
+    fake.emit("styledata");
+
+    const filterCalls = fake.calls.filter((call) => call.method === "setFilter");
+    assert.deepEqual(
+      filterCalls.map((call) => call.args),
+      [
+        [fillId, filterExpression],
+        ["countries-outline", filterExpression],
+      ],
+      "the persisted filter reaches every layer the control created",
+    );
+  });
+
+  it("waits for every native layer before resyncing pending filters", () => {
+    const { map, fake } = makeFakeMap();
+    const controller = controllerWith(map);
+    const layer = controlVectorLayer("countries", {
+      filterExpression: ["==", ["get", "CONTINENT"], "Europe"],
+    });
+
+    controller.syncLayers([layer]);
+    // Only half the control's layers have arrived: a sync now would filter one
+    // and leave the other unfiltered, so it must hold.
+    fake.layers.set("countries-fill", { id: "countries-fill", type: "fill", paint: {} });
+    fake.emit("styledata");
+    assert.equal(
+      fake.calls.some((call) => call.method === "setFilter"),
+      false,
+      "held until the layer set is complete",
+    );
+
+    fake.layers.set("countries-outline", { id: "countries-outline", type: "line", paint: {} });
+    fake.emit("styledata");
+    assert.equal(
+      fake.calls.filter((call) => call.method === "setFilter").length,
+      2,
+      "both native layers filtered",
+    );
+  });
+
+  it("attaches no pending-filter listener for an unfiltered control layer", () => {
+    const { map, fake } = makeFakeMap();
+    const controller = controllerWith(map);
+
+    controller.syncLayers([controlVectorLayer("countries")]);
+    const before = fake.calls.length;
+    fake.layers.set("countries-fill", { id: "countries-fill", type: "fill", paint: {} });
+    fake.emit("styledata");
+
+    assert.equal(fake.calls.length, before, "no resync without a filter to apply");
+  });
+
   it("applies a visibility toggle as a layout property", () => {
     const { map, fake } = makeFakeMap();
     const controller = controllerWith(map);
@@ -741,6 +987,21 @@ describe("MapController.syncLayers vector-tile time filtering", () => {
       "all",
       ["match", ["geometry-type"], ["Point", "MultiPoint"], true, false],
       timeFilter,
+    ]);
+  });
+
+  it("combines a persistent expression filter with transient filters", () => {
+    const { map, fake } = makeFakeMap();
+    const controller = controllerWith(map);
+    const filterExpression = ["==", ["get", "status"], "open"];
+
+    controller.syncLayers([vectorTileLayer("vt", { timeFilter, filterExpression })]);
+
+    assert.deepEqual(fake.layers.get("layer-vt-vector")?.filter, [
+      "all",
+      POLYGON_GEOMETRY_FILTER,
+      timeFilter,
+      filterExpression,
     ]);
   });
 
@@ -1715,6 +1976,92 @@ describe("MapController story-map layer helpers", () => {
     const paint = fake.layers.get("pc-1")?.paint as Record<string, unknown>;
     assert.equal(paint["raster-opacity"], 0.4);
     assert.equal(paint["raster-opacity-transition"], undefined);
+  });
+
+  // A polygon layer whose style draws centroids through the geometry
+  // generator: the companion circle layer is internal (not a candidate style
+  // layer) yet must still follow story fades (discussion #2326).
+  function centroidPolygonLayer(id: string, style: Partial<LayerStyle> = {}): GeoLibreLayer {
+    return pointLayer(
+      id,
+      {
+        geojson: {
+          type: "FeatureCollection",
+          features: [
+            {
+              type: "Feature",
+              properties: {},
+              geometry: {
+                type: "Polygon",
+                coordinates: [
+                  [
+                    [0, 0],
+                    [1, 0],
+                    [1, 1],
+                    [0, 1],
+                    [0, 0],
+                  ],
+                ],
+              },
+            },
+          ],
+        },
+      },
+      { geometryGenerator: "centroid", geometryGeneratorOpacity: 0.5, ...style },
+    );
+  }
+
+  it("setStoryLayerOpacity fades geometry-generator companion layers with the layer", () => {
+    const { map, fake } = makeFakeMap();
+    const controller = controllerWith(map);
+    controller.syncLayers([centroidPolygonLayer("a")]);
+    assert.ok(fake.layers.get("layer-a-generator-circle"), "centroid layer synced");
+
+    controller.setStoryLayerOpacity("a", 0, 400);
+
+    const paint = fake.layers.get("layer-a-generator-circle")?.paint as Record<string, unknown>;
+    assert.equal(paint["circle-opacity"], 0);
+    assert.equal(paint["circle-stroke-opacity"], 0);
+    assert.deepEqual(paint["circle-opacity-transition"], { duration: 400 });
+    // The primary fill still fades too.
+    const fill = fake.layers.get("layer-a-fill")?.paint as Record<string, unknown>;
+    assert.equal(fill["fill-opacity"], 0);
+  });
+
+  it("setStoryLayerOpacity keeps the generator's own translucency when fading back in", () => {
+    const { map, fake } = makeFakeMap();
+    const controller = controllerWith(map);
+    controller.syncLayers([centroidPolygonLayer("a")]);
+
+    controller.setStoryLayerOpacity("a", 1);
+
+    const paint = fake.layers.get("layer-a-generator-circle")?.paint as Record<string, unknown>;
+    // circle-opacity = story opacity x geometryGeneratorOpacity; the stroke
+    // follows the plain layer opacity, as in applyGeometryGeneratorLayers.
+    assert.equal(paint["circle-opacity"], 0.5);
+    assert.equal(paint["circle-stroke-opacity"], 1);
+  });
+
+  it("restoreLayerStyles clears companion-layer transitions before re-syncing", () => {
+    const { map, fake } = makeFakeMap();
+    // restoreLayerStyles halts any in-flight story camera move first.
+    (map as unknown as { stop: () => void }).stop = () => {};
+    const controller = controllerWith(map);
+    controller.syncLayers([centroidPolygonLayer("a")]);
+    controller.setStoryLayerOpacity("a", 0, 3000);
+
+    controller.restoreLayerStyles();
+
+    const transition = fake.calls.find(
+      (c) =>
+        c.method === "setPaintProperty" &&
+        c.args[0] === "layer-a-generator-circle" &&
+        c.args[1] === "circle-opacity-transition" &&
+        JSON.stringify(c.args[2]) === JSON.stringify({ duration: 0 }),
+    );
+    assert.ok(transition, "companion transition reset to 0 so the restore does not animate");
+    const paint = fake.layers.get("layer-a-generator-circle")?.paint as Record<string, unknown>;
+    assert.equal(paint["circle-opacity"], 0.5);
   });
 });
 

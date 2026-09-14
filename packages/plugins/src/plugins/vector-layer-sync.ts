@@ -11,9 +11,13 @@ import {
   type LayerStyle,
   type VectorColorValue,
   useAppStore,
+  documentLocale,
+  resolveLabelNumberLocale,
 } from "@geolibre/core";
+import type { FeatureCollection } from "geojson";
 import type { PropertyValueSpecification } from "maplibre-gl";
 import type { VectorLayerInfo, VectorLayerOptions, VectorLayerStyle } from "maplibre-gl-vector";
+import { stacAssetAccessFromLayer, STAC_ASSET_ACCESS_METADATA_KEY } from "./stac-signing";
 
 export const VECTOR_SOURCE_KIND = "maplibre-gl-vector";
 
@@ -36,6 +40,19 @@ export type VectorSyncableControl = {
   setLayerVisibility: (id: string, visible: boolean) => void;
   setLayerStyle: (id: string, style: Partial<VectorLayerStyle>) => void;
 };
+
+const geometryReaders = new WeakMap<
+  VectorSyncableControl,
+  (info: VectorLayerInfo) => FeatureCollection | undefined
+>();
+
+/** Register the geometry backing a control rendered by a non-MapLibre engine. */
+export function setVectorGeometryReader(
+  control: VectorSyncableControl,
+  reader: (info: VectorLayerInfo) => FeatureCollection | undefined,
+): void {
+  geometryReaders.set(control, reader);
+}
 
 let syncedControl: VectorSyncableControl | null = null;
 let storeUnsubscribe: (() => void) | null = null;
@@ -245,6 +262,16 @@ export function syncVectorLayersToStore(
 
     for (const info of infos) {
       const layer = createVectorStoreLayer(info, panelCollapsed);
+      const geometryReader = geometryReaders.get(control);
+      if (geometryReader) {
+        layer.geojson = geometryReader(info);
+        // The globe draws the collection itself, so a tiled record takes the
+        // GeoJSON path: the drape never creates the control's DuckDB source.
+        if (layer.geojson) {
+          layer.type = "geojson";
+          layer.source = { ...layer.source, type: "geojson" };
+        }
+      }
       const existing = useAppStore.getState().layers.find((current) => current.id === layer.id);
 
       if (!existing) {
@@ -262,26 +289,57 @@ export function syncVectorLayersToStore(
         known?.opacity !== undefined && numbersEqual(layer.opacity, known.opacity);
       const visible = visibleIsEcho ? existing.visible : layer.visible;
       const opacity = opacityIsEcho ? existing.opacity : layer.opacity;
+      const sourceUrl = typeof layer.source.url === "string" ? layer.source.url : undefined;
+      const stacAssetAccess = sourceUrl ? stacAssetAccessFromLayer(existing, sourceUrl) : null;
+      let metadata = stacAssetAccess
+        ? { ...layer.metadata, [STAC_ASSET_ACCESS_METADATA_KEY]: stacAssetAccess }
+        : layer.metadata;
+      const style = geometryReader
+        ? { ...existing.style, ...vectorStyleToLayerStyle(info) }
+        : existing.style;
+      const source = stacAssetAccess
+        ? { ...layer.source, url: stacAssetAccess.href }
+        : layer.source;
+      const sourcePath = stacAssetAccess ? stacAssetAccess.href : layer.sourcePath;
+      // Render-mode changes keep the same data, but a replacement URL, file,
+      // or source kind must not inherit the previous source's edited snapshot.
+      const sourceChanged =
+        existing.source.url !== source.url ||
+        existing.sourcePath !== sourcePath ||
+        existing.metadata.vectorSource !== metadata.vectorSource;
+      if (!sourceChanged && existing.metadata.geometryEdited === true) {
+        metadata = { ...metadata, geometryEdited: true };
+      }
 
       if (
         existing.type !== layer.type ||
+        (geometryReader &&
+          (existing.geojson !== layer.geojson ||
+            !recordsEqual({ ...existing.style }, { ...style }))) ||
         existing.visible !== visible ||
         existing.opacity !== opacity ||
-        existing.sourcePath !== layer.sourcePath ||
-        !recordsEqual(existing.source, layer.source) ||
-        !recordsEqual(existing.metadata, layer.metadata)
+        existing.sourcePath !== sourcePath ||
+        !recordsEqual(existing.source, source) ||
+        !recordsEqual(existing.metadata, metadata)
       ) {
         useAppStore.getState().updateLayer(layer.id, {
-          // Replace metadata wholesale so stale keys (bounds, featureCount,
-          // and any embeddedGeoJSON loaded from the project) cannot survive a
-          // layer being swapped out under the same id. embeddedGeoJSON is not
-          // kept live: the web Save flow re-materializes it fresh from the
-          // control (getLayerGeoJSON), so a reopened layer drops its loaded
-          // blob here and re-embeds current data on the next save.
-          metadata: layer.metadata,
+          // Replace control-derived metadata wholesale so stale keys (bounds,
+          // featureCount, and loaded embeddedGeoJSON) cannot survive a layer
+          // being swapped out under the same id. Preserve the host-owned geometry
+          // edit flag and STAC access record so edits survive synchronization
+          // and protected URLs can be re-signed.
+          // The web Save flow re-materializes embeddedGeoJSON fresh from the
+          // control (getLayerGeoJSON), so it intentionally is not preserved.
+          metadata,
+          ...(geometryReader ? { style } : {}),
+          ...(geometryReader
+            ? { geojson: layer.geojson }
+            : sourceChanged
+              ? { geojson: undefined }
+              : {}),
           opacity,
-          source: layer.source,
-          sourcePath: layer.sourcePath,
+          source,
+          sourcePath,
           // A render-mode switch in the panel flips geojson <-> vector-tiles.
           type: layer.type,
           visible,
@@ -678,6 +736,24 @@ function savedVectorStyle(raw: unknown): Partial<VectorLayerStyle> | null {
   if (typeof candidate.labelAllowOverlap === "boolean") {
     style.labelAllowOverlap = candidate.labelAllowOverlap;
   }
+  if (typeof candidate.labelNumberFormat === "boolean") {
+    style.labelNumberFormat = candidate.labelNumberFormat;
+  }
+  // Same 0-10 integer range the control and LabelStyle both clamp to, so a
+  // hand-edited project cannot restore a fractional or out-of-range precision.
+  if (
+    typeof candidate.labelNumberDecimals === "number" &&
+    Number.isInteger(candidate.labelNumberDecimals) &&
+    candidate.labelNumberDecimals >= 0 &&
+    candidate.labelNumberDecimals <= 10
+  ) {
+    style.labelNumberDecimals = candidate.labelNumberDecimals;
+  }
+  // Length-capped like the field name; the renderer validates the tag itself
+  // and falls back when Intl rejects it or the map cannot draw its separators.
+  if (typeof candidate.labelNumberLocale === "string" && candidate.labelNumberLocale.length <= 35) {
+    style.labelNumberLocale = candidate.labelNumberLocale;
+  }
 
   return Object.keys(style).length > 0 ? style : null;
 }
@@ -745,7 +821,7 @@ function layerStyleToVectorStyle(style: LayerStyle): VectorLayerStyle {
     // an empty labelField clears it.
     //
     // Only field-based labeling is wired here. LabelStyle.expression,
-    // .minZoom, and .maxZoom have no maplibre-gl-vector@0.8.0 equivalent, so
+    // .minZoom, and .maxZoom have no maplibre-gl-vector equivalent, so
     // they are intentionally left out of this mapping, out of vectorStylesEqual,
     // and out of savedVectorStyle. The shared Style panel still shows those
     // controls, but for a control-managed layer they are no-ops; adding them
@@ -758,6 +834,13 @@ function layerStyleToVectorStyle(style: LayerStyle): VectorLayerStyle {
     labelHaloWidth: style.labels.haloWidth,
     labelPlacement: style.labels.placement,
     labelAllowOverlap: style.labels.allowOverlap,
+    labelNumberFormat: style.labels.numberFormatEnabled,
+    labelNumberDecimals: style.labels.numberDecimals,
+    // Resolve the "match app language" sentinel here rather than pushing the
+    // empty string: the control would hand "" to Intl as the runtime default,
+    // which is the browser's locale, not GeoLibre's UI language. layer-sync
+    // resolves it the same way for its own layers, so both paths agree.
+    labelNumberLocale: resolveLabelNumberLocale(style.labels.numberLocale, documentLocale()) ?? "",
   };
 }
 
@@ -837,6 +920,18 @@ function vectorStyleToLayerStyle(info: VectorLayerInfo): Partial<LayerStyle> {
         typeof style.labelHaloWidth === "number" ? style.labelHaloWidth : defaults.haloWidth,
       placement: style.labelPlacement === "line" ? "line" : "point",
       allowOverlap: style.labelAllowOverlap ?? defaults.allowOverlap,
+      numberFormatEnabled: style.labelNumberFormat ?? defaults.numberFormatEnabled,
+      // Range-checked like labelSize above: the control's snapshot is untrusted
+      // input here (it can come from a hand-edited project), and a fractional,
+      // negative or huge precision would otherwise reach LabelStyle.
+      numberDecimals:
+        typeof style.labelNumberDecimals === "number" &&
+        Number.isInteger(style.labelNumberDecimals) &&
+        style.labelNumberDecimals >= 0 &&
+        style.labelNumberDecimals <= 10
+          ? style.labelNumberDecimals
+          : defaults.numberDecimals,
+      numberLocale: style.labelNumberLocale ?? defaults.numberLocale,
     };
   }
 
@@ -891,7 +986,10 @@ function vectorStylesEqual(left: VectorLayerStyle, right: VectorLayerStyle): boo
     left.labelHaloColor === right.labelHaloColor &&
     left.labelHaloWidth === right.labelHaloWidth &&
     left.labelPlacement === right.labelPlacement &&
-    left.labelAllowOverlap === right.labelAllowOverlap
+    left.labelAllowOverlap === right.labelAllowOverlap &&
+    left.labelNumberFormat === right.labelNumberFormat &&
+    left.labelNumberDecimals === right.labelNumberDecimals &&
+    left.labelNumberLocale === right.labelNumberLocale
   );
 }
 

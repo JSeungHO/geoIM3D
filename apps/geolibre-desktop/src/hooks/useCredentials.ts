@@ -1,12 +1,10 @@
 import {
   registerVWorldProtocol,
-  resolveVWorldProtocolUrl,
   setDataGoKrServiceKey,
   setKmaApiKey,
   setVWorldApiKey,
   setVWorldDomain,
 } from "@geolibre/plugins";
-import { setCesiumTileUrlResolver } from "@geolibre/map";
 import { installKoreanApiTransports } from "../lib/kr-api-transport";
 import { useEffect } from "react";
 import { create } from "zustand";
@@ -174,10 +172,6 @@ export function useCredentials(): boolean {
     // be installed first: the protocol handler uses it for every tile request.
     installKoreanApiTransports();
     registerVWorldProtocol();
-    // The globe has no protocol registry of its own, so it is given the same
-    // resolver the MapLibre protocol uses. Without it a VWorld basemap or
-    // thematic layer draws on the 2D map and shows nothing on the Cesium pane.
-    setCesiumTileUrlResolver(resolveVWorldProtocolUrl);
   }, [load]);
 
   useEffect(() => {

@@ -2,7 +2,6 @@ import { normalizeModelGraph, useAppStore } from "@geolibre/core";
 import {
   ALGORITHMS,
   VECTOR_TOOLS,
-  H3_TOOLS,
   STATISTICS_TOOLS,
   fetchRemoteWhiteboxCatalogSnapshot,
   listWasmToolManifests,
@@ -18,10 +17,10 @@ import {
 import { SKETCHES_SOURCE_KIND, addRasterToMap } from "@geolibre/plugins";
 import type { Feature, FeatureCollection } from "geojson";
 import type { RefObject } from "react";
-import type { MapController } from "@geolibre/map";
+import type { MapEngine } from "@geolibre/map";
 import { isTiff } from "./binary-output";
 import { beginProcessingRun } from "../processing-history";
-import { captureMapImage } from "../print-layout-export";
+import { imageBlobToDataUrl } from "@geolibre/map";
 import { styleParamPatch } from "./style-params";
 import { parameterKind } from "../whitebox-param-kind";
 import { canUseLayerForParameter, fetchLayerBytes } from "../whitebox-layer-inputs";
@@ -41,7 +40,7 @@ export type ScriptingHandlers = Record<string, ScriptingHandler>;
 
 export interface ScriptingDeps {
   /** Lazily resolve the live map controller (it is created asynchronously). */
-  getController: () => MapController | null;
+  getController: () => MapEngine | null;
 }
 
 /**
@@ -59,7 +58,7 @@ export interface ScriptingDeps {
  * @returns The id of the added layer.
  */
 function addWhiteboxRasterOutput(
-  getController: () => MapController | null,
+  getController: () => MapEngine | null,
   bytes: Uint8Array,
   name: string,
   fileName: string,
@@ -70,7 +69,7 @@ function addWhiteboxRasterOutput(
     get current() {
       return getController();
     },
-  } as RefObject<MapController | null>;
+  } as RefObject<MapEngine | null>;
   const file = new File([bytes as BlobPart], fileName, { type: "image/tiff" });
   return addRasterToMap(createAppAPI(controllerRef), file, { name });
 }
@@ -107,7 +106,7 @@ async function whiteboxTools(): Promise<WhiteboxTool[]> {
  * "Copy as Python" eligibility can never drift from what actually runs.
  */
 export function allAlgorithms(): ProcessingAlgorithm[] {
-  return [...ALGORITHMS, ...VECTOR_TOOLS, ...H3_TOOLS, ...STATISTICS_TOOLS];
+  return [...ALGORITHMS, ...VECTOR_TOOLS, ...STATISTICS_TOOLS];
 }
 
 /** Validate a required string `layerId` param, with a clear error if missing. */
@@ -134,7 +133,7 @@ export function createScriptingHandlers(deps: ScriptingDeps): ScriptingHandlers 
     getCenter: () => getController()?.readView().center ?? null,
     getBounds: () => getController()?.readView().bbox ?? null,
     flyTo: (params) => {
-      getController()?.flyTo(params as Parameters<MapController["flyTo"]>[0]);
+      getController()?.flyTo(params as Parameters<MapEngine["flyTo"]>[0]);
       return null;
     },
     fitBounds: (params) => {
@@ -307,10 +306,12 @@ export function createScriptingHandlers(deps: ScriptingDeps): ScriptingHandlers 
           },
           duckdb: createDuckDbCapability(),
           viewportBounds: () => {
-            const map = getController()?.getMap();
-            if (!map) return null;
-            const b = map.getBounds();
-            return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+            // `readView().bbox`, not `map.getBounds()`: the extent is a camera
+            // fact every engine reports, and the MapLibre escape hatch is null
+            // on the globe — which would have made every bounds-aware algorithm
+            // silently see "no viewport" there (#2268 review).
+            const view = getController()?.readView();
+            return view?.bbox ?? null;
           },
         };
         await algo.run(ctx);
@@ -516,14 +517,10 @@ export function createScriptingHandlers(deps: ScriptingDeps): ScriptingHandlers 
     },
 
     // -- export -------------------------------------------------------------
-    toImage: () => {
-      const map = getController()?.getMap();
-      if (!map) throw new Error("The map is not ready yet");
-      // toDataURL is a synchronous PNG encode (100-400ms on a large/high-DPI
-      // viewport). In the in-app console (main thread) this briefly freezes the
-      // UI, so callers should avoid it in tight loops; the notebook path hides
-      // this behind the postMessage round-trip.
-      return captureMapImage(map).image.toDataURL("image/png");
+    toImage: async () => {
+      const engine = getController();
+      if (!engine) throw new Error("The map is not ready yet");
+      return imageBlobToDataUrl(await engine.captureImage());
     },
   };
   return handlers;

@@ -276,6 +276,10 @@
         "label": "WMS लेयर जोड़ें",
         "description": "एक WMS GetMap सेवा को टाइल्ड रास्टर लेयर के रूप में जोड़ें।"
       },
+      "csw": {
+        "label": "CSW कैटलॉग खोजें",
+        "description": "किसी OGC कैटलॉग सेवा में डेटासेट खोजें और समर्थित वेब संसाधनों को मानचित्र में जोड़ें।"
+      },
       "wfs": {
         "label": "WFS लेयर जोड़ें",
         "description": "GetFeature सेवा से GeoJSON का अनुरोध करके WFS फ़ीचर जोड़ें।"
@@ -343,6 +347,18 @@
       "polyline": {
         "label": "एन्कोडेड पॉलीलाइन लेयर जोड़ें",
         "description": "एन्कोडेड पॉलीलाइन स्ट्रिंग (Google, OSRM, Valhalla) को टेक्स्ट या फ़ाइलों से वेक्टर लाइनों के रूप में आयात करें।"
+      },
+      "cesiumIon": {
+        "label": "Cesium Ion एसेट जोड़ें",
+        "description": "एसेट id द्वारा Cesium Ion से 3D Tiles टाइलसेट या इमेजरी जोड़ें। आपके Cesium Ion टोकन के साथ 3D ग्लोब पर रेंडर होता है।"
+      },
+      "czml": {
+        "label": "CZML डायनामिक 3D लेयर जोड़ें",
+        "description": "ग्लोब पर कक्षाओं, प्रक्षेप-पथों, वाहन मार्गों और समय के साथ बदलते 3D दृश्यों का वर्णन करने वाला डायनामिक Cesium Language (CZML) दस्तावेज़ लोड करें।"
+      },
+      "kml": {
+        "label": "KML / KMZ",
+        "description": "ग्लोब पर मूल शैलियों, ओवरले और नेटवर्क लिंक के साथ KML या KMZ लोड करें।"
       }
     },
     "shared": {
@@ -400,6 +416,37 @@
       "importedWithDropped_one": "{{count}} सेवा आयात की गई ({{dropped}} छोड़ी गई — लाइब्रेरी भर गई)।",
       "importedWithDropped_other": "{{count}} सेवाएँ आयात की गईं ({{dropped}} छोड़ी गईं — लाइब्रेरी भर गई)।"
     },
+    "cesiumIon": {
+      "defaultName": "Cesium Ion एसेट",
+      "assetId": "एसेट ID",
+      "kindTileset": "3D Tiles",
+      "kindImagery": "इमेजरी",
+      "altitudeOffset": "ऊँचाई ऑफ़सेट (मी)",
+      "quickPicks": "त्वरित चयन",
+      "hint": "एसेट id ion.cesium.com पर My Assets के अंतर्गत मिलते हैं। एसेट को सेटिंग्स में कॉन्फ़िगर किए गए टोकन के साथ साझा किया गया होना चाहिए।",
+      "errorAssetId": "एक Cesium Ion एसेट id दर्ज करें (एक धनात्मक पूर्ण संख्या)।",
+      "errorAltitude": "ऊँचाई ऑफ़सेट को मीटर की संख्या के रूप में दर्ज करें।",
+      "tokenMissing": "कोई Cesium Ion टोकन कॉन्फ़िगर नहीं है। सेटिंग्स → एनवायरनमेंट वेरिएबल (VITE_CESIUM_TOKEN) में एक जोड़ें, अन्यथा एसेट लोड नहीं होगा।"
+    },
+    "czml": {
+      "defaultName": "CZML डायनामिक दृश्य",
+      "url": "CZML URL",
+      "sourceModeUrl": "URL",
+      "sourceModeFile": "स्थानीय फ़ाइल",
+      "file": "फ़ाइल",
+      "quickPicks": "नमूना डायनामिक दृश्य",
+      "hint": "CZML स्ट्रीम या फ़ाइलें ग्लोब की घड़ी के साथ समन्वित डायनामिक 3D स्थितियाँ, एनिमेशन और कक्षाएँ परिभाषित करती हैं।",
+      "errorUrl": "एक मान्य CZML एंडपॉइंट URL दर्ज करें।",
+      "errorChooseFile": "लोड करने के लिए एक CZML (.czml या .json) फ़ाइल चुनें।",
+      "errorFileMissing": "चयनित फ़ाइल नहीं पढ़ी जा सकी।",
+      "errorInvalidCzml": "फ़ाइल में मान्य CZML दस्तावेज़ नहीं है (JSON ऐरे या पैकेट ऑब्जेक्ट अपेक्षित था)।",
+      "readError": "CZML डेटा पढ़ने में विफल।"
+    },
+    "kml": {
+      "defaultName": "KML / KMZ",
+      "url": "KML / KMZ URL",
+      "errorSource": "KML/KMZ URL दर्ज करें या फ़ाइल चुनें।"
+    },
     "xyz": {
       "defaultName": "XYZ लेयर",
       "sampleLabel": "USGS इमेजरी",
@@ -426,6 +473,21 @@
       "noLayersFound": "इस सेवा के लिए कोई लेयर नहीं मिली।",
       "retrieveError": "इस सेवा से लेयर प्राप्त नहीं हो सकीं।",
       "version": "WMS संस्करण"
+    },
+    "csw": {
+      "defaultName": "CSW कैटलॉग",
+      "urlPlaceholder": "https://example.com/csw",
+      "keyword": "कीवर्ड",
+      "search": "खोजें",
+      "searching": "खोजा जा रहा है…",
+      "results": "कैटलॉग परिणाम",
+      "errorUrl": "एक मान्य HTTP या HTTPS CSW सेवा URL दर्ज करें।",
+      "searchError": "इस कैटलॉग में खोज नहीं की जा सकी।",
+      "noResults": "कोई मेल खाता डेटासेट नहीं मिला।",
+      "invalidGeoJson": "चयनित संसाधन GeoJSON FeatureCollection नहीं है।",
+      "addError": "यह कैटलॉग संसाधन जोड़ा नहीं जा सका।",
+      "addResource": "{{kind}} जोड़ें",
+      "noSupportedResources": "कोई समर्थित WMS, WFS, ArcGIS या GeoJSON संसाधन घोषित नहीं किया गया।"
     },
     "wfs": {
       "defaultName": "WFS लेयर",
@@ -624,6 +686,7 @@
       "errorRetrieveColumns": "कॉलम नाम प्राप्त नहीं किए जा सके।",
       "url": "डिलिमिटेड टेक्स्ट URL",
       "file": "डिलिमिटेड टेक्स्ट फ़ाइल",
+      "fileFilter": "CSV / TSV / TXT / Excel",
       "urlPlaceholder": "https://example.com/data.csv",
       "retrieving": "प्राप्त किया जा रहा है...",
       "retrieveColumns": "कॉलम प्राप्त करें",
@@ -892,7 +955,16 @@
       "cellSize": "सेल आकार",
       "lineWidth": "रेखा चौड़ाई",
       "extrusion": "3D एक्सट्रूज़न",
-      "modelUrlPlaceholder": "https://example.com/model.glb"
+      "modelUrlPlaceholder": "https://example.com/model.glb",
+      "chooseModelFile": "स्थानीय मॉडल चुनें",
+      "sampleDataset": "नमूना डेटासेट",
+      "sampleCustom": "कस्टम मॉडल",
+      "sampleAirplane": "हवाई जहाज़ — सैन फ़्रांसिस्को",
+      "sampleShanghai": "शंघाई — शहर का केंद्र",
+      "modelFileHint": "एक GLB या स्व-निहित glTF फ़ाइल चुनें। स्थानीय मॉडल सहेजे गए प्रोजेक्ट में एम्बेड किए जाते हैं, जिससे प्रोजेक्ट का आकार बढ़ता है।",
+      "modelExternalResources": "यह मॉडल अलग फ़ाइलों को संदर्भित करता है। इसे एम्बेडेड टेक्सचर और बफ़र के साथ GLB के रूप में निर्यात करें, फिर पुनः प्रयास करें।",
+      "modelTooLarge": "यह मॉडल प्रोजेक्ट में एम्बेड करने की {{limit}} MB सीमा से बड़ा है। इसके बजाय इसे होस्ट करें और URL से जोड़ें।",
+      "modelFileError": "यह मॉडल नहीं पढ़ा जा सका। एक मान्य glTF 2.0 या GLB फ़ाइल चुनें।"
     },
     "nonGeographicCoordinates": "{{names}} के निर्देशांक देशांतर/अक्षांश नहीं हैं, इसलिए मानचित्र पर कुछ भी नहीं बनेगा। CRS ग़लत दर्ज है — डेटा को पुनःप्रक्षेपित करें (या .prj ठीक करें) और दोबारा लोड करें।"
   },
@@ -1334,6 +1406,12 @@
     "errorFallback": "प्रोजेक्ट साझा नहीं किया जा सका।",
     "usernameRequired": "साझा करने से पहले अपने {{shareHost}} खाते पर एक उपयोगकर्ता नाम सेट करें। एक चुनने के लिए अपनी खाता सेटिंग्स खोलें, फिर पुनः प्रयास करें।",
     "openAccountSettings": "खाता सेटिंग्स खोलें",
+    "shareAnyway": "फिर भी साझा करें",
+    "localWarningTitle_one": "साझा मानचित्र में {{count}} लेयर गायब रहेगी",
+    "localWarningTitle_other": "साझा मानचित्र में {{count}} लेयर गायब रहेंगी",
+    "localWarningBody": "{{shareHost}} केवल प्रोजेक्ट फ़ाइल संग्रहीत करता है, आपके कंप्यूटर की फ़ाइलें कभी नहीं। प्राप्तकर्ता प्रोजेक्ट को ब्राउज़र में खोलते हैं, जो आपकी डिस्क नहीं पढ़ सकता, इसलिए ये लेयर आपके अलावा सभी के लिए खाली होंगी।",
+    "localWarningAdvice": "इन्हें शामिल करने के लिए, रास्टर को Cloud Optimized GeoTIFF और वेक्टर को PMTiles या GeoParquet में बदलें, फ़ाइलों को GitHub या Hugging Face जैसे सार्वजनिक HTTPS सर्वर पर होस्ट करें, उन्हें URL से मानचित्र में जोड़ें, फिर दोबारा साझा करें। छोटी स्थानीय वेक्टर लेयर स्वचालित रूप से प्रोजेक्ट में एम्बेड हो जाती हैं।",
+    "localWarningLearnMore": "और जानें",
     "readinessChecking": "जाँचा जा रहा है कि प्राप्तकर्ता आपका डेटा लोड कर पाएँगे या नहीं…",
     "readinessUnavailable": "डेटा स्रोत की जाँच नहीं चलाई जा सकी।",
     "readinessAllReachable_one": "{{count}} डेटा स्रोत प्राप्तकर्ताओं के लिए पहुँच योग्य लगता है।",
@@ -1414,7 +1492,7 @@
   },
   "printLayout": {
     "title": "प्रिंट लेआउट",
-    "description": "शीर्षक, लीजेंड, स्केल बार और उत्तर तीर के साथ एक प्रिंट-रेडी मानचित्र तैयार करें, फिर उसे PNG या PDF में निर्यात करें।",
+    "description": "शीर्षक, लीजेंड, स्केल बार और उत्तर तीर के साथ एक प्रिंट-रेडी मानचित्र तैयार करें, फिर उसे PNG, PDF या SVG में निर्यात करें।",
     "preview": "पूर्वावलोकन",
     "resizeControls": "नियंत्रण पैनल का आकार बदलें",
     "resizeDialog": "डायलॉग का आकार बदलें",
@@ -1422,6 +1500,7 @@
     "copyToClipboard": "क्लिपबोर्ड पर कॉपी करें",
     "copied": "कॉपी हो गया",
     "exportPng": "PNG निर्यात करें",
+    "exportSvg": "SVG निर्यात करें",
     "exportPdf": "PDF निर्यात करें",
     "titleLabel": "शीर्षक",
     "titlePlaceholder": "मानचित्र शीर्षक",
@@ -1848,7 +1927,22 @@
     "show3d": "मानचित्र {{number}} को 3D ग्लोब के रूप में दिखाएँ",
     "show2d": "मानचित्र {{number}} को 2D मानचित्र के रूप में दिखाएँ",
     "only2d": "केवल 2D",
+    "only3d": "केवल 3D",
     "cesiumTokenHint": "टेरेन और Ion इमेजरी के लिए सेटिंग्स में Cesium Ion टोकन जोड़ें"
+  },
+  "renderer": {
+    "basemap": "बेसमैप",
+    "imagery": "इमेजरी",
+    "projectBasemap": "प्रोजेक्ट बेसमैप",
+    "layerUnsupported": "3D ग्लोब द्वारा रेंडर नहीं किया गया",
+    "layerCesiumOnly": "केवल 3D ग्लोब द्वारा रेंडर किया गया",
+    "resetView": "दृश्य रीसेट करें",
+    "scene3D": "3D ग्लोब",
+    "scene2D": "2D मानचित्र",
+    "sceneColumbus": "कोलंबस दृश्य",
+    "fullscreenEnter": "पूर्ण स्क्रीन",
+    "fullscreenExit": "पूर्ण स्क्रीन से बाहर निकलें",
+    "fullscreenUnavailable": "पूर्ण स्क्रीन उपलब्ध नहीं"
   },
   "mapContextMenu": {
     "copyCoordinatesHint": "निर्देशांक क्लिपबोर्ड पर कॉपी करें",
@@ -2437,6 +2531,7 @@
       "mbtiles": "MBTiles लेयर",
       "xyz": "XYZ लेयर",
       "wms": "WMS लेयर",
+      "csw": "CSW कैटलॉग",
       "wfs": "WFS लेयर",
       "wmts": "WMTS लेयर",
       "ogcFeatures": "OGC API - Features",
@@ -2445,6 +2540,8 @@
       "georss": "GeoRSS लेयर",
       "video": "वीडियो लेयर",
       "deckglViz": "Deck.gl लेयर",
+      "cesiumIon": "Cesium Ion एसेट",
+      "czml": "CZML डायनामिक 3D दृश्य",
       "gltfModel": "3D मॉडल (glTF)",
       "postgres": "PostgreSQL लेयर",
       "iceberg": "Apache Iceberg लेयर"
@@ -2700,6 +2797,9 @@
       "splitViewGrid2x3": "2 × 3 ग्रिड",
       "splitViewGrid3x3": "3 × 3 ग्रिड",
       "splitViewSync": "दृश्य सिंक करें",
+      "renderingEngine": "रेंडरिंग इंजन",
+      "rendererMapLibre": "MapLibre",
+      "rendererCesium": "Cesium",
       "viewInGoogleMaps": "Google Maps में देखें",
       "viewInGoogleEarth": "Google Earth में देखें",
       "zoomIn": "ज़ूम इन",
@@ -2852,6 +2952,7 @@
       "saveProjectAsTitle": "प्रोजेक्ट को इस रूप में सहेजें",
       "saveProjectAsDesc": "एक फ़ाइल नाम दर्ज करें। सहेजें पर क्लिक करने पर प्रोजेक्ट आपके ब्राउज़र के डाउनलोड फ़ोल्डर में डाउनलोड हो जाएगा।",
       "embedVectorTitle": "स्थानीय वेक्टर डेटा एम्बेड करें?",
+      "embedEditedGeometryDesc": "इस प्रोजेक्ट में संपादित ज्यामितियाँ हैं। उन्हें बनाए रखने के लिए वेक्टर डेटा (लगभग {{size}}) एम्बेड करें। एम्बेड किए बिना, संदर्भित लेयर अपनी मूल ज्यामितियों के साथ फिर से खुलेंगी और स्थानीय डेटा अनुपलब्ध हो सकता है।",
       "embedVectorDesc": "इस प्रोजेक्ट में आपके कंप्यूटर से लोड की गई {{count}} स्थानीय वेक्टर परत(ें) हैं। प्रोजेक्ट को फिर से खोलने पर ब्राउज़र उन्हें दोबारा नहीं पढ़ सकता, इसलिए उन्हें पुनर्स्थापित करने के लिए उनका डेटा प्रोजेक्ट फ़ाइल में एम्बेड किया जाना चाहिए। एम्बेड करने से फ़ाइल में लगभग {{size}} जुड़ जाता है।",
       "embedVectorDescDesktop": "इस प्रोजेक्ट में आपके कंप्यूटर से लोड की गई {{count}} स्थानीय वेक्टर परत(ें) हैं। प्रोजेक्ट को स्व-निहित बनाने के लिए उनका डेटा एम्बेड करें (इससे लगभग {{size}} जुड़ जाता है), या फ़ाइल संदर्भ सहेजें जो प्रोजेक्ट को फिर से खोलने पर डिस्क से फिर से लोड हों। संदर्भ फ़ाइल को छोटा रखते हैं लेकिन यदि स्रोत फ़ाइल बाद में स्थानांतरित या हटा दी जाए तो टूट जाते हैं।",
       "embedVectorDescMas": "इस प्रोजेक्ट में आपके कंप्यूटर से लोड की गई {{count}} स्थानीय वेक्टर परत(ें) हैं। Mac App Store सैंडबॉक्स GeoLibre बंद होने के बाद इन फ़ाइलों की पहुँच बनाए नहीं रख सकता, इसलिए उन्हें पुनर्स्थापित करने के लिए उनका डेटा प्रोजेक्ट फ़ाइल में एम्बेड किया जाना चाहिए। एम्बेड करने से फ़ाइल में लगभग {{size}} जुड़ जाता है।",
@@ -2902,6 +3003,7 @@
     },
     "plugin": {
       "maplibre-gl-annotations": "एनोटेशन",
+      "maplibre-gl-dimensions": "विमाएँ",
       "maplibre-gl-streetview": "स्ट्रीट व्यू",
       "maplibre-gl-time-slider": "समय स्लाइडर",
       "geolibre-timelapse": "टाइमलैप्स",
@@ -3094,9 +3196,14 @@
     "openBuilder": "एक्सप्रेशन बिल्डर...",
     "invalidExpression": "एक मान्य बूलियन एक्सप्रेशन दर्ज करें।",
     "select": "फ़ीचर चुनें",
+    "applyLayerFilter": "लेयर फ़िल्टर करें",
+    "clearLayerFilter": "लेयर फ़िल्टर साफ़ करें",
+    "layerFilteredHint": "एक स्थायी फ़िल्टर इस लेयर के कुछ फ़ीचर छिपा रहा है।",
+    "layerFilteredBothHint": "एक स्थायी फ़िल्टर और एक त्वरित फ़िल्टर इस लेयर के कुछ फ़ीचर छिपा रहे हैं।",
     "noLayers": "चयन करने के लिए फ़ीचर वाली एक वेक्टर लेयर जोड़ें।",
     "needTwoLayers": "स्थान द्वारा चयन के लिए फ़ीचर वाली दो वेक्टर लेयर की आवश्यकता है।",
     "summary": "{{total}} में से {{selected}} फ़ीचर चयनित ({{matched}} मेल खाईं)।",
+    "filterSummary": "लेयर फ़िल्टर लागू: {{total}} में से {{matched}} फ़ीचर मेल खाते हैं।",
     "evaluationErrors": "{{count}} फ़ीचर का मूल्यांकन नहीं किया जा सका और वे मेल नहीं खाईं।",
     "unevaluableDisjoint": "{{count}} फ़ीचर को बाहर रखा गया क्योंकि उनकी ज्यामिति का मूल्यांकन नहीं किया जा सका।",
     "tooManyPairs": "इस तुलना के लिए {{pairs}} फ़ीचर-जोड़ी परीक्षण चाहिए (सीमा {{limit}})। इसके बजाय साइडकार इंजन के साथ Processing → GeoLibre → Vector → Select by location का उपयोग करें।",
@@ -3509,6 +3616,7 @@
     "search": "खोजें",
     "searchCurrentView": "वर्तमान मैप क्षेत्र में खोजें",
     "enterKeyword": "शुरू करने के लिए एक कीवर्ड दर्ज करें।",
+    "viewUnavailable": "वर्तमान मानचित्र क्षेत्र उपलब्ध नहीं है; खोजने के लिए मानचित्र-क्षेत्र फ़िल्टर बंद करें।",
     "loadMore": "और लोड करें",
     "searching": "खोजा जा रहा है…",
     "loadingMore": "और डेटासेट लोड किए जा रहे हैं…",
@@ -3551,10 +3659,14 @@
     "title": "STAC कैटलॉग",
     "footprintLayerName": "STAC खोज सीमाएँ",
     "catalogSearch": "STAC Index में सार्वजनिक कैटलॉग खोजें",
+    "portolanCatalogSearch": "Portolan Registry में सार्वजनिक कैटलॉग खोजें",
     "catalogSearchPlaceholder": "कैटलॉग नाम खोजें…",
     "indexLoading": "STAC Index लोड हो रहा है…",
+    "portolanIndexLoading": "Portolan Registry लोड हो रहा है…",
     "indexUnavailable": "STAC Index उपलब्ध नहीं है: URL दर्ज करें",
+    "portolanIndexUnavailable": "Portolan Registry उपलब्ध नहीं है: URL दर्ज करें",
     "indexLoadFailed": "STAC Index लोड नहीं हो सका",
+    "portolanIndexLoadFailed": "Portolan Registry लोड नहीं हो सका",
     "urlLabel": "STAC कैटलॉग या API URL",
     "connect": "कनेक्ट करें",
     "connecting": "STAC से कनेक्ट हो रहा है…",
@@ -3907,6 +4019,28 @@
     "saveElement": "तत्व सहेजें",
     "atPoint": "बिंदु पर",
     "pinnedToExtent": "विस्तार से संलग्न"
+  },
+  "dimensions": {
+    "toolbar": "विमांकन टूल्स",
+    "layerName": "विमाएँ",
+    "tools": {
+      "linear": "रैखिक विमा",
+      "angular": "कोणीय विमा"
+    },
+    "unit": "इकाई",
+    "snap": "शीर्षों पर स्नैप करें",
+    "color": "विमा रंग",
+    "width": "रेखा चौड़ाई",
+    "widthOptions": {
+      "thin": "पतली",
+      "medium": "मध्यम",
+      "thick": "मोटी"
+    },
+    "deleteLast": "अंतिम विमा हटाएं",
+    "clearAll": "सभी विमाएँ साफ़ करें",
+    "newLayer": "नई विमा परत",
+    "confirmClearAll_one": "क्या यह विमा हटानी है? इसे पूर्ववत नहीं किया जा सकता।",
+    "confirmClearAll_other": "क्या इस परत की सभी {{count}} विमाएँ हटानी हैं? इसे पूर्ववत नहीं किया जा सकता।"
   },
   "pythonConsole": {
     "title": "Python कंसोल",
@@ -4509,6 +4643,15 @@
                 "kilometers": "किलोमीटर",
                 "meters": "मीटर",
                 "miles": "मील"
+              }
+            },
+            "side": {
+              "label": "बफर की दिशा",
+              "description": "बाहर प्रत्येक फ़ीचर को बड़ा करता है, अंदर उसे छोटा करता है, और दोनों ओर उसकी सीमा के दोनों ओर दी गई दूरी के भीतर का क्षेत्र रखता है। अंदर के लिए पॉलिगन परत आवश्यक है — बिंदु या रेखा का कोई आंतरिक भाग नहीं होता।",
+              "options": {
+                "outside": "बाहर (बड़ा करें)",
+                "inside": "अंदर (छोटा करें)",
+                "both": "दोनों ओर"
               }
             }
           }
@@ -6325,6 +6468,7 @@
     "description": "लेयर और प्रोजेक्ट में पुन: उपयोग योग्य स्टाइल, प्रतीक, लेबल प्रीसेट, और कलर रैंप सहेजें, ब्राउज़ करें, और लागू करें।",
     "searchPlaceholder": "स्टाइल और टैग खोजें…",
     "presetsSection": "अंतर्निहित प्रीसेट",
+    "presetActions": "प्रीसेट क्रियाएं",
     "librarySection": "मेरी लाइब्रेरी",
     "projectSection": "यह प्रोजेक्ट",
     "empty": "कोई सहेजी गई स्टाइल मेल नहीं खाती। आरंभ करने के लिए किसी लेयर की स्टाइल सहेजें या एक लाइब्रेरी आयात करें।",
@@ -6425,7 +6569,6 @@
       "remove": "जॉइन हटाएँ",
       "enabledTitle": "यह जॉइन लागू करें",
       "missingLayer": "जॉइन लेयर नहीं मिली",
-      "noCandidates": "किसी अन्य लेयर में जोड़ने के लिए विशेषता तालिका नहीं है",
       "statsMatched": "{{total}} में से {{matched}} फ़ीचर मेल खाए",
       "statsUnmatchedJoin_one": "{{count}} तालिका पंक्ति बिना मेल",
       "statsUnmatchedJoin_other": "{{count}} तालिका पंक्तियाँ बिना मेल"
@@ -6482,6 +6625,11 @@
       "offsetY": "ऑफ़सेट Y (em)",
       "rotation": "घुमाव (°)",
       "maxWidth": "रैप चौड़ाई (em)",
+      "numberFormat": "संख्याओं को फ़ॉर्मैट करें",
+      "numberFormatHint": "संख्यात्मक मान हज़ार और दशमलव विभाजकों के साथ दिखते हैं, जैसे {{sample}}। पाठ मान अपरिवर्तित रहते हैं, और लेबल एक्सप्रेशन अपना आउटपुट स्वयं फ़ॉर्मैट करता है।",
+      "numberDecimals": "दशमलव स्थान",
+      "numberLocale": "विभाजक",
+      "numberLocaleApp": "ऐप की भाषा के अनुसार",
       "transform": "अक्षर केस",
       "transformNone": "जैसा दर्ज किया गया",
       "transformUppercase": "बड़े अक्षर",
@@ -6635,6 +6783,7 @@
       "categories": "श्रेणियां",
       "classColor": "वर्ग {{index}} रंग",
       "classColorPick": "स्क्रीन से वर्ग {{index}} रंग चुनें",
+      "classOpacity": "वर्ग {{index}} अपारदर्शिता",
       "classValue": "वर्ग {{index}} मान",
       "colorExpression": "रंग एक्सप्रेशन",
       "applyStyleType": "शैली प्रकार लागू करें",
@@ -6644,6 +6793,8 @@
       "pointRendererClustered": "क्लस्टर्ड",
       "heatmapRadius": "हीटमैप त्रिज्या",
       "heatmapIntensity": "हीटमैप तीव्रता",
+      "heatmapWeightField": "भार फ़ील्ड",
+      "heatmapEqualWeight": "कोई नहीं (समान भार)",
       "clusterRadius": "क्लस्टर त्रिज्या (px)",
       "clusterMaxZoom": "क्लस्टर अधिकतम ज़ूम",
       "strokeWidthUnit": "स्ट्रोक चौड़ाई इकाई",
@@ -6680,10 +6831,12 @@
     "mode2d": "2D",
     "mode3dExtrusion": "3D एक्सट्रूज़न",
     "noControls": "इस लेयर प्रकार के लिए शैली नियंत्रण अभी उपलब्ध नहीं हैं।",
+    "tilesetSymbology": "रंग और फ़िल्टर इस टाइलसेट पर 3D ग्लोब में लागू होते हैं।",
     "selectedLayerType": "चयनित लेयर प्रकार: {{type}}",
     "footerDeck": "बदलाव DuckDB deck.gl लेयर स्टाइलिंग पर लाइव लागू होते हैं।",
     "footerMaplibre": "बदलाव MapLibre paint प्रॉपर्टी पर लाइव लागू होते हैं।",
     "pluginPaintedFooter": "यह लेयर उसके प्लगइन द्वारा बनाई जाती है, जो अपने स्वयं के स्टाइलिंग नियंत्रण देता है।",
+    "serviceStyledFooter": "यह लेयर अपनी सेवा की अपनी स्टाइलिंग बनाए रखती है; अपारदर्शिता, क्रम, ज़ूम रेंज और फ़िल्टर फिर भी लागू होते हैं।",
     "extrusion": {
       "color": "एक्सट्रूज़न रंग",
       "opacity": "एक्सट्रूज़न अपारदर्शिता",
@@ -6780,6 +6933,7 @@
         "upcase": "एक स्ट्रिंग को अपर केस में बदलता है।",
         "downcase": "एक स्ट्रिंग को लोअर केस में बदलता है।",
         "slice": "किसी स्ट्रिंग या एरे का एक भाग लौटाता है।",
+        "numberFormat": "किसी लोकेल के हज़ार और दशमलव विभाजकों का उपयोग करके संख्या को पाठ में बदलता है, वैकल्पिक रूप से निश्चित दशमलव स्थानों के साथ।",
         "toNumber": "एक मान को संख्या में बदलता है।",
         "toString": "एक मान को स्ट्रिंग में बदलता है।",
         "toBoolean": "एक मान को सत्य या असत्य में बदलता है।",
@@ -6939,6 +7093,7 @@
     "allFieldsUsed": "हर फ़ील्ड पर पहले से एक फ़िल्टर है",
     "removeAll": "सभी हटाएँ",
     "clearAll": "फ़िल्टर साफ़ करें",
+    "clearAllWithExpression": "फ़िल्टर और सहेजी गई एक्सप्रेशन साफ़ करें",
     "clearOne": "यह फ़िल्टर साफ़ करें",
     "clearOneNamed": "{{field}} का फ़िल्टर साफ़ करें",
     "remove": "फ़िल्टर हटाएँ",
@@ -7072,6 +7227,8 @@
     "saveEditsSuccess": "{{count}} फ़ीचर स्रोत फ़ाइल में सहेजे गए।",
     "saveEditsNoFeatures": "इस लेयर में सहेजने के लिए कोई फ़ीचर नहीं है।",
     "saveEditsError": "संपादन स्रोत फ़ाइल में सहेजे नहीं जा सके।",
+    "saveEditsToArcgis": "संपादन ArcGIS सेवा में सहेजें",
+    "saveEditsArcgisSuccess": "ArcGIS में सहेजा गया: {{inserted}} जोड़े गए, {{updated}} अपडेट किए गए, {{deleted}} हटाए गए।",
     "saveEditsToPostgis": "संपादन PostGIS टेबल में सहेजें",
     "saveEditsPostgisSuccess": "{{table}} में सहेजा गया: {{inserted}} जोड़े गए, {{updated}} अपडेट किए गए, {{deleted}} हटाए गए।",
     "saveEditsPostgisSkippedFields": "जिन फ़ील्ड्स के लिए मेल खाता टेबल कॉलम नहीं था, वे सहेजी नहीं गईं: {{fields}}।",
@@ -7229,6 +7386,18 @@
     "stretchLinear": "रैखिक",
     "stretchLog": "लघुगणकीय",
     "stretchSqrt": "वर्गमूल",
+    "viewportStretch": "व्यूपोर्ट स्ट्रेच",
+    "viewportMinMax": "व्यूपोर्ट न्यूनतम / अधिकतम",
+    "viewportPercentile": "व्यूपोर्ट 5–95 प्रतिशतक",
+    "viewportStddev": "व्यूपोर्ट माध्य ± 2 मानक विचलन",
+    "viewportApply": "व्यूपोर्ट पर लागू करें",
+    "viewportStretching": "व्यूपोर्ट पढ़ा जा रहा है…",
+    "viewportStretchApplied": "व्यूपोर्ट स्ट्रेच लागू किया गया",
+    "viewportAuto": "मानचित्र हिलने पर स्वचालित रूप से अपडेट करें",
+    "viewportStretchNoView": "मानचित्र दृश्य उपलब्ध नहीं है।",
+    "viewportStretchNoValues": "व्यूपोर्ट में कोई रास्टर मान नहीं मिला।",
+    "viewportStretchNoRange": "व्यूपोर्ट के मान कोई रेंज परिभाषित नहीं करते।",
+    "viewportStretchMoved": "पढ़ना पूरा होने से पहले मानचित्र हिल गया। फिर से लागू करें।",
     "index": "सूचकांक",
     "classifyToggle": "असतत वर्गों में वर्गीकृत करें",
     "method": "विधि",
@@ -7730,5 +7899,66 @@
       "downloadsStarted": "{{started}} डाउनलोड शुरू हुए। {{failed}} विफल रहे।",
       "downloadCancelled": "डाउनलोड रद्द हुआ या विफल रहा।"
     }
+  },
+  "usgsNldi": {
+    "panelTitle": "USGS NLDI",
+    "title": "USGS NLDI नेटवर्क टूल्स",
+    "hint": "पहले प्रवाह-रेखा की दिशा चुनें और मानचित्र पर क्लिक करें। फिर नेविगेशन दिशा चुनें, उपलब्ध कैटलॉग लोड करने के लिए हाइलाइट किया गया बटन दबाएँ, धारा-मापी या कुएँ जैसा कोई कैटलॉग चुनें, और उस कैटलॉग को आलेखित करने के लिए बटन दोबारा दबाएँ।",
+    "directionComplete": "पूरी प्रवाह-रेखा — संपूर्ण NHD खंड लौटाती है",
+    "directionUp": "केवल अपस्ट्रीम — बिंदु के ऊपर का खंड लौटाती है",
+    "directionDown": "केवल डाउनस्ट्रीम — बिंदु के नीचे का खंड लौटाती है",
+    "basinButton": "हाइड्रोलोकेशन से जलग्रहण क्षेत्र",
+    "navigationPlaceholder": "दिशा चुनें — आलेखन से पहले आवश्यक",
+    "navigationUpstreamMain": "अपस्ट्रीम मुख्य धारा — प्राथमिक जलमार्ग का अनुसरण",
+    "navigationUpstreamTributaries": "अपस्ट्रीम सहायक नदियाँ — मिलने वाली शाखाएँ खोजें",
+    "navigationDownstreamMain": "डाउनस्ट्रीम मुख्य धारा — प्राथमिक जलमार्ग का अनुसरण",
+    "navigationDownstreamDiversions": "डाउनस्ट्रीम विपथन — विभाजित प्रवाह पथों का अनुसरण",
+    "sourcePlaceholder": "पहले «स्रोत लोड करें और आलेखित करें» दबाएँ",
+    "distancePlaceholder": "दूरी (किमी)",
+    "navigationButton": "1. स्रोत लोड करें और नेविगेशन आलेखित करें",
+    "navigationButtonAgain": "एक और नेविगेशन परत आलेखित करें",
+    "exportButton": "आलेखित परिणामों को GeoJSON में निर्यात करें",
+    "addLayersButton": "आलेखित परिणामों को GeoLibre लेयर में जोड़ें",
+    "clearButton": "NLDI परिणाम साफ़ करें",
+    "noComid": "इस बिंदु के लिए कोई COMID नहीं लौटाया गया।",
+    "requestingBasin": "अपस्ट्रीम जलग्रहण क्षेत्र का अनुरोध किया जा रहा है…",
+    "basinRendered": "COMID {{comid}} के लिए अपस्ट्रीम जलग्रहण क्षेत्र आलेखित किया गया।",
+    "basinFailed": "जलग्रहण क्षेत्र का अनुरोध विफल रहा।",
+    "selectNavigation": "किसी बिंदु का पता लगाने के बाद नेविगेशन विधि चुनें।",
+    "invalidDistance": "दूरी 1 से 9999 किमी के बीच होनी चाहिए।",
+    "discoveringSources": "NLDI नेविगेशन स्रोत खोजे जा रहे हैं…",
+    "navigationUnavailable": "वह नेविगेशन विधि इस COMID के लिए उपलब्ध नहीं है।",
+    "noPlottableSource": "NLDI ने कोई आलेखन-योग्य नेविगेशन स्रोत नहीं लौटाया।",
+    "navigationEmpty": "{{source}} ने इस नेविगेशन के लिए कोई मानचित्रण-योग्य फ़ीचर नहीं लौटाया।",
+    "navigationAdded": "COMID {{comid}} के लिए {{navigation}} के माध्यम से {{source}} जोड़ा गया ({{km}} किमी)। मौजूदा नेविगेशन लेयर मानचित्र पर बनी रहती हैं।",
+    "navigationFailed": "नेविगेशन अनुरोध विफल रहा।",
+    "tracing": "निकटतम NHD प्रवाह-रेखा तक ट्रेस किया जा रहा है…",
+    "flowline": "प्रवाह-रेखा आलेखित की गई।",
+    "flowlineComid": "प्रवाह-रेखा आलेखित की गई; COMID {{comid}} जलग्रहण कार्यप्रवाहों के लिए तैयार है।",
+    "flowlineFallback": "NLDI हाइड्रोलोकेशन फ़ॉलबैक का उपयोग करके प्रवाह-रेखा आलेखित की गई।",
+    "flowlineFallbackComid": "NLDI हाइड्रोलोकेशन फ़ॉलबैक का उपयोग करके प्रवाह-रेखा आलेखित की गई; COMID {{comid}} जलग्रहण कार्यप्रवाहों के लिए तैयार है।",
+    "requestFailed": "NLDI अनुरोध विफल रहा।",
+    "nothingToAdd": "जोड़ने के लिए कोई आलेखित NLDI फ़ीचर नहीं है।",
+    "layersAdded_one": "{{count}} NLDI लेयर एक «USGS NLDI परिणाम» समूह में जोड़ी गई।",
+    "layersAdded_other": "{{count}} NLDI लेयर एक «USGS NLDI परिणाम» समूह में जोड़ी गईं।",
+    "layerGroupName": "USGS NLDI परिणाम",
+    "layerFlowline": "NLDI प्रवाह-रेखा",
+    "layerRaindrop": "NLDI वर्षा-बूंद पथ",
+    "layerSelectedPoint": "NLDI चयनित बिंदु",
+    "layerBasin": "NLDI अपस्ट्रीम जलग्रहण क्षेत्र",
+    "layerNavigation": "NLDI नेविगेशन {{index}}",
+    "resultCleared": "NLDI परिणाम साफ़ कर दिया गया।",
+    "directionalUnavailable": "जब तक USGS प्रक्रिया ऑफ़लाइन है, दिशात्मक प्रवाह-ट्रेसिंग उपलब्ध नहीं है। «पूरी प्रवाह-रेखा» चुनें या बाद में पुनः प्रयास करें।",
+    "noFlowlineNearby": "NLDI इस बिंदु के पास कोई प्रवाह-रेखा नहीं खोज सका।",
+    "httpError": "USGS NLDI ने HTTP {{status}} लौटाया",
+    "httpErrorDetail": "USGS NLDI ने HTTP {{status}} लौटाया: {{detail}}",
+    "noAttributes": "NLDI द्वारा कोई विशेषता नहीं लौटाई गई।",
+    "catalogCaGages": "कैलिफ़ोर्निया धारा-मापी (ca_gages)",
+    "catalogNwisSite": "NWIS सतही जल स्थल (धारा-मापी)",
+    "catalogNwisGw": "NWIS भूजल कुएँ",
+    "catalogGfv11Pois": "USGS Geospatial Fabric बिंदु",
+    "catalogHuc12pp": "HUC12 निकास बिंदु",
+    "catalogNmwdiSt": "न्यू मैक्सिको जल स्थल",
+    "catalogFlowlines": "NHDPlus प्रवाह-रेखाएँ"
   }
 }

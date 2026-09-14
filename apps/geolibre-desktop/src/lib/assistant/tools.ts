@@ -1,12 +1,13 @@
+import { listAssistantTools } from "@geolibre/plugins/assistant-tool-registry";
 import {
   DEFAULT_LAYER_STYLE,
   OPENFREEMAP_BASEMAPS,
   useAppStore,
   type GeoLibreLayer,
 } from "@geolibre/core";
-import type { MapController } from "@geolibre/map";
+import type { MapEngine } from "@geolibre/map";
 import type { ModelToolDescriptor } from "@geolibre/processing";
-import type { InvokableTool, JSONValue } from "@strands-agents/sdk";
+import type { Tool, JSONValue } from "@strands-agents/sdk";
 import * as maplibregl from "maplibre-gl";
 import { tool } from "@strands-agents/sdk";
 import type { FeatureCollection } from "geojson";
@@ -23,7 +24,7 @@ import { webSearch } from "./web-search";
 /** Dependencies the assistant tools need beyond the global store. */
 export interface AssistantToolDeps {
   /** Returns the live map controller, or null before the map mounts. */
-  getMapController: () => MapController | null;
+  getMapController: () => MapEngine | null;
   /**
    * Ask the user to approve executing model-generated code before it runs.
    * Resolves true to proceed, false to decline. The assistant can be steered by
@@ -305,7 +306,7 @@ function asFeatureCollection(data: unknown): FeatureCollection {
  * @param deps Map-controller accessor for camera tools.
  * @returns The tools to register on the agent.
  */
-export function createAssistantTools(deps: AssistantToolDeps): InvokableTool<unknown, unknown>[] {
+export function createAssistantTools(deps: AssistantToolDeps): Tool[] {
   const store = () => useAppStore.getState();
   // Tool results are serialized to the model; the data we return is JSON-safe by
   // construction, so this asserts the shape against Strands' strict JSONValue.
@@ -741,7 +742,7 @@ export function createAssistantTools(deps: AssistantToolDeps): InvokableTool<unk
   const listAlgorithms = tool({
     name: "list_algorithms",
     description:
-      "List the available client-side processing algorithms (vector geometry/overlay tools like buffer, clip, dissolve, intersection, difference, union, spatial-join; plus H3 grids) with their id, name, group, and typed parameters. Call this before run_algorithm. These are vector-only — for raster work (hydrology, terrain, LiDAR, image processing) use list_whitebox_tools and run_whitebox_tool instead.",
+      "List the available client-side processing algorithms (vector geometry/overlay tools like buffer, clip, dissolve, intersection, difference, union, spatial-join; spatial-statistics tools; and the discrete-global-grid tools dggs-grid and dggs-bin, which build H3, S2, A5, DGGRID and DGGAL grids through their dggsType parameter, plus dggs-compact, which compacts or expands an existing cell layer for H3, S2, A5 and DGGAL but not DGGRID — there is no separate h3-grid id) with their id, name, group, and typed parameters. Call this before run_algorithm. These are vector-only — for raster work (hydrology, terrain, LiDAR, image processing) use list_whitebox_tools and run_whitebox_tool instead.",
     inputSchema: z.object({}),
     callback: async () => json({ algorithms: (await getScripting()).listAlgorithms() }),
   });
@@ -1055,6 +1056,7 @@ export function createAssistantTools(deps: AssistantToolDeps): InvokableTool<unk
   });
 
   return [
+    ...listAssistantTools(),
     listLayers,
     runSql,
     addLayerFromUrl,
@@ -1076,5 +1078,5 @@ export function createAssistantTools(deps: AssistantToolDeps): InvokableTool<unk
     applySymbology,
     runMaplibreJs,
     runPython,
-  ] as InvokableTool<unknown, unknown>[];
+  ] as Tool[];
 }

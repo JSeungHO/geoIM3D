@@ -20,7 +20,10 @@ Pick by what the data **is**:
 | An XYZ raster tile template (`{z}/{x}/{y}.png`) | `add_tile_layer` | Basemaps like OSM go here, not `set_basemap`. |
 | A PMTiles archive, or a vector tile service | `add_tiles_layer` | `kind="pmtiles"` (with `tile_type`) or `kind="vector-tiles"`. |
 | A WMS or WMTS endpoint | `add_ogc_layer` | `service="wms"` or `"wmts"`. |
-| An OGC 3D Tiles tileset | `add_3d_tiles_layer` | `altitude_offset` to sit it on the ground. |
+| An OGC 3D Tiles tileset | `add_3d_tiles_layer` | `altitude_offset` to sit it on the ground; `ion_asset_id` instead of `url` for a Cesium Ion tileset. |
+| A Cesium Ion asset (tileset or imagery) | `add_cesium_ion_layer` | 3D globe only: pair it with `set_renderer` / `primaryRenderer: "cesium"`. `kind="imagery"` for imagery. |
+| A CZML (Cesium Language) dynamic scene: orbits, tracks, moving models | `add_czml_layer` | 3D globe only: `url` for a `.czml` document, or `data` for its packet array inline. The globe follows the document's `clock`. |
+| Native KML/KMZ with document styling | `add_cesium_kml_layer` | 3D globe only. Supply `url`, inline XML in `data`, or a KMZ data URL. Package local icons and overlays in KMZ for sharing. |
 | A Shapefile, GeoPackage, KML, CSV | Convert first | Read it with GeoPandas and pass GeoJSON to `add_geojson_layer`, or use the Python API's `Map.add_shp` / `Map.add_gpkg` / `Map.add_kml` / `Map.add_csv`. |
 
 Layers draw bottom-first. Every `add_*` takes an optional `index` (draw-order
@@ -57,10 +60,13 @@ add_raster_layer(path, name, url, bands=None, colormap=None, rescale=None,
 add_tile_layer(path, name, url, tile_size=256, attribution=None, index=None)
 add_ogc_layer(path, name, service, endpoint, layers=None, styles="",
               image_format="image/png", transparent=True, tile_size=256,
-              version="1.1.1", index=None)
+              version="1.1.1", bounds=None, index=None)
 add_tiles_layer(path, name, url, kind="pmtiles", tile_type="vector",
                 source_layers=None, style=None, index=None)
-add_3d_tiles_layer(path, name, url, altitude_offset=0, index=None)
+add_3d_tiles_layer(path, name, url=None, ion_asset_id=None, altitude_offset=0, index=None)
+add_cesium_ion_layer(path, name, asset_id, kind="3d-tiles", altitude_offset=0, index=None)
+add_czml_layer(path, name, url=None, data=None, index=None)
+add_cesium_kml_layer(path, name, url=None, data=None, index=None)
 ```
 
 - `add_geojson_layer(data=...)` takes an `http(s)` URL, a workspace file path,
@@ -74,7 +80,14 @@ add_3d_tiles_layer(path, name, url, altitude_offset=0, index=None)
   the browser fetches the tiles directly.
 - `add_ogc_layer`: `layers` is required when `service="wms"`. `version` defaults
   to `1.1.1`; pass what the server advertises when it differs. For
-  `service="wmts"`, `endpoint` is a full tile URL template.
+  `service="wmts"`, `endpoint` is a full tile URL template. `bounds` is the
+  layer's extent as `[west, south, east, north]`: a service layer has no
+  geometry to derive it from, so without it "zoom to layer" has nowhere to go.
+  Read it from the capabilities document: `EX_GeographicBoundingBox` for WMS,
+  `ows:WGS84BoundingBox` for WMTS, which is where the WMS element is absent.
+  Both are already lon/lat, unlike a WMS 1.3.0 `BoundingBox CRS="EPSG:4326"`,
+  whose axis order servers often get wrong. Passing anything other than four
+  values is an error rather than a silently dropped extent.
 
 ### Editing
 
@@ -82,6 +95,9 @@ add_3d_tiles_layer(path, name, url, altitude_offset=0, index=None)
 update_layer(path, layer, name=None, visible=None, opacity=None, index=None)
 remove_layer(path, layer)
 style_layer(path, layer, style)
+set_layer_popup(path, layer, fields=None, click=None, title=None,
+                title_expression=None, body_expression=None,
+                show_feature_id=None, tooltip=None, merge=False)
 classify_layer(path, layer, column, class_count=5, colormap="viridis",
                scheme="equal-interval")
 list_layer_properties(path, layer)
@@ -95,6 +111,17 @@ it. Common keys: `fillColor`, `fillOpacity`, `strokeColor`, `strokeWidth`,
 `rasterBrightnessMax` / `rasterSaturation` / `rasterContrast` /
 `rasterHueRotate`. Colors are CSS strings (`"#3b82f6"`).
 
+`set_layer_popup` chooses what a click (and, with `tooltip`, a hover) shows.
+Without it a layer shows its name plus every visible property. Each `fields`
+entry is a property name or an object with `field` plus any of `label`, `kind`,
+`hover`, `decimals`, `thousands`, `date_format`, `prefix`, `suffix`,
+`link_label`. `kind` is `auto`, `text`, `number`, `date`, `link` (an http(s) URL
+becomes an anchor) or `image` (an http(s) URL or inline base64 raster data URL
+becomes a thumbnail). `tooltip` takes the property names to put in the hover
+tip; `[]` turns the tip off. `merge=True` edits the existing config in place, so
+a tooltip can be added without restating the fields. Run
+`list_layer_properties` first to get the real column names.
+
 `classify_layer` clamps `class_count` to 2–12. `scheme` is `equal-interval`
 (even value ranges) or `quantile` (even feature counts per class). It needs an
 inlined GeoJSON layer; run `list_layer_properties` first to get the real column
@@ -103,6 +130,8 @@ name and a sense of the values.
 ### Framing and decoration
 
 ```text
+set_renderer(path, renderer, pane_id=None)
+set_map_layout(path, rows, cols, view_kinds=None, sync_view=True)
 set_view(path, center=None, zoom=None, bearing=None, pitch=None, bbox=None)
 set_basemap(path, basemap)
 add_legend(path, title=None, legend_dict=None, labels=None, colors=None,
@@ -113,6 +142,8 @@ add_swipe(path, left_layers, right_layers, orientation="vertical",
           position=50, control_position="top-right")
 ```
 
+- `set_renderer`: use `"maplibre"` or `"cesium"`; omit `pane_id` for the primary map.
+- `set_map_layout`: rows/cols are integers 1–4. `view_kinds` lists every pane renderer, primary first. Read secondary IDs from the returned `secondaryMapViews` before changing a named pane.
 - `set_view`: `zoom` is clamped to 0–24. `bbox` is `[west, south, east, north]`
   and is resolved to a camera approximately — see the SKILL's gotcha list.
 - `set_basemap` takes a named basemap or a MapLibre style JSON URL. An XYZ

@@ -274,6 +274,10 @@
         "label": "WMSレイヤーを追加",
         "description": "WMS GetMapサービスをタイル化されたラスターレイヤーとして追加します。"
       },
+      "csw": {
+        "label": "CSWカタログを検索",
+        "description": "OGCカタログサービスからデータセットを検索し、対応するWebリソースを地図に追加します。"
+      },
       "wfs": {
         "label": "WFSレイヤーを追加",
         "description": "GetFeatureサービスからGeoJSONを要求してWFSフィーチャを追加します。"
@@ -341,6 +345,18 @@
       "polyline": {
         "label": "エンコードポリラインレイヤーを追加",
         "description": "エンコードされたポリライン文字列（Google、OSRM、Valhalla）をテキストまたはファイルからベクターラインとしてインポートします。"
+      },
+      "cesiumIon": {
+        "label": "Cesium Ionアセットを追加",
+        "description": "Cesium Ionの3D Tilesタイルセットや画像をアセットIDで追加します。お使いのCesium Ionトークンで3D地球儀に描画されます。"
+      },
+      "czml": {
+        "label": "CZML動的3Dレイヤーを追加",
+        "description": "軌道、軌跡、車両の経路、時間変化する3Dシーンを地球儀上に記述する動的なCesium Language (CZML) ドキュメントを読み込みます。"
+      },
+      "kml": {
+        "label": "KML / KMZ",
+        "description": "元のスタイル、オーバーレイ、ネットワークリンクを保持して KML または KMZ を地球儀に読み込みます。"
       }
     },
     "shared": {
@@ -396,6 +412,37 @@
       "imported_other": "{{count}}件のサービスをインポートしました。",
       "importedWithDropped_other": "{{count}}件のサービスをインポートしました({{dropped}}件はライブラリが上限に達したためスキップされました)。"
     },
+    "cesiumIon": {
+      "defaultName": "Cesium Ionアセット",
+      "assetId": "アセットID",
+      "kindTileset": "3D Tiles",
+      "kindImagery": "画像",
+      "altitudeOffset": "高度オフセット (m)",
+      "quickPicks": "クイック選択",
+      "hint": "アセットIDは ion.cesium.com の「My Assets」で確認できます。アセットは設定で構成したトークンと共有されている必要があります。",
+      "errorAssetId": "Cesium IonのアセットID（正の整数）を入力してください。",
+      "errorAltitude": "高度オフセットをメートル単位の数値で入力してください。",
+      "tokenMissing": "Cesium Ionトークンが設定されていません。設定 → 環境変数 (VITE_CESIUM_TOKEN) で追加しないと、アセットを読み込めません。"
+    },
+    "czml": {
+      "defaultName": "CZML動的シーン",
+      "url": "CZML URL",
+      "sourceModeUrl": "URL",
+      "sourceModeFile": "ローカルファイル",
+      "file": "ファイル",
+      "quickPicks": "サンプルの動的シーン",
+      "hint": "CZMLのストリームやファイルは、地球儀の時計と同期した動的な3D位置、アニメーション、軌道を定義します。",
+      "errorUrl": "有効なCZMLエンドポイントのURLを入力してください。",
+      "errorChooseFile": "読み込むCZMLファイル (.czml または .json) を選択してください。",
+      "errorFileMissing": "選択したファイルを読み込めませんでした。",
+      "errorInvalidCzml": "このファイルには有効なCZMLドキュメントが含まれていません（JSON配列またはパケットオブジェクトが必要です）。",
+      "readError": "CZMLデータを読み込めませんでした。"
+    },
+    "kml": {
+      "defaultName": "KML / KMZ",
+      "url": "KML / KMZ の URL",
+      "errorSource": "KML/KMZ の URL を入力するか、ファイルを選択してください。"
+    },
     "xyz": {
       "defaultName": "XYZレイヤー",
       "sampleLabel": "USGS 衛星画像",
@@ -421,6 +468,21 @@
       "noLayersFound": "このサービスにはレイヤーが見つかりませんでした。",
       "retrieveError": "このサービスからレイヤーを取得できませんでした。",
       "version": "WMSバージョン"
+    },
+    "csw": {
+      "defaultName": "CSWカタログ",
+      "urlPlaceholder": "https://example.com/csw",
+      "keyword": "キーワード",
+      "search": "検索",
+      "searching": "検索中…",
+      "results": "カタログの検索結果",
+      "errorUrl": "有効なHTTPまたはHTTPSのCSWサービスURLを入力してください。",
+      "searchError": "このカタログを検索できませんでした。",
+      "noResults": "一致するデータセットは見つかりませんでした。",
+      "invalidGeoJson": "選択したリソースはGeoJSONのFeatureCollectionではありません。",
+      "addError": "このカタログリソースを追加できませんでした。",
+      "addResource": "{{kind}}を追加",
+      "noSupportedResources": "対応するWMS、WFS、ArcGIS、GeoJSONのリソースは提供されていません。"
     },
     "wfs": {
       "defaultName": "WFSレイヤー",
@@ -615,6 +677,7 @@
       "errorRetrieveColumns": "列名を取得できませんでした。",
       "url": "区切りテキストのURL",
       "file": "区切りテキストファイル",
+      "fileFilter": "CSV / TSV / TXT / Excel",
       "urlPlaceholder": "https://example.com/data.csv",
       "retrieving": "取得中...",
       "retrieveColumns": "列を取得",
@@ -871,7 +934,16 @@
       "cellSize": "セルサイズ",
       "lineWidth": "線幅",
       "extrusion": "3D押し出し",
-      "modelUrlPlaceholder": "https://example.com/model.glb"
+      "modelUrlPlaceholder": "https://example.com/model.glb",
+      "chooseModelFile": "ローカルモデルを選択",
+      "sampleDataset": "サンプルデータセット",
+      "sampleCustom": "カスタムモデル",
+      "sampleAirplane": "飛行機 — サンフランシスコ",
+      "sampleShanghai": "上海 — 市中心部",
+      "modelFileHint": "GLBまたは自己完結型のglTFファイルを選択してください。ローカルモデルは保存したプロジェクトに埋め込まれるため、プロジェクトのサイズが大きくなります。",
+      "modelExternalResources": "このモデルは別ファイルを参照しています。テクスチャとバッファを埋め込んだGLBとしてエクスポートしてから、もう一度お試しください。",
+      "modelTooLarge": "このモデルはプロジェクトに埋め込める上限の {{limit}} MB を超えています。サーバーにホストしてURLで追加してください。",
+      "modelFileError": "このモデルを読み込めませんでした。有効なglTF 2.0またはGLBファイルを選択してください。"
     },
     "nonGeographicCoordinates": "{{names}} の座標は経緯度ではないため、地図には何も描画されません。CRS が誤って記録されています — データを再投影する（または .prj を修正する）と読み込み直してください。"
   },
@@ -1298,6 +1370,11 @@
     "errorFallback": "プロジェクトを共有できませんでした。",
     "usernameRequired": "共有する前に {{shareHost}} アカウントでユーザー名を設定してください。アカウント設定を開いて選択し、もう一度お試しください。",
     "openAccountSettings": "アカウント設定を開く",
+    "shareAnyway": "それでも共有",
+    "localWarningTitle_other": "共有地図では {{count}} 件のレイヤーが欠落します",
+    "localWarningBody": "{{shareHost}} はプロジェクトファイルのみを保存し、お使いのコンピューター上のファイルは保存しません。受信者はブラウザーでプロジェクトを開きますが、ブラウザーはあなたのディスクを読めないため、これらのレイヤーはあなた以外の全員に空で表示されます。",
+    "localWarningAdvice": "これらを含めるには、ラスターをCloud Optimized GeoTIFFに、ベクターをPMTilesまたはGeoParquetに変換し、GitHubやHugging Faceなどの公開HTTPSサーバーにホストして、URLで地図に追加してから再度共有してください。小さなローカルベクターレイヤーは自動的にプロジェクトに埋め込まれます。",
+    "localWarningLearnMore": "詳細",
     "readinessChecking": "受信者があなたのデータを読み込めるか確認しています…",
     "readinessUnavailable": "データソースの確認を実行できませんでした。",
     "readinessAllReachable_other": "{{count}} 個のデータソースに受信者がアクセスできるようです。",
@@ -1375,7 +1452,7 @@
   },
   "printLayout": {
     "title": "印刷レイアウト",
-    "description": "タイトル、凡例、縮尺バー、方位記号を含む印刷用地図を作成し、PNGまたはPDFにエクスポートします。",
+    "description": "タイトル、凡例、縮尺バー、方位記号を含む印刷用地図を作成し、PNG、PDFまたはSVGにエクスポートします。",
     "preview": "プレビュー",
     "resizeControls": "コントロールパネルのサイズを変更",
     "resizeDialog": "ダイアログのサイズを変更",
@@ -1383,6 +1460,7 @@
     "copyToClipboard": "クリップボードにコピー",
     "copied": "コピーしました",
     "exportPng": "PNGをエクスポート",
+    "exportSvg": "SVGをエクスポート",
     "exportPdf": "PDFをエクスポート",
     "titleLabel": "タイトル",
     "titlePlaceholder": "地図タイトル",
@@ -1803,7 +1881,22 @@
     "show3d": "地図 {{number}} を3Dグローブとして表示",
     "show2d": "地図 {{number}} を2D地図として表示",
     "only2d": "2Dのみ",
+    "only3d": "3Dのみ",
     "cesiumTokenHint": "地形とIon衛星画像を使うには、設定でCesium Ionトークンを追加してください"
+  },
+  "renderer": {
+    "basemap": "ベースマップ",
+    "imagery": "画像",
+    "projectBasemap": "プロジェクトのベースマップ",
+    "layerUnsupported": "3D地球儀では描画されません",
+    "layerCesiumOnly": "3D地球儀でのみ描画されます",
+    "resetView": "表示をリセット",
+    "scene3D": "3D地球儀",
+    "scene2D": "2D地図",
+    "sceneColumbus": "コロンバスビュー",
+    "fullscreenEnter": "全画面表示",
+    "fullscreenExit": "全画面表示を終了",
+    "fullscreenUnavailable": "全画面表示は利用できません"
   },
   "mapContextMenu": {
     "copyCoordinatesHint": "座標をクリップボードにコピー",
@@ -2390,6 +2483,7 @@
       "mbtiles": "MBTilesレイヤー",
       "xyz": "XYZレイヤー",
       "wms": "WMSレイヤー",
+      "csw": "CSWカタログ",
       "wfs": "WFSレイヤー",
       "wmts": "WMTSレイヤー",
       "ogcFeatures": "OGC API - Features",
@@ -2398,6 +2492,8 @@
       "georss": "GeoRSSレイヤー",
       "video": "動画レイヤー",
       "deckglViz": "Deck.glレイヤー",
+      "cesiumIon": "Cesium Ionアセット",
+      "czml": "CZML動的3Dシーン",
       "gltfModel": "3Dモデル (glTF)",
       "postgres": "PostgreSQLレイヤー",
       "iceberg": "Apache Iceberg レイヤー"
@@ -2653,6 +2749,9 @@
       "splitViewGrid2x3": "2 × 3 グリッド",
       "splitViewGrid3x3": "3 × 3 グリッド",
       "splitViewSync": "ビューを同期",
+      "renderingEngine": "レンダリングエンジン",
+      "rendererMapLibre": "MapLibre",
+      "rendererCesium": "Cesium",
       "viewInGoogleMaps": "Google マップで表示",
       "viewInGoogleEarth": "Google Earth で表示",
       "zoomIn": "ズームイン",
@@ -2802,6 +2901,7 @@
       "saveProjectAsTitle": "名前を付けてプロジェクトを保存",
       "saveProjectAsDesc": "ファイル名を入力してください。「保存」をクリックすると、プロジェクトがブラウザのダウンロードフォルダにダウンロードされます。",
       "embedVectorTitle": "ローカルのベクターデータを埋め込みますか?",
+      "embedEditedGeometryDesc": "このプロジェクトには編集済みのジオメトリが含まれています。変更を保持するにはベクターデータ（約 {{size}}）を埋め込んでください。埋め込まない場合、参照レイヤーは元のジオメトリで再度開かれ、ローカルデータは利用できなくなる場合があります。",
       "embedVectorDesc": "このプロジェクトには、お使いのコンピューターから読み込まれたローカルのベクターレイヤーが {{count}} 個あります。プロジェクトを再度開いたときにブラウザがこれらを再読み込みすることはできないため、復元するにはデータをプロジェクトファイルに埋め込む必要があります。埋め込むとファイルサイズが約 {{size}} 増加します。",
       "embedVectorDescDesktop": "このプロジェクトには、お使いのコンピューターから読み込まれたローカルのベクターレイヤーが {{count}} 個あります。データを埋め込んでプロジェクトを自己完結型にする（約 {{size}} 増加）か、プロジェクトを再度開いたときにディスクから再読み込みされるファイル参照として保存できます。参照はファイルサイズを小さく保ちますが、元のファイルが後で移動または削除されると読み込めなくなります。",
       "embedVectorDescMas": "このプロジェクトには、お使いのコンピューターから読み込まれたローカルベクターレイヤーが {{count}} 個あります。Mac App Store のサンドボックスでは GeoLibre の終了後もこれらのファイルへのアクセスを保持できないため、復元するにはデータをプロジェクトファイルに埋め込む必要があります。埋め込むとファイルサイズが約 {{size}} 増加します。",
@@ -2852,6 +2952,7 @@
     },
     "plugin": {
       "maplibre-gl-annotations": "注釈",
+      "maplibre-gl-dimensions": "寸法",
       "maplibre-gl-streetview": "ストリートビュー",
       "maplibre-gl-time-slider": "タイムスライダー",
       "geolibre-timelapse": "タイムラプス",
@@ -3036,9 +3137,14 @@
     "openBuilder": "式ビルダー...",
     "invalidExpression": "有効なブール式を入力してください。",
     "select": "フィーチャを選択",
+    "applyLayerFilter": "レイヤーをフィルター",
+    "clearLayerFilter": "レイヤーフィルターをクリア",
+    "layerFilteredHint": "永続フィルターがこのレイヤーの一部のフィーチャを非表示にしています。",
+    "layerFilteredBothHint": "永続フィルターとクイックフィルターがこのレイヤーの一部のフィーチャを非表示にしています。",
     "noLayers": "選択を行うには、フィーチャを含むベクターレイヤーを追加してください。",
     "needTwoLayers": "空間検索での選択には、フィーチャを含む2つのベクターレイヤーが必要です。",
     "summary": "{{total}}件中{{selected}}件のフィーチャを選択しました（{{matched}}件が一致）。",
+    "filterSummary": "レイヤーフィルターを適用しました: {{total}}件中{{matched}}件のフィーチャが一致。",
     "evaluationErrors": "{{count}}件のフィーチャは評価できなかったため一致しませんでした。",
     "unevaluableDisjoint": "{{count}}件のフィーチャはジオメトリを評価できなかったため除外されました。",
     "tooManyPairs": "この比較には{{pairs}}回のフィーチャペア判定が必要です（上限{{limit}}）。代わりにプロセッシング → GeoLibre → ベクター → 空間検索で選択をサイドカーエンジンで実行してください。",
@@ -3451,6 +3557,7 @@
     "search": "検索",
     "searchCurrentView": "現在の地図範囲を検索",
     "enterKeyword": "キーワードを入力して開始してください。",
+    "viewUnavailable": "現在の地図範囲を取得できません。検索するには地図範囲フィルターをオフにしてください。",
     "loadMore": "さらに読み込む",
     "searching": "検索中…",
     "loadingMore": "データセットをさらに読み込んでいます…",
@@ -3493,10 +3600,14 @@
     "title": "STAC カタログ",
     "footprintLayerName": "STAC 検索範囲",
     "catalogSearch": "STAC Index で公開カタログを検索",
+    "portolanCatalogSearch": "Portolan Registry で公開カタログを検索",
     "catalogSearchPlaceholder": "カタログ名を検索…",
     "indexLoading": "STAC Index を読み込んでいます…",
+    "portolanIndexLoading": "Portolan Registry を読み込んでいます…",
     "indexUnavailable": "STAC Index を利用できません: URL を入力してください",
+    "portolanIndexUnavailable": "Portolan Registry を利用できません: URL を入力してください",
     "indexLoadFailed": "STAC Index を読み込めませんでした",
+    "portolanIndexLoadFailed": "Portolan Registry を読み込めませんでした",
     "urlLabel": "STAC カタログまたは API の URL",
     "connect": "接続",
     "connecting": "STAC に接続しています…",
@@ -3843,6 +3954,27 @@
     "saveElement": "要素を保存",
     "atPoint": "地点に固定",
     "pinnedToExtent": "範囲に固定"
+  },
+  "dimensions": {
+    "toolbar": "寸法ツール",
+    "layerName": "寸法",
+    "tools": {
+      "linear": "直線寸法",
+      "angular": "角度寸法"
+    },
+    "unit": "単位",
+    "snap": "頂点にスナップ",
+    "color": "寸法の色",
+    "width": "線幅",
+    "widthOptions": {
+      "thin": "細い",
+      "medium": "中",
+      "thick": "太い"
+    },
+    "deleteLast": "最後の寸法を削除",
+    "clearAll": "すべての寸法を消去",
+    "newLayer": "新しい寸法レイヤー",
+    "confirmClearAll_other": "このレイヤーの寸法{{count}}件をすべて削除しますか？この操作は元に戻せません。"
   },
   "pythonConsole": {
     "title": "Pythonコンソール",
@@ -4438,6 +4570,15 @@
                 "kilometers": "キロメートル",
                 "meters": "メートル",
                 "miles": "マイル"
+              }
+            },
+            "side": {
+              "label": "バッファの方向",
+              "description": "外側は各フィーチャを拡大し、内側は縮小します。両側は境界の両側で指定距離以内の範囲だけを残します。内側はポリゴンレイヤーが必要です — ポイントやラインには内部がありません。",
+              "options": {
+                "outside": "外側 (拡大)",
+                "inside": "内側 (縮小)",
+                "both": "両側"
               }
             }
           }
@@ -6251,6 +6392,7 @@
     "description": "再利用可能なスタイル、シンボル、ラベルプリセット、カラーランプを保存・閲覧し、レイヤーやプロジェクト全体に適用します。",
     "searchPlaceholder": "スタイルとタグを検索…",
     "presetsSection": "ビルトインプリセット",
+    "presetActions": "プリセット操作",
     "librarySection": "マイライブラリ",
     "projectSection": "このプロジェクト",
     "empty": "一致する保存済みスタイルがありません。レイヤーのスタイルを保存するか、ライブラリをインポートして始めましょう。",
@@ -6349,7 +6491,6 @@
       "remove": "結合を削除",
       "enabledTitle": "この結合を適用",
       "missingLayer": "結合レイヤが見つかりません",
-      "noCandidates": "結合できる属性テーブルを持つレイヤがありません",
       "statsMatched": "{{total}} 件中 {{matched}} 件の地物が一致",
       "statsUnmatchedJoin_other": "一致しなかったテーブル行: {{count}} 行"
     },
@@ -6404,6 +6545,11 @@
       "offsetY": "オフセットY (em)",
       "rotation": "回転 (°)",
       "maxWidth": "折り返し幅 (em)",
+      "numberFormat": "数値を書式設定",
+      "numberFormatHint": "数値は3桁区切りと小数点で表示されます (例: {{sample}})。文字列の値は変更されず、ラベル式は独自に書式を設定します。",
+      "numberDecimals": "小数点以下の桁数",
+      "numberLocale": "区切り記号",
+      "numberLocaleApp": "アプリの言語に合わせる",
       "transform": "文字の大小",
       "transformNone": "入力のまま",
       "transformUppercase": "大文字",
@@ -6557,6 +6703,7 @@
       "categories": "カテゴリ",
       "classColor": "クラス{{index}}の色",
       "classColorPick": "画面からクラス{{index}}の色を選択",
+      "classOpacity": "クラス{{index}}の不透明度",
       "classValue": "クラス{{index}}の値",
       "colorExpression": "色の式",
       "applyStyleType": "スタイルタイプを適用",
@@ -6566,6 +6713,8 @@
       "pointRendererClustered": "クラスタリング",
       "heatmapRadius": "ヒートマップの半径",
       "heatmapIntensity": "ヒートマップの強度",
+      "heatmapWeightField": "重みフィールド",
+      "heatmapEqualWeight": "なし（均等な重み）",
       "clusterRadius": "クラスタ半径 (px)",
       "clusterMaxZoom": "クラスタの最大ズーム",
       "strokeWidthUnit": "線幅の単位",
@@ -6602,10 +6751,12 @@
     "mode2d": "2D",
     "mode3dExtrusion": "3D押し出し",
     "noControls": "このレイヤータイプではまだスタイルコントロールを利用できません。",
+    "tilesetSymbology": "色とフィルターは 3D グローブ上のこのタイルセットに適用されます。",
     "selectedLayerType": "選択中のレイヤータイプ: {{type}}",
     "footerDeck": "変更はDuckDB deck.glレイヤーのスタイルにリアルタイムで反映されます。",
     "footerMaplibre": "変更はMapLibreのペイントプロパティにリアルタイムで反映されます。",
     "pluginPaintedFooter": "このレイヤーはプラグインによって描画され、プラグインが独自のスタイル設定を提供します。",
+    "serviceStyledFooter": "このレイヤーはサービス独自のスタイルを維持します。不透明度、順序、ズーム範囲、フィルターは引き続き適用されます。",
     "extrusion": {
       "color": "押し出しの色",
       "opacity": "押し出しの不透明度",
@@ -6702,6 +6853,7 @@
         "upcase": "文字列を大文字に変換します。",
         "downcase": "文字列を小文字に変換します。",
         "slice": "文字列または配列の一部を返します。",
+        "numberFormat": "ロケールの3桁区切りと小数点を使って数値を文字列に整形します。小数点以下の桁数も指定できます。",
         "toNumber": "値を数値に変換します。",
         "toString": "値を文字列に変換します。",
         "toBoolean": "値をtrueまたはfalseに変換します。",
@@ -6861,6 +7013,7 @@
     "allFieldsUsed": "すべてのフィールドにフィルターが設定済みです",
     "removeAll": "すべて削除",
     "clearAll": "フィルターをクリア",
+    "clearAllWithExpression": "フィルターと保存済みの式をクリア",
     "clearOne": "このフィルターをクリア",
     "clearOneNamed": "{{field}}のフィルターをクリア",
     "remove": "フィルターを削除",
@@ -6993,6 +7146,8 @@
     "saveEditsSuccess": "{{count}}件のフィーチャを元ファイルに保存しました。",
     "saveEditsNoFeatures": "このレイヤーには保存するフィーチャがありません。",
     "saveEditsError": "編集内容を元ファイルに保存できませんでした。",
+    "saveEditsToArcgis": "編集内容をArcGISサービスに保存",
+    "saveEditsArcgisSuccess": "ArcGISに保存しました: 挿入{{inserted}}件、更新{{updated}}件、削除{{deleted}}件。",
     "saveEditsToPostgis": "編集内容をPostGISテーブルに保存",
     "saveEditsPostgisSuccess": "{{table}}に保存しました: 挿入{{inserted}}件、更新{{updated}}件、削除{{deleted}}件。",
     "saveEditsPostgisSkippedFields": "対応するテーブル列がないフィールドは保存されませんでした: {{fields}}。",
@@ -7150,6 +7305,18 @@
     "stretchLinear": "線形",
     "stretchLog": "対数",
     "stretchSqrt": "平方根",
+    "viewportStretch": "表示範囲ストレッチ",
+    "viewportMinMax": "表示範囲の最小 / 最大",
+    "viewportPercentile": "表示範囲の5–95パーセンタイル",
+    "viewportStddev": "表示範囲の平均 ± 2標準偏差",
+    "viewportApply": "表示範囲に適用",
+    "viewportStretching": "表示範囲を読み込み中…",
+    "viewportStretchApplied": "表示範囲ストレッチを適用しました",
+    "viewportAuto": "地図の移動時に自動更新",
+    "viewportStretchNoView": "地図表示は利用できません。",
+    "viewportStretchNoValues": "表示範囲内にラスター値が見つかりません。",
+    "viewportStretchNoRange": "表示範囲の値から範囲を決定できません。",
+    "viewportStretchMoved": "読み込みが完了する前に地図が移動しました。もう一度適用してください。",
     "index": "指数",
     "classifyToggle": "離散的なクラスに分類する",
     "method": "方法",
@@ -7646,5 +7813,65 @@
       "downloadsStarted": "{{started}} 件のダウンロードを開始しました。{{failed}} 件が失敗しました。",
       "downloadCancelled": "ダウンロードがキャンセルまたは失敗しました。"
     }
+  },
+  "usgsNldi": {
+    "panelTitle": "USGS NLDI",
+    "title": "USGS NLDI 水系ネットワークツール",
+    "hint": "まず流路の方向を選んで地図をクリックします。次にナビゲーション方向を選び、強調表示されたボタンを押して利用可能なカタログを読み込み、観測所や井戸などのカタログを選択して、もう一度押すとそのカタログが描画されます。",
+    "directionComplete": "流路全体 — NHDリーチ全体を返します",
+    "directionUp": "上流のみ — 地点より上流のリーチを返します",
+    "directionDown": "下流のみ — 地点より下流のリーチを返します",
+    "basinButton": "水文位置から流域を取得",
+    "navigationPlaceholder": "方向を選択 — 描画前に必須です",
+    "navigationUpstreamMain": "上流本流 — 主流路をたどります",
+    "navigationUpstreamTributaries": "上流支流 — 流入する分岐を探します",
+    "navigationDownstreamMain": "下流本流 — 主流路をたどります",
+    "navigationDownstreamDiversions": "下流分流 — 分岐した流路をたどります",
+    "sourcePlaceholder": "先に「ソースを読み込んで描画」を押してください",
+    "distancePlaceholder": "距離 (km)",
+    "navigationButton": "1. ソースを読み込んでナビゲーションを描画",
+    "navigationButtonAgain": "別のナビゲーションレイヤーを描画",
+    "exportButton": "描画結果をGeoJSONにエクスポート",
+    "addLayersButton": "描画結果をGeoLibreのレイヤーに追加",
+    "clearButton": "NLDIの結果をクリア",
+    "noComid": "この地点に対するCOMIDは返されませんでした。",
+    "requestingBasin": "上流域を要求しています…",
+    "basinRendered": "COMID {{comid}} の上流域を描画しました。",
+    "basinFailed": "流域の要求に失敗しました。",
+    "selectNavigation": "地点をトレースした後にナビゲーション方法を選択してください。",
+    "invalidDistance": "距離は1〜9999 kmの範囲で指定してください。",
+    "discoveringSources": "NLDIのナビゲーションソースを検出しています…",
+    "navigationUnavailable": "そのナビゲーション方法はこのCOMIDでは利用できません。",
+    "noPlottableSource": "NLDIから描画可能なナビゲーションソースが返されませんでした。",
+    "navigationEmpty": "{{source}} はこのナビゲーションで地図化できるフィーチャを返しませんでした。",
+    "navigationAdded": "COMID {{comid}} に対して {{navigation}} 経由で {{source}} を追加しました ({{km}} km)。既存のナビゲーションレイヤーは地図上に残ります。",
+    "navigationFailed": "ナビゲーションの要求に失敗しました。",
+    "tracing": "最も近いNHD流路までトレースしています…",
+    "flowline": "流路を描画しました。",
+    "flowlineComid": "流路を描画しました。COMID {{comid}} は流域ワークフローで利用できます。",
+    "flowlineFallback": "NLDIの水文位置フォールバックを使って流路を描画しました。",
+    "flowlineFallbackComid": "NLDIの水文位置フォールバックを使って流路を描画しました。COMID {{comid}} は流域ワークフローで利用できます。",
+    "requestFailed": "NLDIの要求に失敗しました。",
+    "nothingToAdd": "追加できる描画済みのNLDIフィーチャがありません。",
+    "layersAdded_other": "{{count}}個のNLDIレイヤーを1つの「USGS NLDIの結果」グループに追加しました。",
+    "layerGroupName": "USGS NLDIの結果",
+    "layerFlowline": "NLDI流路",
+    "layerRaindrop": "NLDI雨滴経路",
+    "layerSelectedPoint": "NLDI選択地点",
+    "layerBasin": "NLDI上流域",
+    "layerNavigation": "NLDIナビゲーション {{index}}",
+    "resultCleared": "NLDIの結果をクリアしました。",
+    "directionalUnavailable": "USGSの処理がオフラインの間は、方向付きの流路トレースは利用できません。「流路全体」を選ぶか、後でもう一度お試しください。",
+    "noFlowlineNearby": "NLDIはこの地点の近くに流路を見つけられませんでした。",
+    "httpError": "USGS NLDIがHTTP {{status}}を返しました",
+    "httpErrorDetail": "USGS NLDIがHTTP {{status}}を返しました: {{detail}}",
+    "noAttributes": "NLDIから属性は返されませんでした。",
+    "catalogCaGages": "カリフォルニア州の観測所 (ca_gages)",
+    "catalogNwisSite": "NWIS地表水観測地点 (流量観測所)",
+    "catalogNwisGw": "NWIS地下水井戸",
+    "catalogGfv11Pois": "USGS Geospatial Fabricの地点",
+    "catalogHuc12pp": "HUC12流出点",
+    "catalogNmwdiSt": "ニューメキシコ州の水文観測地点",
+    "catalogFlowlines": "NHDPlus流路"
   }
 }

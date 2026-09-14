@@ -12,12 +12,13 @@
  */
 import {
   normalizeHexColor,
+  storyVisibleLayers,
   useAppStore,
   type LegendConfig,
   type LegendCustomEntry,
   type LegendPanelPosition,
 } from "@geolibre/core";
-import type { MapController } from "@geolibre/map";
+import type { MapEngine } from "@geolibre/map";
 import { colormapColors, warmColormapColors } from "@geolibre/plugins";
 import { cn } from "@geolibre/ui";
 import {
@@ -174,11 +175,20 @@ export function MapLegendPanel({
   mapControllerRef,
   mapReadyGeneration,
 }: {
-  mapControllerRef: RefObject<MapController | null>;
+  mapControllerRef: RefObject<MapEngine | null>;
   mapReadyGeneration: number;
 }) {
   const { t, i18n } = useTranslation();
-  const layers = useAppStore((state) => state.layers);
+  const storeLayers = useAppStore((state) => state.layers);
+  const storyPresenting = useAppStore((state) => state.ui.storymapPresenting);
+  const storyOpacity = useAppStore((state) => state.ui.storymapLayerOpacity);
+  // During a story presentation the legend follows the chapters: a layer the
+  // current chapter has faded fully out drops from the legend as well, so
+  // the reader sees only the symbology on screen (discussion #2326).
+  const layers = useMemo(
+    () => storyVisibleLayers(storeLayers, storyPresenting, storyOpacity),
+    [storeLayers, storyPresenting, storyOpacity],
+  );
   const legend = useAppStore((state) => state.legend);
   const setLegend = useAppStore((state) => state.setLegend);
   const [editing, setEditing] = useState(false);

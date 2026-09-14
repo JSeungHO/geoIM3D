@@ -3,9 +3,58 @@
 geoIM3D는 [opengeos/GeoLibre](https://github.com/opengeos/GeoLibre)의 포크입니다.
 원본에 새 릴리스가 나오면 이 순서대로 가져옵니다.
 
-마지막 수행: **v2.8.0 → v2.9.0 (48커밋, 228파일)**. 충돌 8개 파일 + git이
-표시하지 않은 의미 충돌 1개(`CesiumCanvas.tsx`). 아래 내용은 실제로 쓴 명령과
-부딪힌 문제를 적은 것입니다.
+마지막 수행: **v2.9.0 → v3.0.0 (95커밋, 476파일)**. 충돌 13개 파일. 아래
+내용은 실제로 쓴 명령과 부딪힌 문제를 적은 것입니다.
+
+v3.0.0에서 겪은 것:
+
+- **상위가 3D 돌출(extrusion)을 직접 흡수 + 고도화함.** 우리 돌출 코드
+  (`extrusionHeightOf`, `applyExtrusion` 등, `packages/map/src/cesium-layer-sync.ts`)
+  는 상위의 확장형 스타일 표현식 돌출(`extrusionAdvancedStyleEnabled`,
+  `extrusionHeightExpression` 등)로 완전히 대체됐습니다. 원칙 5가 예견한
+  대로 우리 파일을 **통째로 지우고 상위 파일을 받은** 뒤(`git checkout
+  upstream/main -- packages/map/src/cesium-layer-sync.ts`), 그 위에 우리만의
+  기능 3개(모두 별도 모듈이라 상위와 충돌 없음)를 다시 얹었습니다:
+  타일셋 배치 매트릭스(`geoim3d-tileset-placement.ts`, `applyTilesetPlacement`),
+  타일셋 로딩 진행률(`geoim3d-tileset-loading.ts`,
+  `tileset.loadProgress.addEventListener`), Layer Swipe를 globe에 반영
+  (`geoim3d-cesium-swipe.ts`, 생성자에서 구독 + `applyAppearance`에서
+  `splitDirection` 적용). **상위 파일을 통째로 받은 뒤 우리 기능을 다시
+  얹을 때는 상위의 최신 아키텍처(예: I3S의 `entryTilesets()` 다중 타일셋
+  순회)에 맞춰 이식하지, 옛 코드를 그대로 붙여넣지 않습니다** — 그대로
+  붙이면 I3S 같은 상위의 새 하위 종류를 놓칩니다.
+- **URL 프로토콜 리졸버(`setCesiumTileUrlResolver`)가 상위 기능에 완전히
+  흡수됨.** VWorld 같은 `vworld://` 커스텀 스킴을 globe에서 재작성해 주던
+  우리 훅은, 상위가 새로 만든 `hasRegisteredProtocol` +
+  `ProtocolImageryProvider`(`cesium-protocol-imagery.ts`)가 MapLibre의
+  `maplibregl.addProtocol` 레지스트리를 직접 읽어 대신 처리하면서 완전히
+  죽은 코드가 됐습니다. `setCesiumTileUrlResolver` 자체와 호출부
+  (`useCredentials.ts`), 그리고 그것만 테스트하던
+  `tests/cesium-basemap-tiles.test.ts`(rasterBasemapTiles·
+  tilesetOpacityExpression 포함, 둘 다 자기 테스트 말고는 호출부가 없어
+  이전 병합 때부터 제거 후보였던 것들)를 함께 지웠습니다. **상위가 흡수한
+  기능인지는 실제로 그 스킴이 상위의 새 레지스트리로 동작하는지 import
+  체인을 따라가서 확인**한 다음에 지웁니다 — 겉만 비슷해 보이고 실제로는
+  다른 메커니즘일 수 있습니다.
+- **globe을 primary map으로 쓰는 기능 자체가 상위에 흡수됨(issue #2217,
+  #2260).** 우리가 만든 `PrimaryGlobeSwitch.tsx`(2D/globe 탭 전환 래퍼)는
+  상위의 `primaryRenderer` 프로젝트 필드 + `PrimaryCesiumCanvas.tsx` +
+  `engineRef`/`onEngineReady` 패턴으로 완전히 대체됐습니다. 파일을 지우고,
+  `selectPrimaryView(x)` 호출은 `useAppStore.getState().setPrimaryRenderer(x)`
+  로, `setPrimaryViewBridge({isGlobeActive, subscribe})`는 스토어를 직접
+  구독하는 얕은 어댑터로 바꿨습니다 — `PrimaryViewBridge` 인터페이스
+  (`packages/plugins/src/plugins/geoim3d-objects.ts`)가 그대로 남아 있어서
+  구현만 바꾸면 됐습니다. **상위가 새 기능을 흡수하면 우리가 만든 얇은
+  래퍼/브리지 인터페이스의 구현만 교체될 뿐, 그 인터페이스를 쓰는 하위
+  코드(3D 오브젝트 플러그인)는 손댈 필요가 없는 경우가 많습니다** — 인터페이스
+  경계를 브리지로 둔 설계가 정확히 이럴 때 값을 냅니다.
+- 회귀 여부가 애매한 실패는 **병합 전 `dev` 기준으로 직접 재현**해서
+  판단합니다. `npm run test:frontend`에서 소스 코드를 정규식으로 스캔하는
+  테스트(`gaussian-splat-drop.test.ts`)가 하나 실패했는데,
+  `git worktree add`로 병합 전 `dev`를 따로 체크아웃해 같은 테스트를
+  돌려보니 **병합과 무관하게 이미 실패 중**이었습니다(정규식이 트레일링
+  콤마를 허용하지 않는데 소스는 항상 콤마가 있었던, 병합 전부터의 버그).
+  이런 건 고치지 않고 그대로 둡니다 — 병합 PR의 범위가 아닙니다.
 
 v2.9.0에서 겪은 것:
 

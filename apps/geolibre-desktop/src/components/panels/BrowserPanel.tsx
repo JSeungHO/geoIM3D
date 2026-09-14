@@ -7,7 +7,7 @@ import {
   useAppStore,
   type GeoLibreLayer,
 } from "@geolibre/core";
-import type { MapController } from "@geolibre/map";
+import type { MapEngine } from "@geolibre/map";
 import { fetchPostgisStatus, listPostgisTables } from "@geolibre/processing";
 import { Input, ScrollArea } from "@geolibre/ui";
 import { Search } from "lucide-react";
@@ -47,7 +47,7 @@ const CONNECTION_ID_PREFIX = "connection:";
 const FOLDER_ID_PREFIX = "folder:";
 
 interface BrowserPanelProps {
-  mapControllerRef: RefObject<MapController | null>;
+  mapControllerRef: RefObject<MapEngine | null>;
   /**
    * Open a recent project by path (shared with the toolbar's instance).
    * Resolves to an error message to show inline, or null on success.
@@ -440,6 +440,15 @@ export function BrowserPanel({
         } else {
           setError(t("browser.addFailed"));
         }
+        return;
+      }
+      if (entry.kind === "csw") {
+        openAddData("csw", {
+          url: typeof entry.fields.endpoint === "string" ? entry.fields.endpoint : undefined,
+          // The entry saves the search term alongside the endpoint, so restore
+          // it too rather than reopening on an empty keyword field.
+          keyword: typeof entry.fields.keyword === "string" ? entry.fields.keyword : undefined,
+        });
         return;
       }
       beginBusy(node.id);

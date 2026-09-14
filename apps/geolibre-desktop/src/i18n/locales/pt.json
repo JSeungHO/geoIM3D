@@ -276,6 +276,10 @@
         "label": "Adicionar camada WMS",
         "description": "Adicione um serviço WMS GetMap como uma camada raster em blocos (tiled)."
       },
+      "csw": {
+        "label": "Pesquisar catálogo CSW",
+        "description": "Pesquise conjuntos de dados em um serviço de catálogo OGC e adicione ao mapa os recursos web compatíveis."
+      },
       "wfs": {
         "label": "Adicionar camada WFS",
         "description": "Adicione feições WFS solicitando GeoJSON de um serviço GetFeature."
@@ -343,6 +347,18 @@
       "polyline": {
         "label": "Adicionar camada de polilinha codificada",
         "description": "Importar strings de polilinha codificada (Google, OSRM, Valhalla) de texto ou arquivos como linhas vetoriais."
+      },
+      "cesiumIon": {
+        "label": "Adicionar recurso do Cesium Ion",
+        "description": "Adicione um tileset 3D Tiles ou imagens do Cesium Ion pelo id do recurso. Renderizado no globo 3D com o seu token do Cesium Ion."
+      },
+      "czml": {
+        "label": "Adicionar camada 3D dinâmica CZML",
+        "description": "Carregue um documento dinâmico Cesium Language (CZML) que descreve órbitas, trajetórias, caminhos de veículos e cenas 3D variáveis no tempo sobre o globo."
+      },
+      "kml": {
+        "label": "KML / KMZ",
+        "description": "Carregue KML ou KMZ com estilos nativos, sobreposições e links de rede no globo."
       }
     },
     "shared": {
@@ -400,6 +416,37 @@
       "importedWithDropped_one": "{{count}} serviço importado ({{dropped}} ignorado — biblioteca cheia).",
       "importedWithDropped_other": "{{count}} serviços importados ({{dropped}} ignorados — biblioteca cheia)."
     },
+    "cesiumIon": {
+      "defaultName": "Recurso do Cesium Ion",
+      "assetId": "ID do recurso",
+      "kindTileset": "3D Tiles",
+      "kindImagery": "Imagens",
+      "altitudeOffset": "Deslocamento de altitude (m)",
+      "quickPicks": "Seleção rápida",
+      "hint": "Encontre os ids de recurso em “My Assets” em ion.cesium.com. O recurso deve estar compartilhado com o token configurado em Configurações.",
+      "errorAssetId": "Digite um id de recurso do Cesium Ion (um número inteiro positivo).",
+      "errorAltitude": "Digite o deslocamento de altitude como um número de metros.",
+      "tokenMissing": "Nenhum token do Cesium Ion está configurado. Adicione um em Configurações → Variáveis de ambiente (VITE_CESIUM_TOKEN), ou o recurso não será carregado."
+    },
+    "czml": {
+      "defaultName": "Cena dinâmica CZML",
+      "url": "URL do CZML",
+      "sourceModeUrl": "URL",
+      "sourceModeFile": "Arquivo local",
+      "file": "Arquivo",
+      "quickPicks": "Cenas dinâmicas de exemplo",
+      "hint": "Fluxos ou arquivos CZML definem posições 3D dinâmicas, animações e órbitas sincronizadas com o relógio do globo.",
+      "errorUrl": "Digite uma URL válida de endpoint CZML.",
+      "errorChooseFile": "Selecione um arquivo CZML (.czml ou .json) para carregar.",
+      "errorFileMissing": "Não foi possível ler o arquivo selecionado.",
+      "errorInvalidCzml": "O arquivo não contém um documento CZML válido (esperava-se um array JSON ou um objeto de pacote).",
+      "readError": "Falha ao ler os dados CZML."
+    },
+    "kml": {
+      "defaultName": "KML / KMZ",
+      "url": "URL KML / KMZ",
+      "errorSource": "Insira uma URL KML/KMZ ou escolha um arquivo."
+    },
     "xyz": {
       "defaultName": "Camada XYZ",
       "sampleLabel": "Imagens USGS",
@@ -426,6 +473,21 @@
       "noLayersFound": "Nenhuma camada foi encontrada para este serviço.",
       "retrieveError": "Não foi possível recuperar as camadas deste serviço.",
       "version": "Versão do WMS"
+    },
+    "csw": {
+      "defaultName": "Catálogo CSW",
+      "urlPlaceholder": "https://example.com/csw",
+      "keyword": "Palavra-chave",
+      "search": "Pesquisar",
+      "searching": "Pesquisando…",
+      "results": "Resultados do catálogo",
+      "errorUrl": "Digite uma URL HTTP ou HTTPS válida do serviço CSW.",
+      "searchError": "Não foi possível pesquisar neste catálogo.",
+      "noResults": "Nenhum conjunto de dados correspondente foi encontrado.",
+      "invalidGeoJson": "O recurso selecionado não é uma FeatureCollection GeoJSON.",
+      "addError": "Não foi possível adicionar este recurso do catálogo.",
+      "addResource": "Adicionar {{kind}}",
+      "noSupportedResources": "Nenhum recurso WMS, WFS, ArcGIS ou GeoJSON compatível foi anunciado."
     },
     "wfs": {
       "defaultName": "Camada WFS",
@@ -624,6 +686,7 @@
       "errorRetrieveColumns": "Não foi possível recuperar os nomes das colunas.",
       "url": "URL de texto delimitado",
       "file": "Arquivo de texto delimitado",
+      "fileFilter": "CSV / TSV / TXT / Excel",
       "urlPlaceholder": "https://example.com/data.csv",
       "retrieving": "Recuperando...",
       "retrieveColumns": "Recuperar colunas",
@@ -892,7 +955,16 @@
       "cellSize": "Tamanho da célula",
       "lineWidth": "Espessura da linha",
       "extrusion": "Extrusão 3D",
-      "modelUrlPlaceholder": "https://example.com/model.glb"
+      "modelUrlPlaceholder": "https://example.com/model.glb",
+      "chooseModelFile": "Escolher modelo local",
+      "sampleDataset": "Conjunto de dados de exemplo",
+      "sampleCustom": "Modelo personalizado",
+      "sampleAirplane": "Avião — San Francisco",
+      "sampleShanghai": "Xangai — centro da cidade",
+      "modelFileHint": "Escolha um arquivo GLB ou um glTF autocontido. Modelos locais são incorporados aos projetos salvos, aumentando o tamanho do projeto.",
+      "modelExternalResources": "Este modelo faz referência a arquivos separados. Exporte-o como GLB com texturas e buffers incorporados e tente novamente.",
+      "modelTooLarge": "Este modelo excede o limite de {{limit}} MB para incorporação em um projeto. Hospede-o e adicione-o por URL.",
+      "modelFileError": "Não foi possível ler este modelo. Escolha um arquivo glTF 2.0 ou GLB válido."
     },
     "nonGeographicCoordinates": "As coordenadas em {{names}} não são de longitude/latitude, portanto nada será desenhado no mapa. O CRS está incorreto — reprojete os dados (ou corrija o .prj) e carregue novamente."
   },
@@ -1334,6 +1406,12 @@
     "errorFallback": "Não foi possível compartilhar o projeto.",
     "usernameRequired": "Defina um nome de usuário na sua conta {{shareHost}} antes de compartilhar. Abra as configurações da sua conta para escolher um e tente novamente.",
     "openAccountSettings": "Abrir configurações da conta",
+    "shareAnyway": "Compartilhar mesmo assim",
+    "localWarningTitle_one": "{{count}} camada ficará faltando no mapa compartilhado",
+    "localWarningTitle_other": "{{count}} camadas ficarão faltando no mapa compartilhado",
+    "localWarningBody": "{{shareHost}} armazena apenas o arquivo do projeto, nunca os arquivos do seu computador. Os destinatários abrem o projeto em um navegador, que não consegue ler o seu disco, então essas camadas ficarão vazias para todos, exceto você.",
+    "localWarningAdvice": "Para incluí-las, converta rasters em Cloud Optimized GeoTIFF e vetores em PMTiles ou GeoParquet, hospede os arquivos em um servidor HTTPS público como GitHub ou Hugging Face, adicione-os ao mapa por URL e compartilhe novamente. Camadas vetoriais locais pequenas são incorporadas ao projeto automaticamente.",
+    "localWarningLearnMore": "Saiba mais",
     "readinessChecking": "Verificando se os destinatários conseguem carregar seus dados…",
     "readinessUnavailable": "Não foi possível executar a verificação das fontes de dados.",
     "readinessAllReachable_one": "{{count}} fonte de dados parece acessível para os destinatários.",
@@ -1414,7 +1492,7 @@
   },
   "printLayout": {
     "title": "Layout de impressão",
-    "description": "Componha um mapa pronto para impressão com título, legenda, barra de escala e seta norte e, em seguida, exporte-o para PNG ou PDF.",
+    "description": "Componha um mapa pronto para impressão com título, legenda, barra de escala e seta norte e, em seguida, exporte-o para PNG, PDF ou SVG.",
     "preview": "Pré-visualização",
     "resizeControls": "Redimensionar painel de controles",
     "resizeDialog": "Redimensionar diálogo",
@@ -1422,6 +1500,7 @@
     "copyToClipboard": "Copiar para a área de transferência",
     "copied": "Copiado",
     "exportPng": "Exportar PNG",
+    "exportSvg": "Exportar SVG",
     "exportPdf": "Exportar PDF",
     "titleLabel": "Título",
     "titlePlaceholder": "Título do mapa",
@@ -1848,7 +1927,22 @@
     "show3d": "Mostrar mapa {{number}} como um globo 3D",
     "show2d": "Mostrar mapa {{number}} como um mapa 2D",
     "only2d": "Somente 2D",
+    "only3d": "Somente 3D",
     "cesiumTokenHint": "Adicione um token do Cesium Ion em Configurações para terreno e imagens do Ion"
+  },
+  "renderer": {
+    "basemap": "Mapa base",
+    "imagery": "Imagens",
+    "projectBasemap": "Mapa base do projeto",
+    "layerUnsupported": "Não renderizado pelo globo 3D",
+    "layerCesiumOnly": "Renderizado somente pelo globo 3D",
+    "resetView": "Redefinir vista",
+    "scene3D": "Globo 3D",
+    "scene2D": "Mapa 2D",
+    "sceneColumbus": "Vista Columbus",
+    "fullscreenEnter": "Tela cheia",
+    "fullscreenExit": "Sair da tela cheia",
+    "fullscreenUnavailable": "Tela cheia indisponível"
   },
   "mapContextMenu": {
     "copyCoordinatesHint": "Copiar coordenadas para a área de transferência",
@@ -2437,6 +2531,7 @@
       "mbtiles": "Camada MBTiles",
       "xyz": "Camada XYZ",
       "wms": "Camada WMS",
+      "csw": "Catálogo CSW",
       "wfs": "Camada WFS",
       "wmts": "Camada WMTS",
       "ogcFeatures": "OGC API - Features",
@@ -2445,6 +2540,8 @@
       "georss": "Camada GeoRSS",
       "video": "Camada de vídeo",
       "deckglViz": "Camada Deck.gl",
+      "cesiumIon": "Recurso do Cesium Ion",
+      "czml": "Cena 3D dinâmica CZML",
       "gltfModel": "Modelo 3D (glTF)",
       "postgres": "Camada PostgreSQL",
       "iceberg": "Camada Apache Iceberg"
@@ -2700,6 +2797,9 @@
       "splitViewGrid2x3": "Grade 2 × 3",
       "splitViewGrid3x3": "Grade 3 × 3",
       "splitViewSync": "Sincronizar visualizações",
+      "renderingEngine": "Motor de renderização",
+      "rendererMapLibre": "MapLibre",
+      "rendererCesium": "Cesium",
       "viewInGoogleMaps": "Ver no Google Maps",
       "viewInGoogleEarth": "Ver no Google Earth",
       "zoomIn": "Ampliar",
@@ -2852,6 +2952,7 @@
       "saveProjectAsTitle": "Salvar projeto como",
       "saveProjectAsDesc": "Digite um nome de arquivo. O projeto será baixado para a pasta de downloads do seu navegador quando você clicar em Salvar.",
       "embedVectorTitle": "Incorporar dados vetoriais locais?",
+      "embedEditedGeometryDesc": "Este projeto contém geometrias editadas. Incorpore os dados vetoriais (cerca de {{size}}) para preservá-las. Sem incorporá-los, as camadas referenciadas serão reabertas com as geometrias originais e os dados locais poderão estar indisponíveis.",
       "embedVectorDesc": "Este projeto tem {{count}} camada(s) vetorial(is) local(is) carregada(s) do seu computador. O navegador não pode relê-las quando o projeto é reaberto, então seus dados precisam ser incorporados no arquivo do projeto para serem restaurados. A incorporação adiciona cerca de {{size}} ao arquivo.",
       "embedVectorDescDesktop": "Este projeto tem {{count}} camada(s) vetorial(is) local(is) carregada(s) do seu computador. Incorpore seus dados para tornar o projeto autocontido (adiciona cerca de {{size}}), ou salve referências de arquivo que recarregam do disco quando o projeto é reaberto. As referências mantêm o arquivo pequeno, mas quebram se um arquivo de origem for movido ou excluído posteriormente.",
       "embedVectorDescMas": "Este projeto tem {{count}} camada(s) vetorial(is) local(is) carregada(s) do seu computador. A sandbox da Mac App Store não consegue manter o acesso a esses arquivos depois que o GeoLibre é fechado, portanto os dados precisam ser incorporados ao arquivo do projeto para serem restaurados. A incorporação adiciona cerca de {{size}} ao arquivo.",
@@ -2902,6 +3003,7 @@
     },
     "plugin": {
       "maplibre-gl-annotations": "Anotações",
+      "maplibre-gl-dimensions": "Cotas",
       "maplibre-gl-streetview": "Visão da rua",
       "maplibre-gl-time-slider": "Controle de tempo",
       "geolibre-timelapse": "Timelapse",
@@ -3094,9 +3196,14 @@
     "openBuilder": "Construtor de expressões...",
     "invalidExpression": "Digite uma expressão booleana válida.",
     "select": "Selecionar feições",
+    "applyLayerFilter": "Filtrar camada",
+    "clearLayerFilter": "Limpar filtro da camada",
+    "layerFilteredHint": "Um filtro persistente está ocultando parte das feições desta camada.",
+    "layerFilteredBothHint": "Um filtro persistente e um filtro rápido estão ocultando parte das feições desta camada.",
     "noLayers": "Adicione uma camada vetorial com feições para fazer uma seleção.",
     "needTwoLayers": "Selecionar por localização requer duas camadas vetoriais com feições.",
     "summary": "{{selected}} de {{total}} feição(ões) selecionada(s) ({{matched}} correspondentes).",
+    "filterSummary": "Filtro da camada aplicado: {{matched}} de {{total}} feição(ões) correspondem.",
     "evaluationErrors": "{{count}} feição(ões) não puderam ser avaliadas e não foram correspondidas.",
     "unevaluableDisjoint": "{{count}} feição(ões) foram excluídas porque sua geometria não pôde ser avaliada.",
     "tooManyPairs": "Esta comparação requer {{pairs}} testes de pares de feições (limite {{limit}}). Em vez disso, use Processamento → GeoLibre → Vetor → Selecionar por localização com o mecanismo Sidecar.",
@@ -3509,6 +3616,7 @@
     "search": "Pesquisar",
     "searchCurrentView": "Pesquisar na área atual do mapa",
     "enterKeyword": "Digite uma palavra-chave para começar.",
+    "viewUnavailable": "A área do mapa atual não está disponível; desative o filtro de área do mapa para pesquisar.",
     "loadMore": "Carregar mais",
     "searching": "Pesquisando…",
     "loadingMore": "Carregando mais conjuntos de dados…",
@@ -3551,10 +3659,14 @@
     "title": "Catálogos STAC",
     "footprintLayerName": "Contornos de busca STAC",
     "catalogSearch": "Encontrar um catálogo público no STAC Index",
+    "portolanCatalogSearch": "Encontrar um catálogo público no Portolan Registry",
     "catalogSearchPlaceholder": "Buscar nomes de catálogos…",
     "indexLoading": "Carregando STAC Index…",
+    "portolanIndexLoading": "Carregando Portolan Registry…",
     "indexUnavailable": "STAC Index indisponível: informe uma URL",
+    "portolanIndexUnavailable": "Portolan Registry indisponível: informe uma URL",
     "indexLoadFailed": "Não foi possível carregar o STAC Index",
+    "portolanIndexLoadFailed": "Não foi possível carregar o Portolan Registry",
     "urlLabel": "URL do catálogo ou da API STAC",
     "connect": "Conectar",
     "connecting": "Conectando ao STAC…",
@@ -3907,6 +4019,28 @@
     "saveElement": "Salvar elemento",
     "atPoint": "No ponto",
     "pinnedToExtent": "Fixado à extensão"
+  },
+  "dimensions": {
+    "toolbar": "Ferramentas de cotagem",
+    "layerName": "Cotas",
+    "tools": {
+      "linear": "Cota linear",
+      "angular": "Cota angular"
+    },
+    "unit": "Unidade",
+    "snap": "Ajustar aos vértices",
+    "color": "Cor da cota",
+    "width": "Espessura da linha",
+    "widthOptions": {
+      "thin": "Fina",
+      "medium": "Média",
+      "thick": "Grossa"
+    },
+    "deleteLast": "Excluir última cota",
+    "clearAll": "Limpar todas as cotas",
+    "newLayer": "Nova camada de cotas",
+    "confirmClearAll_one": "Excluir esta cota? Isso não pode ser desfeito.",
+    "confirmClearAll_other": "Excluir todas as {{count}} cotas desta camada? Isso não pode ser desfeito."
   },
   "pythonConsole": {
     "title": "Console Python",
@@ -4509,6 +4643,15 @@
                 "kilometers": "Quilômetros",
                 "meters": "Metros",
                 "miles": "Milhas"
+              }
+            },
+            "side": {
+              "label": "Lado do buffer",
+              "description": "Fora expande cada feição, Dentro a reduz e Ambos os lados mantém apenas a zona dentro dessa distância de cada lado do seu limite. Dentro exige polígonos — um ponto ou uma linha não tem interior.",
+              "options": {
+                "outside": "Fora (expandir)",
+                "inside": "Dentro (reduzir)",
+                "both": "Ambos os lados"
               }
             }
           }
@@ -6325,6 +6468,7 @@
     "description": "Salve, navegue e aplique estilos, símbolos, predefinições de rótulos e rampas de cores reutilizáveis em camadas e projetos.",
     "searchPlaceholder": "Pesquisar estilos e tags…",
     "presetsSection": "Predefinições integradas",
+    "presetActions": "Ações da predefinição",
     "librarySection": "Minha biblioteca",
     "projectSection": "Este projeto",
     "empty": "Nenhum estilo salvo corresponde. Salve o estilo de uma camada ou importe uma biblioteca para começar.",
@@ -6425,7 +6569,6 @@
       "remove": "Remover junção",
       "enabledTitle": "Aplicar esta junção",
       "missingLayer": "Camada de junção não encontrada",
-      "noCandidates": "Nenhuma outra camada tem tabela de atributos para unir",
       "statsMatched": "{{matched}} de {{total}} feições correspondidas",
       "statsUnmatchedJoin_one": "{{count}} linha da tabela sem correspondência",
       "statsUnmatchedJoin_other": "{{count}} linhas da tabela sem correspondência"
@@ -6482,6 +6625,11 @@
       "offsetY": "Deslocamento Y (em)",
       "rotation": "Rotação (°)",
       "maxWidth": "Largura de quebra (em)",
+      "numberFormat": "Formatar números",
+      "numberFormatHint": "Os valores numéricos são rotulados com separadores de milhares e de decimais, p. ex. {{sample}}. Os valores de texto não mudam, e uma expressão de rótulo formata o seu próprio resultado.",
+      "numberDecimals": "Casas decimais",
+      "numberLocale": "Separadores",
+      "numberLocaleApp": "Seguir o idioma da aplicação",
       "transform": "Caixa das letras",
       "transformNone": "Como digitado",
       "transformUppercase": "MAIÚSCULAS",
@@ -6635,6 +6783,7 @@
       "categories": "Categorias",
       "classColor": "Cor da classe {{index}}",
       "classColorPick": "Escolher a cor da classe {{index}} da tela",
+      "classOpacity": "Opacidade da classe {{index}}",
       "classValue": "Valor da classe {{index}}",
       "colorExpression": "Expressão de cor",
       "applyStyleType": "Aplicar tipo de estilo",
@@ -6644,6 +6793,8 @@
       "pointRendererClustered": "Agrupado",
       "heatmapRadius": "Raio do mapa de calor",
       "heatmapIntensity": "Intensidade do mapa de calor",
+      "heatmapWeightField": "Campo de ponderação",
+      "heatmapEqualWeight": "Nenhum (peso igual)",
       "clusterRadius": "Raio do agrupamento (px)",
       "clusterMaxZoom": "Zoom máximo do agrupamento",
       "strokeWidthUnit": "Unidade da espessura do traço",
@@ -6680,10 +6831,12 @@
     "mode2d": "2D",
     "mode3dExtrusion": "Extrusão 3D",
     "noControls": "Os controles de estilo ainda não estão disponíveis para este tipo de camada.",
+    "tilesetSymbology": "As cores e os filtros aplicam-se a este conjunto de tiles no globo 3D.",
     "selectedLayerType": "Tipo de camada selecionado: {{type}}",
     "footerDeck": "As alterações são aplicadas ao vivo ao estilo da camada deck.gl do DuckDB.",
     "footerMaplibre": "As alterações são aplicadas ao vivo às propriedades paint do MapLibre.",
     "pluginPaintedFooter": "Esta camada é desenhada pelo seu plugin, que oferece os próprios controles de estilo.",
+    "serviceStyledFooter": "Esta camada mantém o estilo próprio do seu serviço; opacidade, ordem, intervalo de zoom e filtros continuam valendo.",
     "extrusion": {
       "color": "Cor da extrusão",
       "opacity": "Opacidade da extrusão",
@@ -6780,6 +6933,7 @@
         "upcase": "Converte uma string para maiúsculas.",
         "downcase": "Converte uma string para minúsculas.",
         "slice": "Retorna uma parte de uma string ou array.",
+        "numberFormat": "Formata um número como texto com os separadores de milhares e de decimais de uma configuração regional, com casas decimais fixas opcionais.",
         "toNumber": "Converte um valor em número.",
         "toString": "Converte um valor em string.",
         "toBoolean": "Converte um valor em verdadeiro ou falso.",
@@ -6939,6 +7093,7 @@
     "allFieldsUsed": "Todos os campos já têm um filtro",
     "removeAll": "Remover todos",
     "clearAll": "Limpar filtros",
+    "clearAllWithExpression": "Limpar filtros e expressão salva",
     "clearOne": "Limpar este filtro",
     "clearOneNamed": "Limpar o filtro de {{field}}",
     "remove": "Remover filtro",
@@ -7072,6 +7227,8 @@
     "saveEditsSuccess": "{{count}} feição(ões) salva(s) no arquivo de origem.",
     "saveEditsNoFeatures": "Esta camada não tem feições para salvar.",
     "saveEditsError": "Não foi possível salvar as edições no arquivo de origem.",
+    "saveEditsToArcgis": "Salvar edições no serviço ArcGIS",
+    "saveEditsArcgisSuccess": "Salvo em ArcGIS: {{inserted}} inserida(s), {{updated}} atualizada(s), {{deleted}} excluída(s).",
     "saveEditsToPostgis": "Salvar edições na tabela PostGIS",
     "saveEditsPostgisSuccess": "Salvo em {{table}}: {{inserted}} inserida(s), {{updated}} atualizada(s), {{deleted}} excluída(s).",
     "saveEditsPostgisSkippedFields": "Os campos sem uma coluna correspondente na tabela não foram salvos: {{fields}}.",
@@ -7229,6 +7386,18 @@
     "stretchLinear": "Linear",
     "stretchLog": "Logarítmico",
     "stretchSqrt": "Raiz quadrada",
+    "viewportStretch": "Contraste da vista",
+    "viewportMinMax": "Mín. / máx. da vista",
+    "viewportPercentile": "Percentis 5–95 da vista",
+    "viewportStddev": "Média ± 2 desvios padrão da vista",
+    "viewportApply": "Aplicar à vista",
+    "viewportStretching": "Lendo a vista…",
+    "viewportStretchApplied": "Contraste da vista aplicado",
+    "viewportAuto": "Atualizar automaticamente quando o mapa se mover",
+    "viewportStretchNoView": "A vista do mapa não está disponível.",
+    "viewportStretchNoValues": "Nenhum valor raster encontrado na vista.",
+    "viewportStretchNoRange": "Os valores da vista não definem um intervalo.",
+    "viewportStretchMoved": "O mapa se moveu antes de a leitura terminar. Aplique novamente.",
     "index": "Índice",
     "classifyToggle": "Classificar em classes discretas",
     "method": "Método",
@@ -7730,5 +7899,66 @@
       "downloadsStarted": "Downloads iniciados: {{started}}. Com falha: {{failed}}.",
       "downloadCancelled": "Download cancelado ou com falha."
     }
+  },
+  "usgsNldi": {
+    "panelTitle": "USGS NLDI",
+    "title": "Ferramentas de rede USGS NLDI",
+    "hint": "Primeiro escolha uma direção da linha de fluxo e clique no mapa. Depois escolha uma direção de navegação, pressione o botão destacado para carregar os catálogos disponíveis, selecione um catálogo como estações fluviométricas ou poços e pressione-o novamente para plotar esse catálogo.",
+    "directionComplete": "Linha de fluxo completa — retorna o trecho NHD inteiro",
+    "directionUp": "Somente montante — retorna o trecho acima do ponto",
+    "directionDown": "Somente jusante — retorna o trecho abaixo do ponto",
+    "basinButton": "Bacia a partir da hidrolocalização",
+    "navigationPlaceholder": "Selecione a direção — obrigatório antes de plotar",
+    "navigationUpstreamMain": "Curso principal a montante — segue o canal primário",
+    "navigationUpstreamTributaries": "Afluentes a montante — encontra os ramos contribuintes",
+    "navigationDownstreamMain": "Curso principal a jusante — segue o canal primário",
+    "navigationDownstreamDiversions": "Derivações a jusante — segue os caminhos de fluxo bifurcado",
+    "sourcePlaceholder": "Pressione antes «Carregar fontes e plotar»",
+    "distancePlaceholder": "Distância (km)",
+    "navigationButton": "1. Carregar fontes e plotar a navegação",
+    "navigationButtonAgain": "Plotar outra camada de navegação",
+    "exportButton": "Exportar os resultados plotados para GeoJSON",
+    "addLayersButton": "Adicionar os resultados plotados às camadas do GeoLibre",
+    "clearButton": "Limpar o resultado do NLDI",
+    "noComid": "Nenhum COMID foi retornado para este ponto.",
+    "requestingBasin": "Solicitando a bacia a montante…",
+    "basinRendered": "Bacia a montante plotada para o COMID {{comid}}.",
+    "basinFailed": "A solicitação da bacia falhou.",
+    "selectNavigation": "Selecione um método de navegação depois de traçar um ponto.",
+    "invalidDistance": "A distância deve estar entre 1 e 9999 km.",
+    "discoveringSources": "Descobrindo as fontes de navegação do NLDI…",
+    "navigationUnavailable": "Esse método de navegação não está disponível para este COMID.",
+    "noPlottableSource": "O NLDI não retornou nenhuma fonte de navegação plotável.",
+    "navigationEmpty": "{{source}} não retornou feições mapeáveis para esta navegação.",
+    "navigationAdded": "Fonte adicionada: {{source}} via {{navigation}} para o COMID {{comid}} ({{km}} km). As camadas de navegação existentes permanecem no mapa.",
+    "navigationFailed": "A solicitação de navegação falhou.",
+    "tracing": "Traçando até a linha de fluxo NHD mais próxima…",
+    "flowline": "Linha de fluxo plotada.",
+    "flowlineComid": "Linha de fluxo plotada; o COMID {{comid}} está pronto para os fluxos de trabalho de bacias.",
+    "flowlineFallback": "Linha de fluxo plotada usando a hidrolocalização alternativa do NLDI.",
+    "flowlineFallbackComid": "Linha de fluxo plotada usando a hidrolocalização alternativa do NLDI; o COMID {{comid}} está pronto para os fluxos de trabalho de bacias.",
+    "requestFailed": "A solicitação ao NLDI falhou.",
+    "nothingToAdd": "Não há feições NLDI plotadas para adicionar.",
+    "layersAdded_one": "{{count}} camada NLDI adicionada a um grupo «Resultados do USGS NLDI».",
+    "layersAdded_other": "{{count}} camadas NLDI adicionadas a um grupo «Resultados do USGS NLDI».",
+    "layerGroupName": "Resultados do USGS NLDI",
+    "layerFlowline": "Linha de fluxo NLDI",
+    "layerRaindrop": "Trajeto da gota de chuva NLDI",
+    "layerSelectedPoint": "Ponto selecionado NLDI",
+    "layerBasin": "Bacia a montante NLDI",
+    "layerNavigation": "Navegação NLDI {{index}}",
+    "resultCleared": "Resultado do NLDI limpo.",
+    "directionalUnavailable": "O traçado direcional do fluxo fica indisponível enquanto o processo do USGS estiver off-line. Escolha «Linha de fluxo completa» ou tente novamente mais tarde.",
+    "noFlowlineNearby": "O NLDI não encontrou nenhuma linha de fluxo perto deste ponto.",
+    "httpError": "O USGS NLDI retornou HTTP {{status}}",
+    "httpErrorDetail": "O USGS NLDI retornou HTTP {{status}}: {{detail}}",
+    "noAttributes": "Nenhum atributo retornado pelo NLDI.",
+    "catalogCaGages": "Estações fluviométricas da Califórnia (ca_gages)",
+    "catalogNwisSite": "Estações de águas superficiais do NWIS (fluviométricas)",
+    "catalogNwisGw": "Poços de águas subterrâneas do NWIS",
+    "catalogGfv11Pois": "Pontos do Geospatial Fabric do USGS",
+    "catalogHuc12pp": "Pontos de escoamento HUC12",
+    "catalogNmwdiSt": "Estações hídricas do Novo México",
+    "catalogFlowlines": "Linhas de fluxo NHDPlus"
   }
 }

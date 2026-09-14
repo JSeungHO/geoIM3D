@@ -1,7 +1,7 @@
 // @refresh reset
-import { useAppStore, type GeoLibreLayer } from "@geolibre/core";
+import { localFileName, useAppStore, type GeoLibreLayer } from "@geolibre/core";
 import type { FeatureCollection } from "geojson";
-import type { MapController, MapDiagnosticEvent } from "@geolibre/map";
+import type { MapDiagnosticEvent, MapEngine } from "@geolibre/map";
 import {
   getLayerBounds,
   getTilesetLoadProgress,
@@ -80,6 +80,7 @@ import {
 import { createPortal } from "react-dom";
 import { BROWSER_PANEL_ID, useRegisterBrowserPanel } from "../../hooks/useRegisterBrowserPanel";
 import { COMMENTS_PANEL_ID, useRegisterCommentsPanel } from "../../hooks/useRegisterCommentsPanel";
+import { UrlLoadErrorBanner } from "./UrlLoadErrorBanner";
 import { CommentsPanel } from "../comments/CommentsPanel";
 import { CommentMapOverlay } from "../comments/CommentMapOverlay";
 import { useCommentTool } from "../comments/useCommentTool";
@@ -88,6 +89,7 @@ import { openRightPanel } from "@geolibre/plugins";
 import { getIsMobileViewport } from "../../hooks/useIsMobileViewport";
 import { useProjectFileActions } from "../../hooks/useProjectFileActions";
 import { useProjectHistory } from "../../hooks/useProjectHistory";
+import { useScreenshotReadiness } from "../../hooks/useScreenshotReadiness";
 import {
   isRasterFileName,
   isGeoLibreProjectFileName,
@@ -112,7 +114,6 @@ import {
   pickLocalObjects,
   resolveLocalObject,
 } from "../../lib/object-source";
-import { isPrimaryGlobeActive, subscribePrimaryView } from "./PrimaryGlobeSwitch";
 import { PLANET_SWITCHER_LABEL_KEYS } from "../../lib/planet-labels";
 import { isPhotoDropFileName, type GeotaggedPhotoResult } from "../../lib/geotagged-photos";
 import type { LargeVectorDataset } from "../../lib/duckdb-vector-guard";
@@ -160,7 +161,9 @@ import { useEmbedBridge } from "../../hooks/useEmbedBridge";
 import { useRasterIdentify } from "../../hooks/useRasterIdentify";
 import { useGlobalRasterIdentify } from "../../hooks/useGlobalRasterIdentify";
 import { useNetcdfIdentify } from "../../hooks/useNetcdfIdentify";
+import { useTerrainRestore } from "../../hooks/useTerrainRestore";
 import { useCogSpectralIdentify } from "../../hooks/useCogSpectralIdentify";
+import { useRasterViewportStretch } from "../../hooks/useRasterViewportStretch";
 import {
   useAutoCollapsedPanel,
   useReplaceLayersPanelId,
@@ -187,7 +190,7 @@ import { MapContextMenu } from "./MapContextMenu";
 import { KnowledgeCardPanel, type KnowledgePlace } from "./KnowledgeCardPanel";
 import { KnowledgeCardConsentDialog } from "./KnowledgeCardConsentDialog";
 import { MapGrid } from "./MapGrid";
-import { PrimaryGlobeSwitch, selectPrimaryView } from "./PrimaryGlobeSwitch";
+import { PrimaryCesiumCanvas } from "./PrimaryCesiumCanvas";
 import { RemoteCursorsOverlay } from "./RemoteCursorsOverlay";
 import { useCommandBridge } from "../../hooks/useCommandBridge";
 import { useEmbedApi } from "../../hooks/useEmbedApi";
@@ -548,7 +551,7 @@ function hasDroppedFiles(event: DragEvent<HTMLElement>): boolean {
 }
 
 function fileNameFromPath(path: string): string {
-  return path.split(/[/\\]/).pop() ?? path;
+  return localFileName(path);
 }
 
 function layerNameFromPath(path: string): string {
@@ -684,7 +687,7 @@ export function DesktopShell({
   // mid-drag still detaches the global listeners and restores document.body.
   const activeResizeCleanupRef = useRef<(() => void) | null>(null);
   useEffect(() => () => activeResizeCleanupRef.current?.(), []);
-  const mapControllerRef = useRef<MapController | null>(null);
+  const mapControllerRef = useRef<MapEngine | null>(null);
 
   // Frame layers a `?data=` deep link added. Single non-GeoJSON datasets move
   // the camera in their format-specific loader; a repeated `data` batch lists
@@ -960,7 +963,7 @@ export function DesktopShell({
   // the Collaborate dialog and the on-canvas status badge share one socket, and
   // so the dialog stays mounted in toolbar-hidden layouts.
   const collaboration = useCollaboration(mapControllerRef);
-  const commentTool = useCommentTool({ mapControllerRef, collaboration });
+  const commentTool = useCommentTool({ mapControllerRef, collaboration, mapReadyGeneration });
   const [showResolvedComments, setShowResolvedComments] = useState(false);
   const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
   const collaborateDialogOpen = useAppStore((s) => s.ui.collaborateDialogOpen);
@@ -979,11 +982,11 @@ export function DesktopShell({
   useEmbedBridge(mapControllerRef);
   // Request/reply + event channel backing the Python scripting API (live
   // queries, processing, map events). Also inert when not embedded.
-  useCommandBridge(mapControllerRef);
+  useCommandBridge(mapControllerRef, mapReadyGeneration);
   // Runtime postMessage API for a third-party host page that frames the app
   // (fly to a record, highlight it, open a tool; selection/view/tool events back
   // out). Off unless the deployment configured GEOLIBRE_EMBED_ORIGINS.
-  useEmbedApi(mapControllerRef, mapAppAPI);
+  useEmbedApi(mapControllerRef, mapAppAPI, mapReadyGeneration);
   // Same scripting surface, reached over the desktop Jupyter server's relay, so
   // a kernel driven from an EXTERNAL client (VS Code's Jupyter extension) can
   // control the map too. Inert until that server is running.
@@ -993,6 +996,8 @@ export function DesktopShell({
   useRasterIdentify();
   useNetcdfIdentify(mapControllerRef, mapReadyGeneration);
   useCogSpectralIdentify(mapControllerRef, mapReadyGeneration);
+  useRasterViewportStretch(mapControllerRef, mapReadyGeneration);
+  useTerrainRestore(mapControllerRef, mapReadyGeneration, projectGeneration);
   const [layerPanelWidth, setLayerPanelWidth] = useState(initialSidePanelWidth);
   const [stylePanelWidth, setStylePanelWidth] = useState(initialSidePanelWidth);
   const [stylePanelOpenRequest, setStylePanelOpenRequest] = useState(0);
@@ -1207,8 +1212,11 @@ export function DesktopShell({
     // the globe tab is up. This lets the plugin withdraw its menu there rather
     // than offer actions whose result cannot be seen.
     setPrimaryViewBridge({
-      isGlobeActive: isPrimaryGlobeActive,
-      subscribe: subscribePrimaryView,
+      isGlobeActive: () => useAppStore.getState().primaryRenderer === "cesium",
+      subscribe: (listener) =>
+        useAppStore.subscribe((state, prev) => {
+          if (state.primaryRenderer !== prev.primaryRenderer) listener();
+        }),
     });
     return () => {
       setLocalObjectPicker(null);
@@ -1312,17 +1320,59 @@ export function DesktopShell({
     // or the map is reinitialised (mapReadyGeneration), not on every
     // incremental plugin write-back. projectPlugins is read from the store
     // snapshot at call time so it is always current without being a dependency.
-    if (!externalPluginsReady || !mapReadyGeneration || !mapControllerRef.current) return;
+    // Restore compatible plugins for either renderer. Native MapLibre layer
+    // producers remain below their own capability gate.
+    const engine = mapControllerRef.current;
+    if (!externalPluginsReady || !mapReadyGeneration || !engine) return;
     const appAPI = createAppAPI(mapControllerRef);
     const pluginManager = getPluginManager();
     pluginManager.restoreProjectState(useAppStore.getState().projectPlugins, appAPI);
     // Immediately after the restore, so a project that persisted the geo-editor
     // as active cannot re-arm editing inside a read-only viewer embed.
     enforceViewerPlugins();
+    const search = window.location.search;
+    void pluginManager
+      .handleUrlParameters(new URLSearchParams(search), appAPI, `${projectGeneration}:${search}`)
+      // `handleUrlParameters` activates plugins asynchronously, so it can land
+      // after the synchronous pass above. No blocked plugin registers a URL
+      // handler today, but "every activation path is covered" is the whole
+      // point of the guard, so re-assert it once this settles rather than
+      // leaving the next one to notice.
+      .catch(console.error)
+      .finally(enforceViewerPlugins);
+    // The environment plugins have a branch for each renderer (#2287): the
+    // effects engine drives Cesium's sky box and atmosphere, the sun simulation
+    // its lighting and clock, the flight simulator its camera. They rebind the
+    // same way on both — a renderer swap rebuilds the engine, so the host
+    // re-attaches them exactly as it does after a MapLibre re-init.
+    //
+    // activeByDefault plugins are marked active without activate() being
+    // called, so the effects engine must be kicked explicitly to match the
+    // restored active state (idempotent).
+    restoreEffects(
+      appAPI,
+      pluginManager.isActive(EFFECTS_PLUGIN_ID),
+      useAppStore.getState().projectPlugins?.settings?.[EFFECTS_PLUGIN_ID],
+    );
+    // The sun simulation reads/writes native map layers, so it must re-bind to
+    // the (possibly new) map instance after a map re-init or basemap change.
+    // Reattach only — it must NOT derive open/closed state here, which would
+    // reset a locally-opened panel on an unrelated basemap swap or remote edit.
+    // Project loads open/close it via the plugin's applyProjectState (invoked by
+    // restoreProjectState above).
+    reattachSun(appAPI);
+    // The flight simulator holds a reference to the live map (and suspends its
+    // interaction handlers while flying), so rebind it after a map re-init too.
+    reattachFlightSimulator(appAPI);
+    // VectorControl has a Cesium bridge and must restore on either engine.
+    restoreVectorLayers(appAPI);
+    if (!engine.capabilities.nativeMapInstance) {
+      void restoreLocalFileLayers();
+      return;
+    }
     restoreThreeDTilesLayers(appAPI);
     restoreRasterLayers(appAPI);
     restorePlanetaryComputerLayers(appAPI);
-    restoreVectorLayers(appAPI);
     // Re-bind saved ArcGIS feature layers to the viewport. Without this a
     // reopened project's layer stays frozen on the extent it was saved with.
     restoreArcGISViewportLayers(appAPI);
@@ -1345,28 +1395,10 @@ export function DesktopShell({
       if (applyStacSearchLayerOrder(layerId, beforeId)) return;
       applyRasterLayerOrder(layerId, beforeId);
     });
-    // activeByDefault plugins are marked active without activate() being
-    // called, so the effects engine must be kicked explicitly to match the
-    // restored active state (idempotent).
-    restoreEffects(
-      appAPI,
-      pluginManager.isActive(EFFECTS_PLUGIN_ID),
-      useAppStore.getState().projectPlugins?.settings?.[EFFECTS_PLUGIN_ID],
-    );
-    // The sun simulation reads/writes native map layers, so it must re-bind to
-    // the (possibly new) map instance after a map re-init or basemap change.
-    // Reattach only — it must NOT derive open/closed state here, which would
-    // reset a locally-opened panel on an unrelated basemap swap or remote edit.
-    // Project loads open/close it via the plugin's applyProjectState (invoked by
-    // restoreProjectState above).
-    reattachSun(appAPI);
-    // The route animation likewise owns native marker/trail layers, so rebind it
-    // to the (possibly new) map after a re-init/basemap swap without deriving
+    // The route animation owns native marker/trail layers, so rebind it to the
+    // (possibly new) map after a re-init/basemap swap without deriving
     // open/closed state (project loads handle that via applyProjectState).
     reattachRouteAnimation(appAPI);
-    // The flight simulator holds a reference to the live map (and suspends its
-    // interaction handlers while flying), so rebind it after a map re-init too.
-    reattachFlightSimulator(appAPI);
     // Rebind the directions tool to the (possibly new) map instance after a
     // map re-init, since restoreProjectState skips an already-active plugin.
     restoreDirections(appAPI, pluginManager.isActive(DIRECTIONS_PLUGIN_ID));
@@ -1382,16 +1414,6 @@ export function DesktopShell({
     // Same contract for the deck.gl overlay: re-attach it to the current map
     // and re-render any deckgl-viz layers a restored project carries.
     restoreDeckViz(appAPI, pluginManager.isActive(DECK_VIZ_PLUGIN_ID));
-    const search = window.location.search;
-    void pluginManager
-      .handleUrlParameters(new URLSearchParams(search), appAPI, `${projectGeneration}:${search}`)
-      // `handleUrlParameters` activates plugins asynchronously, so it can land
-      // after the synchronous pass above. No blocked plugin registers a URL
-      // handler today, but "every activation path is covered" is the whole
-      // point of the guard, so re-assert it once this settles rather than
-      // leaving the next one to notice.
-      .catch(console.error)
-      .finally(enforceViewerPlugins);
   }, [enforceViewerPlugins, externalPluginsReady, mapReadyGeneration, projectGeneration]);
 
   useEffect(() => {
@@ -1406,6 +1428,53 @@ export function DesktopShell({
     setMapReadyGeneration((generation) => generation + 1);
     onMapReady?.(createAppAPI(mapControllerRef));
   }, [onMapReady]);
+
+  /**
+   * Which engine draws the primary map area (issue #2217). `"cesium"` unmounts
+   * `MapCanvas` in favour of the globe, so no `MapController` exists while it is
+   * selected.
+   */
+  const primaryRenderer = useAppStore((s) => s.primaryRenderer);
+  const cesiumPrimary = primaryRenderer === "cesium";
+  useScreenshotReadiness(
+    mapControllerRef,
+    mapReadyGeneration,
+    externalPluginsReady,
+    projectUrlLoadState?.status === "loading" || dataUrlLoadState?.status === "loading",
+    projectUrlLoadState?.error ?? dataUrlLoadState?.error ?? null,
+    cesiumPrimary,
+  );
+  const setObjectDetectionOpen = useAppStore((s) => s.setObjectDetectionOpen);
+  const setSegmentEverythingOpen = useAppStore((s) => s.setSegmentEverythingOpen);
+  // Switching engines swaps which engine the shared ref points at: MapCanvas
+  // unmounts and clears it, then PrimaryCesiumCanvas publishes its CesiumEngine
+  // (and the reverse on the way back). The ref is no longer nulled wholesale
+  // here — that was necessary while only MapLibre implemented the surface, and
+  // it is what left every menu, panel, and shortcut pointing at nothing on the
+  // globe (#2260). Each canvas owns clearing its own engine on unmount, so the
+  // ref is never left aimed at a destroyed map.
+  //
+  // The MapLibre-only panels below still unmount with the 2D map, so any that
+  // were open are closed here. Without this their open flags survive on the
+  // globe and the panel springs back the moment the user returns to 2D, long
+  // after they meant to dismiss it (#2217 review).
+  useEffect(() => {
+    if (!cesiumPrimary) return;
+    // Bump the readiness generation on the hand-off. It is no longer *reset*
+    // (that is what left every consumer pointing at nothing on the globe), but
+    // the reset did do one useful thing: it forced the generation-gated effects
+    // — viewport history, the embed/notebook/command bridges — to re-run and
+    // detach their listeners from the outgoing MapLibre map. Without a bump
+    // they would not re-run until a new engine published, so a globe that never
+    // becomes ready would leave those closures holding a destroyed map for the
+    // session (#2268 review). Incrementing keeps that cleanup timing while the
+    // ref itself stays live.
+    setMapReadyGeneration((generation) => generation + 1);
+    setRasterSubsetLayer(null);
+    setBasemapExtractOpen(false);
+    setObjectDetectionOpen(false);
+    setSegmentEverythingOpen(false);
+  }, [cesiumPrimary, setObjectDetectionOpen, setSegmentEverythingOpen]);
 
   // Keep the on-map compass (reset pitch/bearing) control's tooltip translated.
   // Re-runs when the controller (re)initialises (mapReadyGeneration) and on
@@ -1947,7 +2016,9 @@ export function DesktopShell({
               useAppStore.getState().mapView.center,
             );
             selectGaussianSplatRenderingWorkspace(splatFiles.length, (workspace) =>
-              selectPrimaryView(workspace === "maplibre" ? "maplibre" : "cesium"),
+              useAppStore
+                .getState()
+                .setPrimaryRenderer(workspace === "maplibre" ? "maplibre" : "cesium"),
             );
             for (const file of splatFiles) {
               setDropMessage(t("toolbar.fileDrop.loadingSplat", { name: file.name }));
@@ -2154,7 +2225,9 @@ export function DesktopShell({
           useAppStore.getState().mapView.center,
         );
         selectGaussianSplatRenderingWorkspace(splatFiles.length, (workspace) =>
-          selectPrimaryView(workspace === "maplibre" ? "maplibre" : "cesium"),
+          useAppStore
+            .getState()
+            .setPrimaryRenderer(workspace === "maplibre" ? "maplibre" : "cesium"),
         );
         for (const file of splatFiles) {
           setDropMessage(t("toolbar.fileDrop.loadingSplat", { name: file.name }));
@@ -2681,90 +2754,105 @@ export function DesktopShell({
             fallbackClassName="h-full w-full"
           >
             <MapGrid>
-              {/* geoIM3D: tabs that switch the primary view between the 2D map
-                  and the Cesium globe. All of it lives in PrimaryGlobeSwitch —
-                  this file only gains the wrapper. */}
-              <PrimaryGlobeSwitch>
-                <MapCanvas
-                  canUseRemoteElevation={hasElevationConsent}
-                  controllerRef={mapControllerRef}
-                  identifyAllLabels={identifyAllLabels}
-                  identifyRasterLayerAt={identifyRasterLayerAt}
-                  onMapDiagnosticEvent={handleMapDiagnosticEvent}
-                  onControllerReady={handleMapControllerReady}
+              {/* The primary map area is one renderer or the other (#2217).
+                  Everything below that takes `mapControllerRef` is MapLibre-only
+                  — it drives a `MapController` that the globe does not have — so
+                  it mounts with the 2D map and stays unmounted on the globe,
+                  where `PrimaryCesiumCanvas` explains the absence. Renderer-
+                  neutral, store-driven overlays sit outside the branch and are
+                  available under either engine. */}
+              {cesiumPrimary ? (
+                <PrimaryCesiumCanvas
+                  engineRef={mapControllerRef}
+                  onEngineReady={handleMapControllerReady}
                 />
-                <RemoteCursorsOverlay mapControllerRef={mapControllerRef} />
-                <CommentMapOverlay
-                  mapControllerRef={mapControllerRef}
-                  onSelectComment={(commentId) => {
-                    setSelectedCommentId(commentId);
-                    openRightPanel(COMMENTS_PANEL_ID);
-                  }}
-                  showResolved={showResolvedComments}
-                />
-                <MapContextMenu
-                  mapControllerRef={mapControllerRef}
-                  mapReadyGeneration={mapReadyGeneration}
-                  onExplorePlace={handleExplorePlace}
-                />
-                <KnowledgeCardPanel
-                  place={knowledgePlace}
-                  lang={wikipediaLang(i18n.language)}
-                  onClose={() => setKnowledgePlace(null)}
-                  onFlyTo={handleKnowledgeFlyTo}
-                />
-                <BoundsRestrictionIndicator />
-                {/* Isolate the collaboration badge in its own boundary: it renders
-                    over the map, so a fault here must never take down the map
-                    itself (it shares this subtree's error boundary otherwise). */}
-                <SilentErrorBoundary label="Collaboration status">
-                  <CollaborationStatusBadge
-                    api={collaboration}
-                    mapControllerRef={mapControllerRef}
+              ) : (
+                <>
+                  <MapCanvas
+                    canUseRemoteElevation={hasElevationConsent}
+                    controllerRef={mapControllerRef}
+                    identifyAllLabels={identifyAllLabels}
+                    identifyRasterLayerAt={identifyRasterLayerAt}
+                    onMapDiagnosticEvent={handleMapDiagnosticEvent}
+                    onControllerReady={handleMapControllerReady}
                   />
-                </SilentErrorBoundary>
-                <MapModeBanner mapControllerRef={mapControllerRef} />
-                <QuickAnalysisBanner />
-                <PixelTimeSeriesControl mapControllerRef={mapControllerRef} />
-                <NetcdfSampleMarkers
-                  mapControllerRef={mapControllerRef}
-                  mapReadyGeneration={mapReadyGeneration}
-                />
-                <NetcdfProfileWindow />
-                {/* Its own boundary: the cube window builds a `WebGLRenderer`,
-                    whose constructor throws outright when the browser or driver
-                    gives it no context. Sharing the map's boundary would turn a
-                    failure to draw one panel into the loss of the whole map. */}
-                <SilentErrorBoundary label="NetCDF 3D cube">
-                  <NetcdfCubeWindow mapControllerRef={mapControllerRef} />
-                </SilentErrorBoundary>
-                <NetcdfCubeSetupDialog mapControllerRef={mapControllerRef} />
-                <MapLegendPanel
-                  mapControllerRef={mapControllerRef}
-                  mapReadyGeneration={mapReadyGeneration}
-                />
-                <RasterSubsetPanel
-                  layer={rasterSubsetLayer}
-                  onClose={() => setRasterSubsetLayer(null)}
-                  mapControllerRef={mapControllerRef}
-                />
-                <BasemapExtractPanel
-                  open={basemapExtractOpen}
-                  onClose={() => setBasemapExtractOpen(false)}
-                  mapControllerRef={mapControllerRef}
-                />
-                <Suspense fallback={null}>
-                  <StyleManagerPanel />
-                </Suspense>
-                <Suspense fallback={null}>
-                  <ObjectDetectionDialog mapControllerRef={mapControllerRef} />
-                </Suspense>
-                <Suspense fallback={null}>
-                  <SegmentEverythingPanel mapControllerRef={mapControllerRef} />
-                </Suspense>
-                <TerrainSettingsDialog mapControllerRef={mapControllerRef} />
-                <StoryMapComposeBar mapControllerRef={mapControllerRef} />
-              </PrimaryGlobeSwitch>
+                  <RemoteCursorsOverlay mapControllerRef={mapControllerRef} />
+                  <CommentMapOverlay
+                    mapControllerRef={mapControllerRef}
+                    onSelectComment={(commentId) => {
+                      setSelectedCommentId(commentId);
+                      openRightPanel(COMMENTS_PANEL_ID);
+                    }}
+                    showResolved={showResolvedComments}
+                  />
+                  <MapContextMenu
+                    mapControllerRef={mapControllerRef}
+                    mapReadyGeneration={mapReadyGeneration}
+                    onExplorePlace={handleExplorePlace}
+                  />
+                  <KnowledgeCardPanel
+                    place={knowledgePlace}
+                    lang={wikipediaLang(i18n.language)}
+                    onClose={() => setKnowledgePlace(null)}
+                    onFlyTo={handleKnowledgeFlyTo}
+                  />
+                  {/* Isolate the collaboration badge in its own boundary: it renders
+                  over the map, so a fault here must never take down the map
+                  itself (it shares this subtree's error boundary otherwise). */}
+                  <SilentErrorBoundary label="Collaboration status">
+                    <CollaborationStatusBadge
+                      api={collaboration}
+                      mapControllerRef={mapControllerRef}
+                    />
+                  </SilentErrorBoundary>
+                  <MapModeBanner mapControllerRef={mapControllerRef} />
+                  <PixelTimeSeriesControl mapControllerRef={mapControllerRef} />
+                  <NetcdfSampleMarkers
+                    mapControllerRef={mapControllerRef}
+                    mapReadyGeneration={mapReadyGeneration}
+                  />
+                  {/* Its own boundary: the cube window builds a `WebGLRenderer`,
+                  whose constructor throws outright when the browser or driver
+                  gives it no context. Sharing the map's boundary would turn a
+                  failure to draw one panel into the loss of the whole map. */}
+                  <SilentErrorBoundary label="NetCDF 3D cube">
+                    <NetcdfCubeWindow mapControllerRef={mapControllerRef} />
+                  </SilentErrorBoundary>
+                  <NetcdfCubeSetupDialog mapControllerRef={mapControllerRef} />
+                  <MapLegendPanel
+                    mapControllerRef={mapControllerRef}
+                    mapReadyGeneration={mapReadyGeneration}
+                  />
+                  <Suspense fallback={null}>
+                    <ObjectDetectionDialog mapControllerRef={mapControllerRef} />
+                  </Suspense>
+                  <Suspense fallback={null}>
+                    <SegmentEverythingPanel mapControllerRef={mapControllerRef} />
+                  </Suspense>
+                  <StoryMapComposeBar mapControllerRef={mapControllerRef} />
+                </>
+              )}
+              {/* Renderer-neutral: these read the store rather than a
+                  `MapController`, so they stay available on the 3D globe. */}
+              <TerrainSettingsDialog mapControllerRef={mapControllerRef} />
+              <RasterSubsetPanel
+                layer={rasterSubsetLayer}
+                onClose={() => setRasterSubsetLayer(null)}
+                mapControllerRef={mapControllerRef}
+                mapReadyGeneration={mapReadyGeneration}
+              />
+              <BasemapExtractPanel
+                open={basemapExtractOpen}
+                onClose={() => setBasemapExtractOpen(false)}
+                mapControllerRef={mapControllerRef}
+                mapReadyGeneration={mapReadyGeneration}
+              />
+              <BoundsRestrictionIndicator />
+              <QuickAnalysisBanner />
+              <NetcdfProfileWindow />
+              <Suspense fallback={null}>
+                <StyleManagerPanel />
+              </Suspense>
             </MapGrid>
           </SectionErrorBoundary>
           <SectionErrorBoundary
@@ -2800,7 +2888,7 @@ export function DesktopShell({
             displayName={t("shell.section.selectionPanels")}
           >
             <Suspense fallback={null}>
-              <SelectByExpressionDialog />
+              <SelectByExpressionDialog canEditLayer={collaboration.canEditLayer} />
             </Suspense>
             <Suspense fallback={null}>
               <SelectByLocationDialog />
@@ -2945,6 +3033,7 @@ export function DesktopShell({
               <NotebookPanel
                 onResizeStart={startNotebookPanelResize}
                 mapControllerRef={mapControllerRef}
+                mapReadyGeneration={mapReadyGeneration}
                 themeMode={themeMode}
               />
             </Suspense>
@@ -3111,26 +3200,20 @@ export function DesktopShell({
           </div>
         </div>
       ) : null}
-      {projectUrlLoadState?.error ? (
-        <div
-          aria-live="assertive"
-          className="pointer-events-none absolute left-1/2 top-14 z-50 max-w-[min(90vw,32rem)] -translate-x-1/2 rounded-md border bg-background px-3 py-2 text-center text-sm text-destructive shadow-lg"
-        >
-          {projectUrlLoadState.error}
-        </div>
-      ) : null}
-      {dataUrlLoadState?.error ? (
-        // A link can carry both `url=` and `data=`, and both loaders can fail.
-        // Drop below the project banner so neither message is covered.
-        <div
-          aria-live="assertive"
-          className={`pointer-events-none absolute left-1/2 z-50 max-w-[min(90vw,32rem)] -translate-x-1/2 rounded-md border bg-background px-3 py-2 text-center text-sm text-destructive shadow-lg ${
-            projectUrlLoadState?.error ? "top-28" : "top-14"
-          }`}
-        >
-          {dataUrlLoadState.error}
-        </div>
-      ) : null}
+      <div className="pointer-events-none absolute left-1/2 top-14 z-50 flex w-max max-w-[min(90vw,32rem)] -translate-x-1/2 flex-col gap-2">
+        {projectUrlLoadState?.error ? (
+          <UrlLoadErrorBanner
+            key={`project:${projectUrlLoadState.error}`}
+            message={projectUrlLoadState.error}
+          />
+        ) : null}
+        {dataUrlLoadState?.error ? (
+          <UrlLoadErrorBanner
+            key={`data:${dataUrlLoadState.error}`}
+            message={dataUrlLoadState.error}
+          />
+        ) : null}
+      </div>
       {crsWarning ? (
         <div
           data-testid="crs-warning"

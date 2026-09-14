@@ -80,12 +80,42 @@ describe("project credential redaction", () => {
       external: { arbitraryName: "plugin-secret" },
       "maplibre-gl-components": { legend: { A: "#112233" } },
       "maplibre-gl-swipe": { position: 50 },
+      "maplibre-gl-time-slider": {
+        startDate: "2024-01-01T00:00:00.000Z",
+        interval: 1,
+        granularity: "day",
+        currentDate: "2024-01-01T00:00:00.000Z",
+        speed: 800,
+        loop: false,
+        sources: [
+          {
+            type: "mosaic",
+            id: "acdom",
+            url: "https://example.com/{date:YYYYMMDD}_acdom.json",
+          },
+        ],
+      },
     };
     const { project, redactedPaths } = redactProjectCredentials(original);
     const settings = project.plugins!.settings;
 
     assert.deepEqual(settings["maplibre-gl-components"], { legend: { A: "#112233" } });
     assert.deepEqual(settings["maplibre-gl-swipe"], { position: 50 });
+    assert.deepEqual(settings["maplibre-gl-time-slider"], {
+      startDate: "2024-01-01T00:00:00.000Z",
+      interval: 1,
+      granularity: "day",
+      currentDate: "2024-01-01T00:00:00.000Z",
+      speed: 800,
+      loop: false,
+      sources: [
+        {
+          type: "mosaic",
+          id: "acdom",
+          url: "https://example.com/{date:YYYYMMDD}_acdom.json",
+        },
+      ],
+    });
     // An unknown plugin's blob is free-form and can hold a key, so it still goes.
     assert.ok(!("external" in settings));
     assert.ok(redactedPaths.includes("plugins.settings"));
@@ -185,6 +215,38 @@ describe("project credential redaction", () => {
       assert.ok(!serialized.includes(secret), `redacted ${secret}`);
     }
     assert.deepEqual(safe.layers[0].source, { sr: 4326, key: "layer-identifier" });
+  });
+
+  it("strips tokens from the resolved ArcGIS vector-tile sources", () => {
+    // The ArcGIS plugin persists the SDK's resolved sources on the layer so
+    // the Cesium drape can rebuild them; a token-bearing tile URL rides along.
+    const project = credentialProject();
+    project.layers[0] = {
+      ...project.layers[0],
+      type: "arcgis",
+      source: {
+        arcgisSources: {
+          parcels: {
+            type: "vector",
+            tiles: ["https://tiles.example.com/{z}/{x}/{y}.pbf?token=arcgis-secret&f=pbf"],
+          },
+        },
+        arcgisLayers: [
+          { id: "parcels-fill", type: "fill", source: "parcels", "source-layer": "parcels" },
+        ],
+      },
+      metadata: { nativeLayerIds: ["parcels-fill"] },
+    };
+
+    const { project: safe, redactedPaths } = redactProjectCredentials(project);
+    const serialized = serializeProject(safe);
+    assert.ok(!serialized.includes("arcgis-secret"));
+    const sources = safe.layers[0].source.arcgisSources as {
+      parcels: { tiles: string[] };
+    };
+    assert.deepEqual(sources.parcels.tiles, ["https://tiles.example.com/{z}/{x}/{y}.pbf?f=pbf"]);
+    assert.deepEqual(safe.layers[0].source.arcgisLayers, project.layers[0].source.arcgisLayers);
+    assert.ok(redactedPaths.includes("layers[0].source.arcgisSources.parcels.tiles[0]"));
   });
 
   it("sweeps a layer's connection record, not only its source", () => {

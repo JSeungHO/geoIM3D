@@ -276,6 +276,10 @@
         "label": "افزودن لایهٔ WMS",
         "description": "یک سرویس WMS GetMap را به‌عنوان لایهٔ رستری کاشی‌بندی‌شده بیفزایید."
       },
+      "csw": {
+        "label": "جست‌وجو در کاتالوگ CSW",
+        "description": "در یک سرویس کاتالوگ OGC به دنبال مجموعه‌داده بگردید و منابع وب پشتیبانی‌شده را به نقشه بیفزایید."
+      },
       "wfs": {
         "label": "افزودن لایهٔ WFS",
         "description": "عوارض WFS را با درخواست GeoJSON از یک سرویس GetFeature بیفزایید."
@@ -343,6 +347,18 @@
       "polyline": {
         "label": "افزودن لایهٔ چندخطی کدگذاری‌شده",
         "description": "وارد کردن رشته‌های چندخطی کدگذاری‌شده (Google، OSRM، Valhalla) از متن یا فایل‌ها به‌صورت خطوط برداری."
+      },
+      "cesiumIon": {
+        "label": "افزودن دارایی Cesium Ion",
+        "description": "یک مجموعهٔ 3D Tiles یا تصاویر را از Cesium Ion با شناسهٔ دارایی بیفزایید. با توکن Cesium Ion شما روی کرهٔ سه‌بعدی ترسیم می‌شود."
+      },
+      "czml": {
+        "label": "افزودن لایهٔ سه‌بعدی پویای CZML",
+        "description": "یک سند پویای Cesium Language ‏(CZML) را بارگذاری کنید که مدارها، مسیرها، مسیر وسایل نقلیه و صحنه‌های سه‌بعدی متغیر با زمان را روی کره توصیف می‌کند."
+      },
+      "kml": {
+        "label": "KML / KMZ",
+        "description": "KML یا KMZ را با سبک‌های بومی، هم‌پوشانی‌ها و پیوندهای شبکه روی کره بارگذاری کنید."
       }
     },
     "shared": {
@@ -400,6 +416,37 @@
       "importedWithDropped_one": "{{count}} سرویس وارد شد ({{dropped}} مورد رد شد — کتابخانه پر است).",
       "importedWithDropped_other": "{{count}} سرویس وارد شد ({{dropped}} مورد رد شد — کتابخانه پر است)."
     },
+    "cesiumIon": {
+      "defaultName": "دارایی Cesium Ion",
+      "assetId": "شناسهٔ دارایی",
+      "kindTileset": "3D Tiles",
+      "kindImagery": "تصاویر",
+      "altitudeOffset": "جابه‌جایی ارتفاع (متر)",
+      "quickPicks": "انتخاب‌های سریع",
+      "hint": "شناسهٔ دارایی‌ها را در بخش My Assets در ion.cesium.com بیابید. دارایی باید با توکن تنظیم‌شده در تنظیمات هم‌رسانی شده باشد.",
+      "errorAssetId": "یک شناسهٔ دارایی Cesium Ion (عدد صحیح مثبت) وارد کنید.",
+      "errorAltitude": "جابه‌جایی ارتفاع را به‌صورت عدد و بر حسب متر وارد کنید.",
+      "tokenMissing": "هیچ توکن Cesium Ion تنظیم نشده است. یکی را در تنظیمات ← متغیرهای محیطی (VITE_CESIUM_TOKEN) بیفزایید، وگرنه بارگیری دارایی ناموفق خواهد بود."
+    },
+    "czml": {
+      "defaultName": "صحنهٔ پویای CZML",
+      "url": "نشانی CZML",
+      "sourceModeUrl": "نشانی",
+      "sourceModeFile": "فایل محلی",
+      "file": "فایل",
+      "quickPicks": "صحنه‌های پویای نمونه",
+      "hint": "جریان‌ها یا فایل‌های CZML موقعیت‌های سه‌بعدی پویا، پویانمایی‌ها و مدارهای هم‌گام با ساعت کره را تعریف می‌کنند.",
+      "errorUrl": "یک نشانی معتبر برای نقطهٔ پایانی CZML وارد کنید.",
+      "errorChooseFile": "یک فایل CZML ‏(.czml یا .json) برای بارگیری انتخاب کنید.",
+      "errorFileMissing": "خواندن فایل انتخاب‌شده ممکن نشد.",
+      "errorInvalidCzml": "این فایل سند CZML معتبری ندارد (آرایهٔ JSON یا شیء بسته انتظار می‌رفت).",
+      "readError": "خواندن دادهٔ CZML ناموفق بود."
+    },
+    "kml": {
+      "defaultName": "KML / KMZ",
+      "url": "نشانی KML / KMZ",
+      "errorSource": "نشانی KML/KMZ را وارد کنید یا یک فایل انتخاب کنید."
+    },
     "xyz": {
       "defaultName": "لایهٔ XYZ",
       "sampleLabel": "تصاویر USGS",
@@ -426,6 +473,21 @@
       "noLayersFound": "برای این سرویس هیچ لایه‌ای یافت نشد.",
       "retrieveError": "دریافت لایه‌ها از این سرویس ممکن نشد.",
       "version": "نسخهٔ WMS"
+    },
+    "csw": {
+      "defaultName": "کاتالوگ CSW",
+      "urlPlaceholder": "https://example.com/csw",
+      "keyword": "کلیدواژه",
+      "search": "جست‌وجو",
+      "searching": "در حال جست‌وجو…",
+      "results": "نتایج کاتالوگ",
+      "errorUrl": "یک نشانی HTTP یا HTTPS معتبر برای سرویس CSW وارد کنید.",
+      "searchError": "جست‌وجو در این کاتالوگ ممکن نشد.",
+      "noResults": "هیچ مجموعه‌دادهٔ منطبقی یافت نشد.",
+      "invalidGeoJson": "منبع انتخاب‌شده یک FeatureCollection از نوع GeoJSON نیست.",
+      "addError": "افزودن این منبع کاتالوگ ممکن نشد.",
+      "addResource": "افزودن {{kind}}",
+      "noSupportedResources": "هیچ منبع پشتیبانی‌شدهٔ WMS، WFS، ArcGIS یا GeoJSON اعلام نشده بود."
     },
     "wfs": {
       "defaultName": "لایهٔ WFS",
@@ -624,6 +686,7 @@
       "errorRetrieveColumns": "دریافت نام ستون‌ها ممکن نشد.",
       "url": "نشانی متن جداشده",
       "file": "فایل متن جداشده",
+      "fileFilter": "CSV / TSV / TXT / Excel",
       "urlPlaceholder": "https://example.com/data.csv",
       "retrieving": "در حال دریافت...",
       "retrieveColumns": "دریافت ستون‌ها",
@@ -892,7 +955,16 @@
       "cellSize": "اندازهٔ سلول",
       "lineWidth": "ضخامت خط",
       "extrusion": "برجسته‌سازی سه‌بعدی",
-      "modelUrlPlaceholder": "https://example.com/model.glb"
+      "modelUrlPlaceholder": "https://example.com/model.glb",
+      "chooseModelFile": "انتخاب مدل محلی",
+      "sampleDataset": "مجموعه‌دادهٔ نمونه",
+      "sampleCustom": "مدل سفارشی",
+      "sampleAirplane": "هواپیما — سان‌فرانسیسکو",
+      "sampleShanghai": "شانگهای — مرکز شهر",
+      "modelFileHint": "یک فایل GLB یا glTF خودکفا انتخاب کنید. مدل‌های محلی در پروژه‌های ذخیره‌شده جاسازی می‌شوند و حجم پروژه را افزایش می‌دهند.",
+      "modelExternalResources": "این مدل به فایل‌های جداگانه ارجاع می‌دهد. آن را به‌صورت GLB با بافت‌ها و بافرهای درون‌ساخته صادر کنید و دوباره تلاش کنید.",
+      "modelTooLarge": "این مدل از حد {{limit}} مگابایت برای جاسازی در پروژه بزرگ‌تر است. آن را روی سرور میزبانی کنید و با نشانی بیفزایید.",
+      "modelFileError": "خواندن این مدل ممکن نشد. یک فایل معتبر glTF 2.0 یا GLB انتخاب کنید."
     },
     "nonGeographicCoordinates": "مختصات در {{names}} طول/عرض جغرافیایی نیستند، بنابراین چیزی روی نقشه ترسیم نمی‌شود. برچسب سیستم مختصات نادرست است — داده را دوباره تصویر کنید (یا فایل ‎.prj آن را درست کنید) و دوباره بارگیری کنید."
   },
@@ -1334,6 +1406,12 @@
     "errorFallback": "هم‌رسانی پروژه ممکن نشد.",
     "usernameRequired": "پیش از هم‌رسانی، برای حساب {{shareHost}} خود یک نام کاربری تعیین کنید. تنظیمات حساب خود را باز کنید، یکی برگزینید و دوباره تلاش کنید.",
     "openAccountSettings": "باز کردن تنظیمات حساب",
+    "shareAnyway": "به هر حال هم‌رسانی شود",
+    "localWarningTitle_one": "{{count}} لایه در نقشهٔ هم‌رسانی‌شده وجود نخواهد داشت",
+    "localWarningTitle_other": "{{count}} لایه در نقشهٔ هم‌رسانی‌شده وجود نخواهند داشت",
+    "localWarningBody": "{{shareHost}} تنها فایل پروژه را ذخیره می‌کند و هرگز فایل‌های رایانهٔ شما را ذخیره نمی‌کند. گیرندگان پروژه را در مرورگری باز می‌کنند که نمی‌تواند دیسک شما را بخواند، بنابراین این لایه‌ها برای همه جز شما خالی خواهند بود.",
+    "localWarningAdvice": "برای گنجاندن آن‌ها، رسترها را به Cloud Optimized GeoTIFF و بردارها را به PMTiles یا GeoParquet تبدیل کنید، فایل‌ها را روی یک سرور HTTPS عمومی مانند GitHub یا Hugging Face میزبانی کنید، آن‌ها را با نشانی به نقشه بیفزایید و دوباره هم‌رسانی کنید. لایه‌های برداری محلی کوچک به‌طور خودکار در پروژه جاسازی می‌شوند.",
+    "localWarningLearnMore": "بیشتر بدانید",
     "readinessChecking": "در حال بررسی اینکه گیرندگان می‌توانند داده‌های شما را بارگیری کنند یا نه…",
     "readinessUnavailable": "بررسی منابع داده انجام نشد.",
     "readinessAllReachable_one": "{{count}} منبع داده برای گیرندگان در دسترس به نظر می‌رسد.",
@@ -1414,7 +1492,7 @@
   },
   "printLayout": {
     "title": "تنظیمات چاپ",
-    "description": "یک نقشهٔ آمادهٔ چاپ با عنوان، راهنمای نقشه، مقیاس‌نما و فلش شمال بسازید، سپس آن را به صورت PNG یا PDF خروجی بگیرید.",
+    "description": "یک نقشهٔ آمادهٔ چاپ با عنوان، راهنمای نقشه، مقیاس‌نما و فلش شمال بسازید، سپس آن را به صورت PNG، PDF یا SVG خروجی بگیرید.",
     "preview": "پیش‌نمایش",
     "resizeControls": "تغییر اندازهٔ پنل کنترل‌ها",
     "resizeDialog": "تغییر اندازهٔ پنجره",
@@ -1422,6 +1500,7 @@
     "copyToClipboard": "کپی کردن",
     "copied": "رونوشت شد",
     "exportPng": "خروجی PNG",
+    "exportSvg": "خروجی SVG",
     "exportPdf": "خروجی PDF",
     "titleLabel": "عنوان",
     "titlePlaceholder": "عنوان نقشه",
@@ -1848,7 +1927,22 @@
     "show3d": "نمایش نقشهٔ {{number}} به‌صورت کرهٔ سه‌بعدی",
     "show2d": "نمایش نقشهٔ {{number}} به‌صورت نقشهٔ دوبعدی",
     "only2d": "تنها دوبعدی",
+    "only3d": "تنها سه‌بعدی",
     "cesiumTokenHint": "برای زمین و تصاویر Ion، یک توکن Cesium Ion در تنظیمات بیفزایید"
+  },
+  "renderer": {
+    "basemap": "نقشهٔ پایه",
+    "imagery": "تصاویر",
+    "projectBasemap": "نقشهٔ پایهٔ پروژه",
+    "layerUnsupported": "روی کرهٔ سه‌بعدی ترسیم نمی‌شود",
+    "layerCesiumOnly": "تنها روی کرهٔ سه‌بعدی ترسیم می‌شود",
+    "resetView": "بازنشانی نما",
+    "scene3D": "کرهٔ سه‌بعدی",
+    "scene2D": "نقشهٔ دوبعدی",
+    "sceneColumbus": "نمای کلمبوس",
+    "fullscreenEnter": "تمام‌صفحه",
+    "fullscreenExit": "خروج از تمام‌صفحه",
+    "fullscreenUnavailable": "تمام‌صفحه در دسترس نیست"
   },
   "mapContextMenu": {
     "copyCoordinatesHint": "رونوشت مختصات در بریده‌دان",
@@ -2437,6 +2531,7 @@
       "mbtiles": "لایهٔ MBTiles",
       "xyz": "لایهٔ XYZ",
       "wms": "لایهٔ WMS",
+      "csw": "کاتالوگ CSW",
       "wfs": "لایهٔ WFS",
       "wmts": "لایهٔ WMTS",
       "ogcFeatures": "OGC API - Features",
@@ -2445,6 +2540,8 @@
       "georss": "لایهٔ GeoRSS",
       "video": "لایهٔ ویدئو",
       "deckglViz": "لایهٔ Deck.gl",
+      "cesiumIon": "دارایی Cesium Ion",
+      "czml": "صحنهٔ سه‌بعدی پویای CZML",
       "gltfModel": "مدل سه‌بعدی (glTF)",
       "postgres": "لایهٔ PostgreSQL",
       "iceberg": "لایهٔ Apache Iceberg"
@@ -2700,6 +2797,9 @@
       "splitViewGrid2x3": "شبکهٔ ۲ × ۳",
       "splitViewGrid3x3": "شبکهٔ ۳ × ۳",
       "splitViewSync": "هم‌گام‌سازی نماها",
+      "renderingEngine": "موتور ترسیم",
+      "rendererMapLibre": "MapLibre",
+      "rendererCesium": "Cesium",
       "viewInGoogleMaps": "دیدن در Google Maps",
       "viewInGoogleEarth": "دیدن در Google Earth",
       "zoomIn": "بزرگ‌نمایی",
@@ -2852,6 +2952,7 @@
       "saveProjectAsTitle": "ذخیرهٔ پروژه با نام",
       "saveProjectAsDesc": "یک نام فایل وارد کنید. با کلیک روی «ذخیره»، پروژه در پوشهٔ دانلودهای مرورگر شما ذخیره می‌شود.",
       "embedVectorTitle": "دادهٔ برداری محلی جاسازی شود؟",
+      "embedEditedGeometryDesc": "این پروژه شامل هندسه‌های ویرایش‌شده است. برای حفظ آن‌ها، داده‌های برداری را جاسازی کنید (حدود {{size}}). بدون جاسازی، لایه‌های ارجاعی با هندسه‌های اصلی باز می‌شوند و ممکن است داده‌های محلی در دسترس نباشند.",
       "embedVectorDesc": "این پروژه {{count}} لایهٔ برداری محلی دارد که از رایانهٔ شما بارگیری شده است. مرورگر هنگام باز شدن دوبارهٔ پروژه نمی‌تواند آن‌ها را دوباره بخواند، پس برای بازیابی باید داده‌شان در فایل پروژه جاسازی شود. جاسازی حدود {{size}} به فایل می‌افزاید.",
       "embedVectorDescDesktop": "این پروژه {{count}} لایهٔ برداری محلی دارد که از رایانهٔ شما بارگیری شده است. داده‌شان را جاسازی کنید تا پروژه خودبسنده شود (حدود {{size}} می‌افزاید)، یا ارجاع‌های فایل را ذخیره کنید تا هنگام باز شدن دوبارهٔ پروژه از دیسک بارگیری شوند. ارجاع‌ها فایل را کوچک نگه می‌دارند اما اگر فایل مبدأ بعداً جابه‌جا یا حذف شود می‌شکنند.",
       "embedVectorDescMas": "این پروژه {{count}} لایهٔ برداری محلی دارد که از رایانهٔ شما بارگیری شده است. محیط ایزولهٔ Mac App Store پس از بسته شدن GeoLibre نمی‌تواند دسترسی به این فایل‌ها را حفظ کند، بنابراین برای بازیابی باید داده‌هایشان در فایل پروژه جاسازی شود. جاسازی حدود {{size}} به فایل می‌افزاید.",
@@ -2902,6 +3003,7 @@
     },
     "plugin": {
       "maplibre-gl-annotations": "حاشیه‌نویسی‌ها",
+      "maplibre-gl-dimensions": "اندازه‌گذاری",
       "maplibre-gl-streetview": "نمای خیابان",
       "maplibre-gl-time-slider": "لغزندهٔ زمان",
       "geolibre-timelapse": "گذر زمان",
@@ -3094,9 +3196,14 @@
     "openBuilder": "سازندهٔ عبارت...",
     "invalidExpression": "یک عبارت بولی معتبر وارد کنید.",
     "select": "انتخاب عوارض",
+    "applyLayerFilter": "فیلتر کردن لایه",
+    "clearLayerFilter": "پاک کردن فیلتر لایه",
+    "layerFilteredHint": "یک فیلتر ماندگار بخشی از عوارض این لایه را پنهان کرده است.",
+    "layerFilteredBothHint": "یک فیلتر ماندگار و یک فیلتر سریع بخشی از عوارض این لایه را پنهان کرده‌اند.",
     "noLayers": "برای انتخاب، یک لایهٔ برداری دارای عارضه بیفزایید.",
     "needTwoLayers": "انتخاب بر پایهٔ موقعیت به دو لایهٔ برداری دارای عارضه نیاز دارد.",
     "summary": "{{selected}} از {{total}} عارضه انتخاب شد ({{matched}} مورد هم‌خوان).",
+    "filterSummary": "فیلتر لایه اعمال شد: {{matched}} از {{total}} عارضه هم‌خوان است.",
     "evaluationErrors": "{{count}} عارضه ارزیابی‌پذیر نبود و هم‌خوان شمرده نشد.",
     "unevaluableDisjoint": "{{count}} عارضه کنار گذاشته شد، چون هندسه‌شان ارزیابی‌پذیر نبود.",
     "tooManyPairs": "این مقایسه به {{pairs}} آزمون جفت‌عارضه نیاز دارد (حد {{limit}}). به‌جای آن از پردازش ← GeoLibre ← برداری ← انتخاب بر پایهٔ موقعیت با موتور سرویس کناری استفاده کنید.",
@@ -3509,6 +3616,7 @@
     "search": "جستجو",
     "searchCurrentView": "جستجوی ناحیهٔ کنونی نقشه",
     "enterKeyword": "برای آغاز، یک کلیدواژه وارد کنید.",
+    "viewUnavailable": "محدودهٔ فعلی نقشه در دسترس نیست؛ برای جست‌وجو فیلتر محدودهٔ نقشه را خاموش کنید.",
     "loadMore": "بارگیری بیشتر",
     "searching": "در حال جستجو…",
     "loadingMore": "در حال بارگیری مجموعه‌داده‌های بیشتر…",
@@ -3551,10 +3659,14 @@
     "title": "فهرست‌های STAC",
     "footprintLayerName": "ردپاهای جستجوی STAC",
     "catalogSearch": "یافتن یک فهرست عمومی از STAC Index",
+    "portolanCatalogSearch": "یافتن یک فهرست عمومی از Portolan Registry",
     "catalogSearchPlaceholder": "جستجوی نام فهرست‌ها…",
     "indexLoading": "در حال بارگیری STAC Index…",
+    "portolanIndexLoading": "در حال بارگیری Portolan Registry…",
     "indexUnavailable": "STAC Index در دسترس نیست — یک نشانی وارد کنید",
+    "portolanIndexUnavailable": "Portolan Registry در دسترس نیست: یک نشانی وارد کنید",
     "indexLoadFailed": "بارگیری STAC Index با شکست مواجه شد",
+    "portolanIndexLoadFailed": "بارگیری Portolan Registry با شکست مواجه شد",
     "urlLabel": "نشانی فهرست یا رابط برنامه‌نویسی STAC",
     "connect": "اتصال",
     "connecting": "در حال اتصال به STAC…",
@@ -3907,6 +4019,28 @@
     "saveElement": "ذخیرهٔ عنصر",
     "atPoint": "در نقطه",
     "pinnedToExtent": "سنجاق‌شده به گستره"
+  },
+  "dimensions": {
+    "toolbar": "ابزارهای اندازه‌گذاری",
+    "layerName": "اندازه‌ها",
+    "tools": {
+      "linear": "اندازهٔ خطی",
+      "angular": "اندازهٔ زاویه‌ای"
+    },
+    "unit": "یکا",
+    "snap": "چسبیدن به رئوس",
+    "color": "رنگ اندازه‌گذاری",
+    "width": "ضخامت خط",
+    "widthOptions": {
+      "thin": "نازک",
+      "medium": "متوسط",
+      "thick": "ضخیم"
+    },
+    "deleteLast": "حذف آخرین اندازه",
+    "clearAll": "پاک کردن همهٔ اندازه‌ها",
+    "newLayer": "لایهٔ اندازه‌گذاری جدید",
+    "confirmClearAll_one": "این اندازه حذف شود؟ این کار برگشت‌پذیر نیست.",
+    "confirmClearAll_other": "همهٔ {{count}} اندازهٔ این لایه حذف شود؟ این کار برگشت‌پذیر نیست."
   },
   "pythonConsole": {
     "title": "کنسول Python",
@@ -4509,6 +4643,15 @@
                 "kilometers": "کیلومتر",
                 "meters": "متر",
                 "miles": "مایل"
+              }
+            },
+            "side": {
+              "label": "سمت بافر",
+              "description": "بیرون هر عارضه را بزرگ می‌کند، درون آن را کوچک می‌کند و هر دو سو تنها ناحیهٔ درون فاصلهٔ تعیین‌شده در دو سوی مرز را نگه می‌دارد. درون به لایهٔ چندضلعی نیاز دارد — نقطه یا خط فضای درونی ندارد.",
+              "options": {
+                "outside": "بیرون (بزرگ‌کردن)",
+                "inside": "درون (کوچک‌کردن)",
+                "both": "هر دو سو"
               }
             }
           }
@@ -6325,6 +6468,7 @@
     "description": "شیوهٔ نمایش‌ها، نمادها، پیش‌تنظیم‌های برچسب و طیف‌های رنگ دوباره‌استفاده‌شدنی را در سراسر لایه‌ها و پروژه‌ها ذخیره، مرور و اعمال کنید.",
     "searchPlaceholder": "جستجوی شیوهٔ نمایش‌ها و برچسب‌ها…",
     "presetsSection": "پیش‌تنظیم‌های توکار",
+    "presetActions": "کنش‌های پیش‌تنظیم",
     "librarySection": "کتابخانهٔ من",
     "projectSection": "این پروژه",
     "empty": "هیچ شیوهٔ نمایش ذخیره‌شده‌ای هم‌خوان نیست. برای آغاز، شیوهٔ نمایش یک لایه را ذخیره کنید یا یک کتابخانه وارد کنید.",
@@ -6425,7 +6569,6 @@
       "remove": "حذف پیوند",
       "enabledTitle": "اعمال این پیوند",
       "missingLayer": "لایهٔ پیوند یافت نشد",
-      "noCandidates": "هیچ لایهٔ دیگری جدول صفات برای پیوند ندارد",
       "statsMatched": "{{matched}} از {{total}} عارضه هم‌خوان شد",
       "statsUnmatchedJoin_one": "{{count}} سطر پیوند هم‌خوان نشد",
       "statsUnmatchedJoin_other": "{{count}} سطر پیوند هم‌خوان نشد"
@@ -6482,6 +6625,11 @@
       "offsetY": "جابه‌جایی Y (em)",
       "rotation": "چرخش (°)",
       "maxWidth": "پهنای شکست سطر (em)",
+      "numberFormat": "قالب‌بندی اعداد",
+      "numberFormatHint": "مقادیر عددی با جداکننده هزارگان و اعشار برچسب می‌خورند، مثلاً {{sample}}. مقادیر متنی تغییر نمی‌کنند و عبارت برچسب خروجی خود را قالب‌بندی می‌کند.",
+      "numberDecimals": "رقم اعشار",
+      "numberLocale": "جداکننده‌ها",
+      "numberLocaleApp": "مطابق زبان برنامه",
       "transform": "بزرگی و کوچکی حروف",
       "transformNone": "همان‌گونه که نوشته شده",
       "transformUppercase": "UPPERCASE",
@@ -6635,6 +6783,7 @@
       "categories": "دسته‌ها",
       "classColor": "رنگ کلاس {{index}}",
       "classColorPick": "برگزیدن رنگ کلاس {{index}} از صفحه",
+      "classOpacity": "کدری کلاس {{index}}",
       "classValue": "مقدار کلاس {{index}}",
       "colorExpression": "عبارت رنگ",
       "applyStyleType": "اعمال نوع شیوهٔ نمایش",
@@ -6644,6 +6793,8 @@
       "pointRendererClustered": "خوشه‌بندی‌شده",
       "heatmapRadius": "شعاع نقشهٔ حرارتی",
       "heatmapIntensity": "شدت نقشهٔ حرارتی",
+      "heatmapWeightField": "فیلد وزن",
+      "heatmapEqualWeight": "هیچ‌کدام (وزن برابر)",
       "clusterRadius": "شعاع خوشه (پیکسل)",
       "clusterMaxZoom": "بیشینهٔ بزرگ‌نمایی خوشه",
       "strokeWidthUnit": "یکای ضخامت خط",
@@ -6680,10 +6831,12 @@
     "mode2d": "دوبعدی",
     "mode3dExtrusion": "برجسته‌سازی سه‌بعدی",
     "noControls": "کنترل‌های شیوهٔ نمایش هنوز برای این نوع لایه در دسترس نیستند.",
+    "tilesetSymbology": "رنگ‌ها و فیلترها روی این مجموعه کاشی در کرهٔ سه‌بعدی اعمال می‌شوند.",
     "selectedLayerType": "نوع لایهٔ انتخاب‌شده: {{type}}",
     "footerDeck": "تغییرات به‌صورت زنده بر شیوهٔ نمایش‌دهی لایهٔ deck.gl مربوط به DuckDB اعمال می‌شوند.",
     "footerMaplibre": "تغییرات به‌صورت زنده بر ویژگی‌های رنگ‌آمیزی MapLibre اعمال می‌شوند.",
     "pluginPaintedFooter": "این لایه را افزونه‌اش ترسیم می‌کند و کنترل‌های شیوهٔ نمایش‌دهی خودش را دارد.",
+    "serviceStyledFooter": "این لایه سبک خود سرویسش را حفظ می‌کند؛ شفافیت، ترتیب، بازهٔ بزرگ‌نمایی و فیلترها همچنان اعمال می‌شوند.",
     "extrusion": {
       "color": "رنگ برجسته‌سازی",
       "opacity": "کدری برجسته‌سازی",
@@ -6780,6 +6933,7 @@
         "upcase": "یک رشته را به حروف بزرگ تبدیل می‌کند.",
         "downcase": "یک رشته را به حروف کوچک تبدیل می‌کند.",
         "slice": "بخشی از یک رشته یا آرایه را برمی‌گرداند.",
+        "numberFormat": "یک عدد را با جداکننده هزارگان و اعشار یک زبان و منطقه به متن تبدیل می‌کند و می‌تواند تعداد ثابتی رقم اعشار داشته باشد.",
         "toNumber": "یک مقدار را به عدد تبدیل می‌کند.",
         "toString": "یک مقدار را به رشته تبدیل می‌کند.",
         "toBoolean": "یک مقدار را به درست یا نادرست تبدیل می‌کند.",
@@ -6939,6 +7093,7 @@
     "allFieldsUsed": "هر فیلد از پیش یک فیلتر دارد",
     "removeAll": "حذف همه",
     "clearAll": "پاک کردن فیلترها",
+    "clearAllWithExpression": "پاک کردن فیلترها و عبارت ذخیره‌شده",
     "clearOne": "پاک کردن این فیلتر",
     "clearOneNamed": "پاک کردن فیلتر روی {{field}}",
     "remove": "حذف فیلتر",
@@ -7072,6 +7227,8 @@
     "saveEditsSuccess": "{{count}} عارضه در فایل مبدأ ذخیره شد.",
     "saveEditsNoFeatures": "این لایه هیچ عارضه‌ای برای ذخیره ندارد.",
     "saveEditsError": "ذخیرهٔ ویرایش‌ها در فایل مبدأ ممکن نشد.",
+    "saveEditsToArcgis": "ذخیرهٔ ویرایش‌ها در سرویس ArcGIS",
+    "saveEditsArcgisSuccess": "در ArcGIS ذخیره شد: {{inserted}} درج، {{updated}} به‌روزرسانی، {{deleted}} حذف.",
     "saveEditsToPostgis": "ذخیرهٔ ویرایش‌ها در جدول PostGIS",
     "saveEditsPostgisSuccess": "در {{table}} ذخیره شد: {{inserted}} درج، {{updated}} به‌روزرسانی، {{deleted}} حذف.",
     "saveEditsPostgisSkippedFields": "فیلدهایی که ستون متناظری در جدول نداشتند ذخیره نشدند: {{fields}}.",
@@ -7229,6 +7386,18 @@
     "stretchLinear": "خطی",
     "stretchLog": "لگاریتمی",
     "stretchSqrt": "ریشهٔ دوم",
+    "viewportStretch": "کشش نمای فعلی",
+    "viewportMinMax": "کمینه / بیشینهٔ نمای فعلی",
+    "viewportPercentile": "صدک ۵–۹۵ نمای فعلی",
+    "viewportStddev": "میانگین نمای فعلی ± ۲ انحراف معیار",
+    "viewportApply": "اعمال بر نمای فعلی",
+    "viewportStretching": "در حال خواندن نمای فعلی…",
+    "viewportStretchApplied": "کشش نمای فعلی اعمال شد",
+    "viewportAuto": "به‌روزرسانی خودکار هنگام جابه‌جایی نقشه",
+    "viewportStretchNoView": "نمای نقشه در دسترس نیست.",
+    "viewportStretchNoValues": "هیچ مقدار رستری در نمای فعلی یافت نشد.",
+    "viewportStretchNoRange": "مقادیر نمای فعلی بازه‌ای تعریف نمی‌کنند.",
+    "viewportStretchMoved": "نقشه پیش از پایان خواندن جابه‌جا شد. دوباره اعمال کنید.",
     "index": "شاخص",
     "classifyToggle": "طبقه‌بندی به کلاس‌های گسسته",
     "method": "روش",
@@ -7730,5 +7899,66 @@
       "downloadsStarted": "{{started}} دانلود آغاز شد. {{failed}} مورد شکست خورد.",
       "downloadCancelled": "دانلود لغو شد یا شکست خورد."
     }
+  },
+  "usgsNldi": {
+    "panelTitle": "USGS NLDI",
+    "title": "ابزارهای شبکهٔ USGS NLDI",
+    "hint": "نخست یک جهت برای خط جریان برگزینید و روی نقشه کلیک کنید. سپس یک جهت پیمایش برگزینید، دکمهٔ برجسته‌شده را برای بارگیری کاتالوگ‌های موجود بفشارید، کاتالوگی مانند ایستگاه‌های آب‌سنجی یا چاه‌ها را انتخاب کنید و برای ترسیم آن کاتالوگ دوباره آن را بفشارید.",
+    "directionComplete": "خط جریان کامل — کل بازهٔ NHD را برمی‌گرداند",
+    "directionUp": "فقط بالادست — بازهٔ بالای نقطه را برمی‌گرداند",
+    "directionDown": "فقط پایین‌دست — بازهٔ پایین نقطه را برمی‌گرداند",
+    "basinButton": "حوضه از موقعیت آب‌شناختی",
+    "navigationPlaceholder": "جهت را برگزینید — پیش از ترسیم الزامی است",
+    "navigationUpstreamMain": "شاخهٔ اصلی بالادست — آبراههٔ اصلی را دنبال می‌کند",
+    "navigationUpstreamTributaries": "سرشاخه‌های بالادست — شاخه‌های ورودی را می‌یابد",
+    "navigationDownstreamMain": "شاخهٔ اصلی پایین‌دست — آبراههٔ اصلی را دنبال می‌کند",
+    "navigationDownstreamDiversions": "انحراف‌های پایین‌دست — مسیرهای جریان منشعب را دنبال می‌کند",
+    "sourcePlaceholder": "نخست «بارگیری منابع و ترسیم» را بفشارید",
+    "distancePlaceholder": "فاصله (کیلومتر)",
+    "navigationButton": "۱. بارگیری منابع و ترسیم پیمایش",
+    "navigationButtonAgain": "ترسیم یک لایهٔ پیمایش دیگر",
+    "exportButton": "خروجی گرفتن از نتایج ترسیم‌شده به GeoJSON",
+    "addLayersButton": "افزودن نتایج ترسیم‌شده به لایه‌های GeoLibre",
+    "clearButton": "پاک کردن نتیجهٔ NLDI",
+    "noComid": "برای این نقطه هیچ COMID بازگردانده نشد.",
+    "requestingBasin": "در حال درخواست حوضهٔ بالادست…",
+    "basinRendered": "حوضهٔ بالادست برای COMID {{comid}} ترسیم شد.",
+    "basinFailed": "درخواست حوضه ناموفق بود.",
+    "selectNavigation": "پس از ردیابی یک نقطه، یک روش پیمایش برگزینید.",
+    "invalidDistance": "فاصله باید بین ۱ تا ۹۹۹۹ کیلومتر باشد.",
+    "discoveringSources": "در حال یافتن منابع پیمایش NLDI…",
+    "navigationUnavailable": "آن روش پیمایش برای این COMID در دسترس نیست.",
+    "noPlottableSource": "NLDI هیچ منبع پیمایش قابل ترسیمی برنگرداند.",
+    "navigationEmpty": "{{source}} برای این پیمایش هیچ عارضهٔ قابل نقشه‌سازی برنگرداند.",
+    "navigationAdded": "{{source}} از راه {{navigation}} برای COMID {{comid}} افزوده شد ({{km}} کیلومتر). لایه‌های پیمایش موجود روی نقشه باقی می‌مانند.",
+    "navigationFailed": "درخواست پیمایش ناموفق بود.",
+    "tracing": "در حال ردیابی تا نزدیک‌ترین خط جریان NHD…",
+    "flowline": "خط جریان ترسیم شد.",
+    "flowlineComid": "خط جریان ترسیم شد؛ COMID {{comid}} برای گردش‌کارهای حوضه آماده است.",
+    "flowlineFallback": "خط جریان با استفاده از سازوکار پشتیبان موقعیت آب‌شناختی NLDI ترسیم شد.",
+    "flowlineFallbackComid": "خط جریان با استفاده از سازوکار پشتیبان موقعیت آب‌شناختی NLDI ترسیم شد؛ COMID {{comid}} برای گردش‌کارهای حوضه آماده است.",
+    "requestFailed": "درخواست NLDI ناموفق بود.",
+    "nothingToAdd": "هیچ عارضهٔ ترسیم‌شدهٔ NLDI برای افزودن وجود ندارد.",
+    "layersAdded_one": "{{count}} لایهٔ NLDI به یک گروه «نتایج USGS NLDI» افزوده شد.",
+    "layersAdded_other": "{{count}} لایهٔ NLDI به یک گروه «نتایج USGS NLDI» افزوده شد.",
+    "layerGroupName": "نتایج USGS NLDI",
+    "layerFlowline": "خط جریان NLDI",
+    "layerRaindrop": "مسیر قطرهٔ باران NLDI",
+    "layerSelectedPoint": "نقطهٔ انتخاب‌شدهٔ NLDI",
+    "layerBasin": "حوضهٔ بالادست NLDI",
+    "layerNavigation": "پیمایش NLDI {{index}}",
+    "resultCleared": "نتیجهٔ NLDI پاک شد.",
+    "directionalUnavailable": "تا زمانی که فرایند USGS برون‌خط است، ردیابی جهت‌دار جریان در دسترس نیست. «خط جریان کامل» را برگزینید یا بعداً دوباره تلاش کنید.",
+    "noFlowlineNearby": "NLDI نتوانست خط جریانی نزدیک این نقطه بیابد.",
+    "httpError": "USGS NLDI کد HTTP {{status}} را برگرداند",
+    "httpErrorDetail": "USGS NLDI کد HTTP {{status}} را برگرداند: {{detail}}",
+    "noAttributes": "NLDI هیچ صفتی برنگرداند.",
+    "catalogCaGages": "ایستگاه‌های آب‌سنجی کالیفرنیا (ca_gages)",
+    "catalogNwisSite": "ایستگاه‌های آب سطحی NWIS (آب‌سنجی)",
+    "catalogNwisGw": "چاه‌های آب زیرزمینی NWIS",
+    "catalogGfv11Pois": "نقاط USGS Geospatial Fabric",
+    "catalogHuc12pp": "نقاط خروجی HUC12",
+    "catalogNmwdiSt": "ایستگاه‌های آبی نیومکزیکو",
+    "catalogFlowlines": "خطوط جریان NHDPlus"
   }
 }

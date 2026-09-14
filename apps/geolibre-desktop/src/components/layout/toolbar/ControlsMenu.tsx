@@ -1,4 +1,5 @@
 import { useAppStore } from "@geolibre/core";
+import { TERRAIN_SETTINGS_EVENT } from "@geolibre/map";
 import {
   DEFAULT_EFFECTS_SETTINGS,
   type EffectsSettings,
@@ -49,6 +50,7 @@ import {
   type ToolbarChrome,
   type ToolbarMapControl,
 } from "./constants";
+import { useMapCapabilities } from "../../../hooks/useMapCapabilities";
 
 /**
  * Controls-menu entries that write to the project rather than only changing
@@ -116,14 +118,18 @@ export function ControlsMenu({
   onOpenRecordVideo,
 }: ControlsMenuProps) {
   const { t } = useTranslation();
+  const capabilities = useMapCapabilities();
   const uiProfile = useDesktopSettingsStore((s) => s.desktopSettings.uiProfile);
   const show = (id: string) =>
     viewer && AUTHORING_CONTROL_ITEMS.includes(id) ? false : isMenuItemVisible(uiProfile, id);
   // Atmospheric effects only render on the globe (the engine idles in Mercator),
   // so the submenu is disabled while the map is in a flat projection (#783). The
   // GlobeControl toggle syncs this preference via the map "projectiontransition"
-  // event, so the menu reacts the moment the user switches projections.
-  const globeActive = useAppStore((s) => s.preferences.map.projection === "globe");
+  // event, so the menu reacts the moment the user switches projections. The
+  // Cesium renderer is a globe whatever the 2D projection preference says, and
+  // its effects branch drives the native sky box and atmosphere (#2287).
+  const globeProjection = useAppStore((s) => s.preferences.map.projection === "globe");
+  const globeActive = globeProjection || !capabilities.nativeMapInstance;
   const restrictBounds = useAppStore((s) => s.preferences.map.restrictBounds);
   const setPreferences = useAppStore((s) => s.setPreferences);
   // Ground elevation under the pointer in the status bar (#1813). Off by
@@ -207,6 +213,13 @@ export function ControlsMenu({
               {controlsVisible[control.id] ? " ✓" : ""}
             </DropdownMenuItem>
           ))}
+          {show("controls.mapControl.terrain") && (
+            <DropdownMenuItem
+              onClick={() => window.dispatchEvent(new CustomEvent(TERRAIN_SETTINGS_EVENT))}
+            >
+              {t("terrainSettings.title")}
+            </DropdownMenuItem>
+          )}
           {(show("controls.mapControl.logo") || show("controls.mapControl.maptoolkit-logo")) && (
             <LogosSubmenu
               controlsVisible={controlsVisible}

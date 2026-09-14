@@ -20,7 +20,7 @@
  */
 
 import type { GeoLibreLayer } from "@geolibre/core";
-import type { MapController } from "@geolibre/map";
+import type { MapEngine } from "@geolibre/map";
 // Type-only: erased at compile time, so importing it does not pull maplibre-gl
 // (which `xyz-url` imports at runtime) into the pure builder surface.
 import type { ArcGISLayerType, ArcGISSourceType } from "@geolibre/plugins";
@@ -425,7 +425,7 @@ export interface ApplyServiceDeps {
   /** Store action to add the built layer. */
   addLayer: (layer: GeoLibreLayer, beforeLayerId?: string | null) => void;
   /** Map controller ref, used for the ArcGIS plugin path and to fit new layers. */
-  mapControllerRef: RefObject<MapController | null>;
+  mapControllerRef: RefObject<MapEngine | null>;
   /** Insert-before layer id, or null/undefined for the top of the stack. */
   beforeLayerId?: string | null;
 }
@@ -455,6 +455,8 @@ export async function applyServiceEntry(
   const { addLayer, mapControllerRef, beforeLayerId = null } = deps;
 
   switch (entry.kind) {
+    case "csw":
+      throw new Error("CSW catalog connections must be opened before choosing a dataset.");
     case "xyz": {
       const request = xyzFieldsToRequest(entry.fields);
       if (!request.url.trim()) throw new Error("This service has no tile URL.");

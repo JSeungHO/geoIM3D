@@ -1,5 +1,5 @@
 import { useAppStore } from "@geolibre/core";
-import type { MapController } from "@geolibre/map";
+import type { MapEngine } from "@geolibre/map";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@geolibre/ui";
 import { Database } from "lucide-react";
 import { useCallback, useMemo, useState, type RefObject } from "react";
@@ -8,6 +8,9 @@ import { AddDataShellProvider } from "./add-data/context";
 import { KIND_I18N_KEY } from "./add-data/constants";
 import { ArcGISSource } from "./add-data/sources/ArcGISSource";
 import { CadSource } from "./add-data/sources/CadSource";
+import { CesiumIonSource } from "./add-data/sources/CesiumIonSource";
+import { CzmlSource } from "./add-data/sources/CzmlSource";
+import { KmlSource } from "./add-data/sources/KmlSource";
 import { DeckVizSource } from "./add-data/sources/DeckVizSource";
 import { DelimitedTextSource } from "./add-data/sources/DelimitedTextSource";
 import { GdbSource } from "./add-data/sources/GdbSource";
@@ -23,6 +26,7 @@ import { PostgresSource } from "./add-data/sources/PostgresSource";
 import { VideoSource } from "./add-data/sources/VideoSource";
 import { WfsSource } from "./add-data/sources/WfsSource";
 import { WmsSource } from "./add-data/sources/WmsSource";
+import { CswSource } from "./add-data/sources/CswSource";
 import { WmtsSource } from "./add-data/sources/WmtsSource";
 import { XyzSource } from "./add-data/sources/XyzSource";
 import type { AddDataKind } from "./add-data/types";
@@ -33,7 +37,7 @@ export type { AddDataKind } from "./add-data/types";
 
 interface AddDataDialogProps {
   kind: AddDataKind | null;
-  mapControllerRef: RefObject<MapController | null>;
+  mapControllerRef: RefObject<MapEngine | null>;
   onOpenChange: (open: boolean) => void;
   /**
    * Deck.gl Layer kind to pre-select when the dialog opens as `deckgl-viz`
@@ -56,6 +60,11 @@ interface AddDataDialogProps {
   initialLayer?: string;
   /** Style document accompanying a deep-linked vector tileset. */
   initialStyleUrl?: string;
+  /** Search term a saved CSW connection was stored with. */
+  initialKeyword?: string;
+  /** Group this dialog session's layers are moved into, when opened via
+   * "Add data to group". */
+  targetGroupId?: string | null;
 }
 
 /**
@@ -70,12 +79,21 @@ function renderSource(
   initialUrl: string | undefined,
   initialLayer: string | undefined,
   initialStyleUrl: string | undefined,
+  initialKeyword: string | undefined,
 ) {
   switch (kind) {
     case "xyz":
       return <XyzSource initialUrl={initialUrl} />;
+    case "cesium-ion":
+      return <CesiumIonSource />;
+    case "czml":
+      return <CzmlSource initialUrl={initialUrl} />;
+    case "kml":
+      return <KmlSource initialUrl={initialUrl} />;
     case "wms":
       return <WmsSource initialUrl={initialUrl} initialLayers={initialLayer} />;
+    case "csw":
+      return <CswSource initialUrl={initialUrl} initialKeyword={initialKeyword} />;
     case "wfs":
       return <WfsSource initialUrl={initialUrl} initialTypeName={initialLayer} />;
     case "wmts":
@@ -135,6 +153,8 @@ export function AddDataDialog({
   initialUrl,
   initialLayer,
   initialStyleUrl,
+  initialKeyword,
+  targetGroupId = null,
 }: AddDataDialogProps) {
   const { t } = useTranslation();
   const open = kind !== null;
@@ -169,8 +189,9 @@ export function AddDataDialog({
       setIsSubmitting,
       closeDialog,
       martin,
+      targetGroupId,
     }),
-    [mapControllerRef, addLayer, existingLayers, isSubmitting, closeDialog, martin],
+    [mapControllerRef, addLayer, existingLayers, isSubmitting, closeDialog, martin, targetGroupId],
   );
 
   return (
@@ -193,6 +214,7 @@ export function AddDataDialog({
               initialUrl,
               initialLayer,
               initialStyleUrl,
+              initialKeyword,
             )}
           </AddDataShellProvider>
         ) : null}

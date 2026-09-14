@@ -276,6 +276,10 @@
         "label": "WMS შრის დამატება",
         "description": "დაამატეთ WMS GetMap სერვისი ფილებად დაყოფილ რასტრულ შრედ."
       },
+      "csw": {
+        "label": "CSW კატალოგში ძებნა",
+        "description": "მოძებნეთ მონაცემთა ნაკრებები OGC კატალოგის სერვისში და დაამატეთ რუკაზე მხარდაჭერილი ვებრესურსები."
+      },
       "wfs": {
         "label": "WFS შრის დამატება",
         "description": "დაამატეთ WFS ობიექტები GetFeature სერვისიდან GeoJSON-ის მოთხოვნით."
@@ -343,6 +347,18 @@
       "polyline": {
         "label": "დაშიფრული პოლიხაზის შრის დამატება",
         "description": "დაშიფრული პოლიხაზის სტრიქონების (Google, OSRM, Valhalla) იმპორტი ტექსტიდან ან ფაილებიდან ვექტორული ხაზების სახით."
+      },
+      "cesiumIon": {
+        "label": "Cesium Ion-ის აქტივის დამატება",
+        "description": "დაამატეთ 3D Tiles ნაკრები ან სურათები Cesium Ion-იდან აქტივის id-ით. ისახება 3D გლობუსზე თქვენი Cesium Ion-ის token-ით."
+      },
+      "czml": {
+        "label": "CZML დინამიკური 3D შრის დამატება",
+        "description": "ჩატვირთეთ დინამიკური Cesium Language (CZML) დოკუმენტი, რომელიც აღწერს ორბიტებს, ტრაექტორიებს, სატრანსპორტო მარშრუტებსა და დროში ცვალებად 3D სცენებს გლობუსზე."
+      },
+      "kml": {
+        "label": "KML / KMZ",
+        "description": "ჩატვირთეთ KML ან KMZ გლობუსზე ორიგინალური სტილებით, გადაფარვებითა და ქსელური ბმულებით."
       }
     },
     "shared": {
@@ -400,6 +416,37 @@
       "importedWithDropped_one": "დაიმპორტდა {{count}} სერვისი ({{dropped}} გამოტოვდა — ბიბლიოთეკა სავსეა).",
       "importedWithDropped_other": "დაიმპორტდა {{count}} სერვისი ({{dropped}} გამოტოვდა — ბიბლიოთეკა სავსეა)."
     },
+    "cesiumIon": {
+      "defaultName": "Cesium Ion-ის აქტივი",
+      "assetId": "აქტივის ID",
+      "kindTileset": "3D Tiles",
+      "kindImagery": "სურათები",
+      "altitudeOffset": "სიმაღლის წანაცვლება (მ)",
+      "quickPicks": "სწრაფი არჩევანი",
+      "hint": "აქტივების id-ები იხილეთ „My Assets“ განყოფილებაში ion.cesium.com-ზე. აქტივი გაზიარებული უნდა იყოს პარამეტრებში მითითებულ token-თან.",
+      "errorAssetId": "შეიყვანეთ Cesium Ion-ის აქტივის id (დადებითი მთელი რიცხვი).",
+      "errorAltitude": "შეიყვანეთ სიმაღლის წანაცვლება რიცხვად, მეტრებში.",
+      "tokenMissing": "Cesium Ion-ის token არ არის მითითებული. დაამატეთ იგი პარამეტრები → გარემოს ცვლადები (VITE_CESIUM_TOKEN) განყოფილებაში, წინააღმდეგ შემთხვევაში აქტივი ვერ ჩაიტვირთება."
+    },
+    "czml": {
+      "defaultName": "CZML დინამიკური სცენა",
+      "url": "CZML URL",
+      "sourceModeUrl": "URL",
+      "sourceModeFile": "ლოკალური ფაილი",
+      "file": "ფაილი",
+      "quickPicks": "სამაგალითო დინამიკური სცენები",
+      "hint": "CZML ნაკადები ან ფაილები განსაზღვრავს გლობუსის საათთან სინქრონიზებულ დინამიკურ 3D პოზიციებს, ანიმაციებსა და ორბიტებს.",
+      "errorUrl": "შეიყვანეთ CZML ბოლო წერტილის ვალიდური URL.",
+      "errorChooseFile": "ჩასატვირთად აირჩიეთ CZML (.czml ან .json) ფაილი.",
+      "errorFileMissing": "არჩეული ფაილის წაკითხვა ვერ მოხერხდა.",
+      "errorInvalidCzml": "ფაილი არ შეიცავს ვალიდურ CZML დოკუმენტს (მოსალოდნელი იყო JSON მასივი ან პაკეტის ობიექტი).",
+      "readError": "CZML მონაცემების წაკითხვა ვერ მოხერხდა."
+    },
+    "kml": {
+      "defaultName": "KML / KMZ",
+      "url": "KML / KMZ URL",
+      "errorSource": "შეიყვანეთ KML/KMZ URL ან აირჩიეთ ფაილი."
+    },
     "xyz": {
       "defaultName": "XYZ შრე",
       "sampleLabel": "USGS-ის სურათები",
@@ -426,6 +473,21 @@
       "noLayersFound": "ამ სერვისისთვის შრეები ვერ მოიძებნა.",
       "retrieveError": "ამ სერვისიდან შრეების მიღება ვერ მოხერხდა.",
       "version": "WMS ვერსია"
+    },
+    "csw": {
+      "defaultName": "CSW კატალოგი",
+      "urlPlaceholder": "https://example.com/csw",
+      "keyword": "საკვანძო სიტყვა",
+      "search": "ძებნა",
+      "searching": "მიმდინარეობს ძებნა…",
+      "results": "კატალოგის შედეგები",
+      "errorUrl": "შეიყვანეთ CSW სერვისის სწორი HTTP ან HTTPS URL.",
+      "searchError": "ამ კატალოგში ძებნა ვერ მოხერხდა.",
+      "noResults": "შესაბამისი მონაცემთა ნაკრები ვერ მოიძებნა.",
+      "invalidGeoJson": "არჩეული რესურსი არ არის GeoJSON FeatureCollection.",
+      "addError": "ამ კატალოგის რესურსის დამატება ვერ მოხერხდა.",
+      "addResource": "{{kind}}-ის დამატება",
+      "noSupportedResources": "მხარდაჭერილი WMS, WFS, ArcGIS ან GeoJSON რესურსი არ გამოცხადებულა."
     },
     "wfs": {
       "defaultName": "WFS შრე",
@@ -624,6 +686,7 @@
       "errorRetrieveColumns": "სვეტების სახელების მიღება ვერ მოხერხდა.",
       "url": "გამყოფებით დაყოფილი ტექსტის URL",
       "file": "გამყოფებით დაყოფილი ტექსტური ფაილი",
+      "fileFilter": "CSV / TSV / TXT / Excel",
       "urlPlaceholder": "https://example.com/data.csv",
       "retrieving": "მიმდინარეობს მიღება...",
       "retrieveColumns": "სვეტების მიღება",
@@ -892,7 +955,16 @@
       "cellSize": "უჯრედის ზომა",
       "lineWidth": "ხაზის სიგანე",
       "extrusion": "3D ამოწევა",
-      "modelUrlPlaceholder": "https://example.com/model.glb"
+      "modelUrlPlaceholder": "https://example.com/model.glb",
+      "chooseModelFile": "ლოკალური მოდელის არჩევა",
+      "sampleDataset": "სამაგალითო მონაცემთა ნაკრები",
+      "sampleCustom": "საკუთარი მოდელი",
+      "sampleAirplane": "თვითმფრინავი — სან-ფრანცისკო",
+      "sampleShanghai": "შანხაი — ქალაქის ცენტრი",
+      "modelFileHint": "აირჩიეთ GLB ან თვითკმარი glTF ფაილი. ლოკალური მოდელები შენახულ პროექტებში ჩაშენდება, რაც პროექტის ზომას ზრდის.",
+      "modelExternalResources": "ეს მოდელი ცალკე ფაილებზე მიუთითებს. დააექსპორტეთ იგი GLB ფორმატში ჩაშენებული ტექსტურებითა და ბუფერებით და სცადეთ თავიდან.",
+      "modelTooLarge": "ეს მოდელი აჭარბებს პროექტში ჩასაშენებელ {{limit}} მბ ლიმიტს. განათავსეთ იგი სერვერზე და დაამატეთ URL-ით.",
+      "modelFileError": "ამ მოდელის წაკითხვა ვერ მოხერხდა. აირჩიეთ ვალიდური glTF 2.0 ან GLB ფაილი."
     },
     "nonGeographicCoordinates": "{{names}}-ის კოორდინატები არ არის გრძედი/განედი, ამიტომ რუკაზე არაფერი დაიხატება. CRS არასწორადაა მითითებული — გადააპროექტეთ მონაცემები (ან შეასწორეთ .prj) და ხელახლა ჩატვირთეთ."
   },
@@ -1334,6 +1406,12 @@
     "errorFallback": "პროექტის გაზიარება ვერ მოხერხდა.",
     "usernameRequired": "გაზიარებამდე დააყენეთ მომხმარებლის სახელი თქვენს {{shareHost}} ანგარიშზე. გახსენით ანგარიშის პარამეტრები ასარჩევად, შემდეგ სცადეთ ხელახლა.",
     "openAccountSettings": "ანგარიშის პარამეტრების გახსნა",
+    "shareAnyway": "მაინც გაზიარება",
+    "localWarningTitle_one": "გაზიარებულ რუკაზე {{count}} შრე დააკლდება",
+    "localWarningTitle_other": "გაზიარებულ რუკაზე {{count}} შრე დააკლდება",
+    "localWarningBody": "{{shareHost}} ინახავს მხოლოდ პროექტის ფაილს და არასდროს თქვენს კომპიუტერზე არსებულ ფაილებს. მიმღებები პროექტს ბრაუზერში ხსნიან, რომელსაც თქვენი დისკის წაკითხვა არ შეუძლია, ამიტომ ეს შრეები თქვენ გარდა ყველასთვის ცარიელი იქნება.",
+    "localWarningAdvice": "მათ ჩასართავად გადაიყვანეთ რასტრები Cloud Optimized GeoTIFF-ში, ხოლო ვექტორები PMTiles-ში ან GeoParquet-ში, განათავსეთ ფაილები საჯარო HTTPS სერვერზე, მაგალითად GitHub-ზე ან Hugging Face-ზე, დაამატეთ ისინი რუკაზე URL-ით და გააზიარეთ თავიდან. მცირე ლოკალური ვექტორული შრეები პროექტში ავტომატურად ჩაშენდება.",
+    "localWarningLearnMore": "გაიგეთ მეტი",
     "readinessChecking": "მოწმდება, შეძლებენ თუ არა მიმღებები თქვენი მონაცემების ჩატვირთვას…",
     "readinessUnavailable": "მონაცემთა წყაროების შემოწმება ვერ შესრულდა.",
     "readinessAllReachable_one": "{{count}} მონაცემთა წყარო მიმღებებისთვის ხელმისაწვდომად გამოიყურება.",
@@ -1414,7 +1492,7 @@
   },
   "printLayout": {
     "title": "ბეჭდვის განლაგება",
-    "description": "შეადგინეთ დასაბეჭდი რუკა სათაურით, ლეგენდით, მასშტაბის ზოლითა და ჩრდილოეთის ისრით, შემდეგ კი ექსპორტირეთ PNG-ში ან PDF-ში.",
+    "description": "შეადგინეთ დასაბეჭდი რუკა სათაურით, ლეგენდით, მასშტაბის ზოლითა და ჩრდილოეთის ისრით, შემდეგ კი ექსპორტირეთ PNG-ში, PDF-ში ან SVG-ში.",
     "preview": "გადახედვა",
     "resizeControls": "მართვის პანელის ზომის შეცვლა",
     "resizeDialog": "დიალოგის ზომის შეცვლა",
@@ -1422,6 +1500,7 @@
     "copyToClipboard": "ბუფერში კოპირება",
     "copied": "დაკოპირდა",
     "exportPng": "PNG-ის ექსპორტი",
+    "exportSvg": "SVG-ის ექსპორტი",
     "exportPdf": "PDF-ის ექსპორტი",
     "titleLabel": "სათაური",
     "titlePlaceholder": "რუკის სათაური",
@@ -1848,7 +1927,22 @@
     "show3d": "აჩვენე რუკა {{number}} 3D გლობუსად",
     "show2d": "აჩვენე რუკა {{number}} 2D რუკად",
     "only2d": "მხოლოდ 2D",
+    "only3d": "მხოლოდ 3D",
     "cesiumTokenHint": "რელიეფისა და Ion-ის სურათებისთვის დაამატეთ Cesium Ion-ის token პარამეტრებში"
+  },
+  "renderer": {
+    "basemap": "საბაზისო რუკა",
+    "imagery": "სურათები",
+    "projectBasemap": "პროექტის საბაზისო რუკა",
+    "layerUnsupported": "3D გლობუსზე არ ისახება",
+    "layerCesiumOnly": "ისახება მხოლოდ 3D გლობუსზე",
+    "resetView": "ხედის საწყისზე დაბრუნება",
+    "scene3D": "3D გლობუსი",
+    "scene2D": "2D რუკა",
+    "sceneColumbus": "კოლუმბუსის ხედი",
+    "fullscreenEnter": "სრულ ეკრანზე",
+    "fullscreenExit": "სრული ეკრანიდან გასვლა",
+    "fullscreenUnavailable": "სრული ეკრანი მიუწვდომელია"
   },
   "mapContextMenu": {
     "copyCoordinatesHint": "კოორდინატების კოპირება ბუფერში",
@@ -2437,6 +2531,7 @@
       "mbtiles": "MBTiles შრე",
       "xyz": "XYZ შრე",
       "wms": "WMS შრე",
+      "csw": "CSW კატალოგი",
       "wfs": "WFS შრე",
       "wmts": "WMTS შრე",
       "ogcFeatures": "OGC API - Features",
@@ -2445,6 +2540,8 @@
       "georss": "GeoRSS შრე",
       "video": "ვიდეო შრე",
       "deckglViz": "Deck.gl შრე",
+      "cesiumIon": "Cesium Ion-ის აქტივი",
+      "czml": "CZML დინამიკური 3D სცენა",
       "gltfModel": "3D მოდელი (glTF)",
       "postgres": "PostgreSQL შრე",
       "iceberg": "Apache Iceberg შრე"
@@ -2700,6 +2797,9 @@
       "splitViewGrid2x3": "2 × 3 ბადე",
       "splitViewGrid3x3": "3 × 3 ბადე",
       "splitViewSync": "ხედების სინქრონიზაცია",
+      "renderingEngine": "რენდერინგის ძრავა",
+      "rendererMapLibre": "MapLibre",
+      "rendererCesium": "Cesium",
       "viewInGoogleMaps": "ნახვა Google Maps-ში",
       "viewInGoogleEarth": "ნახვა Google Earth-ში",
       "zoomIn": "მიახლოება",
@@ -2852,6 +2952,7 @@
       "saveProjectAsTitle": "პროექტის შენახვა როგორც",
       "saveProjectAsDesc": "შეიყვანეთ ფაილის სახელი. „შენახვა“-ზე დაწკაპუნებისას პროექტი ჩამოიტვირთება თქვენი ბრაუზერის ჩამოტვირთვების საქაღალდეში.",
       "embedVectorTitle": "ჩავრთოთ ლოკალური ვექტორული მონაცემები?",
+      "embedEditedGeometryDesc": "ეს პროექტი შეიცავს რედაქტირებულ გეომეტრიებს. მათ შესანარჩუნებლად ჩააშენეთ ვექტორული მონაცემები (დაახლოებით {{size}}). ჩაშენების გარეშე მითითებული ფენები თავდაპირველი გეომეტრიებით გაიხსნება და ადგილობრივი მონაცემები შეიძლება მიუწვდომელი იყოს.",
       "embedVectorDesc": "ამ პროექტს აქვს {{count}} ლოკალური ვექტორული შრე, ჩატვირთული თქვენი კომპიუტერიდან. ბრაუზერს არ შეუძლია მათი ხელახლა წაკითხვა პროექტის ხელახლა გახსნისას, ამიტომ აღსადგენად მათი მონაცემები უნდა ჩაიდოს პროექტის ფაილში. ჩართვა ფაილს დაახლოებით {{size}}-ს მატებს.",
       "embedVectorDescDesktop": "ამ პროექტს აქვს {{count}} ლოკალური ვექტორული შრე, ჩატვირთული თქვენი კომპიუტერიდან. ჩართეთ მათი მონაცემები, რომ პროექტი თვითკმარი გახდეს (მატებს დაახლ. {{size}}-ს), ან შეინახეთ ფაილის მიმართვები, რომლებიც პროექტის ხელახლა გახსნისას დისკიდან იტვირთება. მიმართვები ფაილს პატარას ტოვებს, მაგრამ ფუჭდება, თუ წყარო ფაილი მოგვიანებით გადაინაცვლებს ან წაიშლება.",
       "embedVectorDescMas": "ამ პროექტში არის თქვენი კომპიუტერიდან ჩატვირთული {{count}} ლოკალური ვექტორული შრე. Mac App Store-ის ქვიშის ყუთი GeoLibre-ის დახურვის შემდეგ ამ ფაილებზე წვდომას ვერ ინარჩუნებს, ამიტომ აღსადგენად მათი მონაცემები პროექტის ფაილში უნდა ჩაიდოს. ჩაშენება ფაილს დაახლოებით {{size}}-ს მატებს.",
@@ -2902,6 +3003,7 @@
     },
     "plugin": {
       "maplibre-gl-annotations": "ანოტაციები",
+      "maplibre-gl-dimensions": "ზომები",
       "maplibre-gl-streetview": "Street View",
       "maplibre-gl-time-slider": "დროის სლაიდერი",
       "geolibre-timelapse": "Timelapse",
@@ -3094,9 +3196,14 @@
     "openBuilder": "გამოსახულების კონსტრუქტორი...",
     "invalidExpression": "შეიყვანეთ სწორი ლოგიკური გამოსახულება.",
     "select": "ობიექტების არჩევა",
+    "applyLayerFilter": "შრის გაფილტვრა",
+    "clearLayerFilter": "შრის ფილტრის გასუფთავება",
+    "layerFilteredHint": "მუდმივი ფილტრი მალავს ამ შრის ობიექტების ნაწილს.",
+    "layerFilteredBothHint": "მუდმივი ფილტრი და სწრაფი ფილტრი მალავს ამ შრის ობიექტების ნაწილს.",
     "noLayers": "დაამატეთ ვექტორული შრე ობიექტებით, რომ არჩევა შეასრულოთ.",
     "needTwoLayers": "მდებარეობით არჩევას სჭირდება ორი ვექტორული შრე ობიექტებით.",
     "summary": "მონიშნულია {{selected}} / {{total}} ობიექტი ({{matched}} დაემთხვა).",
+    "filterSummary": "შრის ფილტრი გამოყენებულია: დაემთხვა {{matched}} / {{total}} ობიექტი.",
     "evaluationErrors": "{{count}} ობიექტის შეფასება ვერ მოხერხდა და არ დაემთხვა.",
     "unevaluableDisjoint": "{{count}} ობიექტი გამოირიცხა, რადგან მათი გეომეტრიის შეფასება ვერ მოხერხდა.",
     "tooManyPairs": "ამ შედარებას სჭირდება {{pairs}} ობიექტ-წყვილის ტესტი (ლიმიტი {{limit}}). ამის ნაცვლად გამოიყენეთ Processing → GeoLibre → Vector → Select by location Sidecar ძრავით.",
@@ -3509,6 +3616,7 @@
     "search": "ძებნა",
     "searchCurrentView": "მიმდინარე რუკის არეში ძებნა",
     "enterKeyword": "დასაწყებად შეიყვანეთ საკვანძო სიტყვა.",
+    "viewUnavailable": "მიმდინარე რუკის არეალი მიუწვდომელია; ძიებისთვის გამორთეთ რუკის არეალის ფილტრი.",
     "loadMore": "მეტის ჩატვირთვა",
     "searching": "ძებნა…",
     "loadingMore": "მიმდინარეობს დამატებითი ნაკრებების ჩატვირთვა…",
@@ -3551,10 +3659,14 @@
     "title": "STAC კატალოგები",
     "footprintLayerName": "STAC ძიების საზღვრები",
     "catalogSearch": "იპოვეთ საჯარო კატალოგი STAC Index-ში",
+    "portolanCatalogSearch": "იპოვეთ საჯარო კატალოგი Portolan Registry-ში",
     "catalogSearchPlaceholder": "კატალოგების სახელების ძიება…",
     "indexLoading": "STAC Index იტვირთება…",
+    "portolanIndexLoading": "Portolan Registry იტვირთება…",
     "indexUnavailable": "STAC Index მიუწვდომელია: შეიყვანეთ URL",
+    "portolanIndexUnavailable": "Portolan Registry მიუწვდომელია: შეიყვანეთ URL",
     "indexLoadFailed": "STAC Index ვერ ჩაიტვირთა",
+    "portolanIndexLoadFailed": "Portolan Registry ვერ ჩაიტვირთა",
     "urlLabel": "STAC კატალოგის ან API-ის URL",
     "connect": "დაკავშირება",
     "connecting": "მიმდინარეობს STAC-თან დაკავშირება…",
@@ -3907,6 +4019,28 @@
     "saveElement": "ელემენტის შენახვა",
     "atPoint": "წერტილზე",
     "pinnedToExtent": "მიმაგრებულია არეზე"
+  },
+  "dimensions": {
+    "toolbar": "ზომების ხელსაწყოები",
+    "layerName": "ზომები",
+    "tools": {
+      "linear": "წრფივი ზომა",
+      "angular": "კუთხური ზომა"
+    },
+    "unit": "ერთეული",
+    "snap": "მიბმა წვეროებზე",
+    "color": "ზომის ფერი",
+    "width": "ხაზის სიგანე",
+    "widthOptions": {
+      "thin": "წვრილი",
+      "medium": "საშუალო",
+      "thick": "მსხვილი"
+    },
+    "deleteLast": "ბოლო ზომის წაშლა",
+    "clearAll": "ყველა ზომის გასუფთავება",
+    "newLayer": "ახალი ზომების ფენა",
+    "confirmClearAll_one": "წავშალოთ ეს ზომა? ამის გაუქმება შეუძლებელია.",
+    "confirmClearAll_other": "წავშალოთ ამ ფენის ყველა {{count}} ზომა? ამის გაუქმება შეუძლებელია."
   },
   "pythonConsole": {
     "title": "Python კონსოლი",
@@ -4509,6 +4643,15 @@
                 "kilometers": "კილომეტრი",
                 "meters": "მეტრი",
                 "miles": "მილი"
+              }
+            },
+            "side": {
+              "label": "ბუფერის მხარე",
+              "description": "გარეთ ზრდის თითოეულ ობიექტს, შიგნით ამცირებს მას, ხოლო ორივე მხარეს ტოვებს მხოლოდ იმ ზონას, რომელიც მისი საზღვრის ორივე მხარეს მითითებულ მანძილშია. შიგნით საჭიროებს პოლიგონურ ფენას — წერტილს ან ხაზს შიდა ფართობი არ აქვს.",
+              "options": {
+                "outside": "გარეთ (გაზრდა)",
+                "inside": "შიგნით (შემცირება)",
+                "both": "ორივე მხარეს"
               }
             }
           }
@@ -6325,6 +6468,7 @@
     "description": "შეინახეთ, დაათვალიერეთ და გამოიყენეთ ხელახლა გამოსაყენებელი სტილები, სიმბოლოები, წარწერების წინასწარი პარამეტრები და ფერთა გრადიენტები ფენებსა და პროექტებზე.",
     "searchPlaceholder": "სტილებისა და ტეგების ძიება…",
     "presetsSection": "ჩაშენებული წინასწარი პარამეტრები",
+    "presetActions": "წინასწარი პარამეტრის მოქმედებები",
     "librarySection": "ჩემი ბიბლიოთეკა",
     "projectSection": "ეს პროექტი",
     "empty": "შენახული სტილები ვერ მოიძებნა. დასაწყებად შეინახეთ ფენის სტილი ან შემოიტანეთ ბიბლიოთეკა.",
@@ -6425,7 +6569,6 @@
       "remove": "შეერთების წაშლა",
       "enabledTitle": "ამ შეერთების გამოყენება",
       "missingLayer": "შესაერთებელი შრე ვერ მოიძებნა",
-      "noCandidates": "სხვა შრეს არ აქვს ატრიბუტების ცხრილი შესაერთებლად",
       "statsMatched": "{{total}}-დან {{matched}} ობიექტი დაემთხვა",
       "statsUnmatchedJoin_one": "{{count}} ცხრილის მწკრივი დამთხვევის გარეშე",
       "statsUnmatchedJoin_other": "{{count}} ცხრილის მწკრივი დამთხვევის გარეშე"
@@ -6482,6 +6625,11 @@
       "offsetY": "წანაცვლება Y (em)",
       "rotation": "ბრუნვა (°)",
       "maxWidth": "გადატანის სიგანე (em)",
+      "numberFormat": "რიცხვების ფორმატირება",
+      "numberFormatHint": "რიცხვითი მნიშვნელობები აისახება ათასეულებისა და ათწილადის გამყოფებით, მაგ. {{sample}}. ტექსტური მნიშვნელობები არ იცვლება, ხოლო წარწერის გამოსახულება საკუთარ შედეგს თავად აფორმატებს.",
+      "numberDecimals": "ათწილადის ნიშნები",
+      "numberLocale": "გამყოფები",
+      "numberLocaleApp": "აპლიკაციის ენის მიხედვით",
       "transform": "ასოების რეგისტრი",
       "transformNone": "როგორც შეყვანილია",
       "transformUppercase": "მაღალი რეგისტრი",
@@ -6635,6 +6783,7 @@
       "categories": "კატეგორიები",
       "classColor": "კლასი {{index}}-ის ფერი",
       "classColorPick": "კლასი {{index}}-ის ფერის აღება ეკრანიდან",
+      "classOpacity": "კლასი {{index}}-ის გამჭვირვალობა",
       "classValue": "კლასი {{index}}-ის მნიშვნელობა",
       "colorExpression": "ფერის გამოსახულება",
       "applyStyleType": "სტილის ტიპის გამოყენება",
@@ -6644,6 +6793,8 @@
       "pointRendererClustered": "დაჯგუფებული",
       "heatmapRadius": "სითბური რუკის რადიუსი",
       "heatmapIntensity": "სითბური რუკის ინტენსივობა",
+      "heatmapWeightField": "წონის ველი",
+      "heatmapEqualWeight": "არცერთი (თანაბარი წონა)",
       "clusterRadius": "კლასტერის რადიუსი (px)",
       "clusterMaxZoom": "კლასტერის მაქს. zoom",
       "strokeWidthUnit": "ხაზის სისქის ერთეული",
@@ -6680,10 +6831,12 @@
     "mode2d": "2D",
     "mode3dExtrusion": "3D ამოწევა",
     "noControls": "სტილის კონტროლები ამ ტიპის შრისთვის ჯერ მიუწვდომელია.",
+    "tilesetSymbology": "ფერები და ფილტრები ვრცელდება ამ ფილაკრებულზე 3D გლობუსზე.",
     "selectedLayerType": "არჩეული შრის ტიპი: {{type}}",
     "footerDeck": "ცვლილებები რეალურ დროში ედება DuckDB deck.gl შრის სტილს.",
     "footerMaplibre": "ცვლილებები რეალურ დროში ედება MapLibre-ის paint-თვისებებს.",
     "pluginPaintedFooter": "ამ შრეს ხატავს მისი პლაგინი, რომელიც საკუთარ სტილის კონტროლებს გთავაზობთ.",
+    "serviceStyledFooter": "ეს შრე ინარჩუნებს თავისი სერვისის საკუთარ სტილს; გამჭვირვალობა, რიგი, მასშტაბის დიაპაზონი და ფილტრები მაინც მოქმედებს.",
     "extrusion": {
       "color": "ამოწევის ფერი",
       "opacity": "ამოწევის გამჭვირვალობა",
@@ -6780,6 +6933,7 @@
         "upcase": "გარდაქმნის სტრიქონს მაღალრეგისტრში.",
         "downcase": "გარდაქმნის სტრიქონს დაბალრეგისტრში.",
         "slice": "აბრუნებს სტრიქონის ან მასივის მონაკვეთს.",
+        "numberFormat": "აფორმატებს რიცხვს ტექსტად ლოკალის ათასეულებისა და ათწილადის გამყოფებით, სურვილისამებრ ფიქსირებული ათწილადის ნიშნებით.",
         "toNumber": "გარდაქმნის მნიშვნელობას რიცხვად.",
         "toString": "გარდაქმნის მნიშვნელობას სტრიქონად.",
         "toBoolean": "გარდაქმნის მნიშვნელობას true-დ ან false-დ.",
@@ -6939,6 +7093,7 @@
     "allFieldsUsed": "ყველა ველს უკვე აქვს ფილტრი",
     "removeAll": "ყველას ამოღება",
     "clearAll": "ფილტრების გასუფთავება",
+    "clearAllWithExpression": "ფილტრებისა და შენახული გამოსახულების გასუფთავება",
     "clearOne": "ამ ფილტრის გასუფთავება",
     "clearOneNamed": "{{field}}-ის ფილტრის გასუფთავება",
     "remove": "ფილტრის ამოღება",
@@ -7072,6 +7227,8 @@
     "saveEditsSuccess": "წყარო ფაილში შენახულია {{count}} ობიექტი.",
     "saveEditsNoFeatures": "ამ შრეს არ აქვს შესანახი ობიექტები.",
     "saveEditsError": "წყარო ფაილში ცვლილებების შენახვა ვერ მოხერხდა.",
+    "saveEditsToArcgis": "ცვლილებების შენახვა ArcGIS სერვისში",
+    "saveEditsArcgisSuccess": "შენახულია ArcGIS-ში: {{inserted}} ჩამატებული, {{updated}} განახლებული, {{deleted}} წაშლილი.",
     "saveEditsToPostgis": "ცვლილებების შენახვა PostGIS ცხრილში",
     "saveEditsPostgisSuccess": "შენახულია {{table}}-ში: {{inserted}} ჩამატებული, {{updated}} განახლებული, {{deleted}} წაშლილი.",
     "saveEditsPostgisSkippedFields": "ცხრილის შესაბამისი სვეტის გარეშე ველები არ შენახულა: {{fields}}.",
@@ -7229,6 +7386,18 @@
     "stretchLinear": "წრფივი",
     "stretchLog": "ლოგარითმული",
     "stretchSqrt": "კვადრატული ფესვი",
+    "viewportStretch": "ხედის გაწელვა",
+    "viewportMinMax": "ხედის მინ. / მაქს.",
+    "viewportPercentile": "ხედის 5–95 პროცენტილი",
+    "viewportStddev": "ხედის საშუალო ± 2 სტანდარტული გადახრა",
+    "viewportApply": "ხედზე გამოყენება",
+    "viewportStretching": "ხედის წაკითხვა…",
+    "viewportStretchApplied": "ხედის გაწელვა გამოყენებულია",
+    "viewportAuto": "ავტომატური განახლება რუკის გადაადგილებისას",
+    "viewportStretchNoView": "რუკის ხედი მიუწვდომელია.",
+    "viewportStretchNoValues": "ხედში რასტრული მნიშვნელობები ვერ მოიძებნა.",
+    "viewportStretchNoRange": "ხედის მნიშვნელობები დიაპაზონს არ განსაზღვრავს.",
+    "viewportStretchMoved": "რუკა გადაადგილდა წაკითხვის დასრულებამდე. გამოიყენეთ თავიდან.",
     "index": "ინდექსი",
     "classifyToggle": "დისკრეტულ კლასებად დაყოფა",
     "method": "მეთოდი",
@@ -7730,5 +7899,66 @@
       "downloadsStarted": "დაიწყო {{started}} ჩამოტვირთვა. {{failed}} ვერ შესრულდა.",
       "downloadCancelled": "ჩამოტვირთვა გაუქმდა ან ვერ შესრულდა."
     }
+  },
+  "usgsNldi": {
+    "panelTitle": "USGS NLDI",
+    "title": "USGS NLDI ქსელის ხელსაწყოები",
+    "hint": "ჯერ აირჩიეთ ნაკადის ხაზის მიმართულება და დააწკაპუნეთ რუკაზე. შემდეგ აირჩიეთ ნავიგაციის მიმართულება, დააჭირეთ გამოკვეთილ ღილაკს ხელმისაწვდომი კატალოგების ჩასატვირთად, აირჩიეთ კატალოგი, მაგალითად ჰიდროსაგუშაგოები ან ჭაბურღილები, და კვლავ დააჭირეთ ამ კატალოგის დასახატად.",
+    "directionComplete": "სრული ნაკადის ხაზი — აბრუნებს NHD-ის მთელ მონაკვეთს",
+    "directionUp": "მხოლოდ ზემოთ დინებით — აბრუნებს წერტილის ზემოთ მდებარე მონაკვეთს",
+    "directionDown": "მხოლოდ ქვემოთ დინებით — აბრუნებს წერტილის ქვემოთ მდებარე მონაკვეთს",
+    "basinButton": "აუზი ჰიდროლოკაციიდან",
+    "navigationPlaceholder": "აირჩიეთ მიმართულება — საჭიროა დახატვამდე",
+    "navigationUpstreamMain": "ზემო დინების მთავარი კალაპოტი — მიჰყვება ძირითად კალაპოტს",
+    "navigationUpstreamTributaries": "ზემო დინების შენაკადები — პოულობს შემერთებულ განშტოებებს",
+    "navigationDownstreamMain": "ქვემო დინების მთავარი კალაპოტი — მიჰყვება ძირითად კალაპოტს",
+    "navigationDownstreamDiversions": "ქვემო დინების განშტოებები — მიჰყვება გაყოფილი ნაკადის გზებს",
+    "sourcePlaceholder": "ჯერ დააჭირეთ „წყაროების ჩატვირთვა და დახატვა“",
+    "distancePlaceholder": "მანძილი (კმ)",
+    "navigationButton": "1. წყაროების ჩატვირთვა და ნავიგაციის დახატვა",
+    "navigationButtonAgain": "კიდევ ერთი ნავიგაციის ფენის დახატვა",
+    "exportButton": "დახატული შედეგების ექსპორტი GeoJSON-ში",
+    "addLayersButton": "დახატული შედეგების დამატება GeoLibre-ის ფენებში",
+    "clearButton": "NLDI შედეგის გასუფთავება",
+    "noComid": "ამ წერტილისთვის COMID არ დაბრუნებულა.",
+    "requestingBasin": "მიმდინარეობს ზემო დინების აუზის მოთხოვნა…",
+    "basinRendered": "ზემო დინების აუზი დახატულია COMID {{comid}}-ისთვის.",
+    "basinFailed": "აუზის მოთხოვნა ვერ შესრულდა.",
+    "selectNavigation": "წერტილის ტრასირების შემდეგ აირჩიეთ ნავიგაციის მეთოდი.",
+    "invalidDistance": "მანძილი უნდა იყოს 1-დან 9999 კმ-მდე.",
+    "discoveringSources": "მიმდინარეობს NLDI ნავიგაციის წყაროების აღმოჩენა…",
+    "navigationUnavailable": "ეს ნავიგაციის მეთოდი მიუწვდომელია ამ COMID-ისთვის.",
+    "noPlottableSource": "NLDI-მ არ დააბრუნა დასახატად ვარგისი ნავიგაციის წყარო.",
+    "navigationEmpty": "{{source}}-მა ამ ნავიგაციისთვის რუკაზე გამოსახვადი ობიექტები არ დააბრუნა.",
+    "navigationAdded": "დაემატა {{source}} {{navigation}}-ის მეშვეობით COMID {{comid}}-ისთვის ({{km}} კმ). არსებული ნავიგაციის ფენები რუკაზე რჩება.",
+    "navigationFailed": "ნავიგაციის მოთხოვნა ვერ შესრულდა.",
+    "tracing": "მიმდინარეობს ტრასირება უახლოეს NHD ნაკადის ხაზამდე…",
+    "flowline": "ნაკადის ხაზი დახატულია.",
+    "flowlineComid": "ნაკადის ხაზი დახატულია; COMID {{comid}} მზადაა აუზის სამუშაო პროცესებისთვის.",
+    "flowlineFallback": "ნაკადის ხაზი დახატულია NLDI ჰიდროლოკაციის სათადარიგო მექანიზმით.",
+    "flowlineFallbackComid": "ნაკადის ხაზი დახატულია NLDI ჰიდროლოკაციის სათადარიგო მექანიზმით; COMID {{comid}} მზადაა აუზის სამუშაო პროცესებისთვის.",
+    "requestFailed": "NLDI მოთხოვნა ვერ შესრულდა.",
+    "nothingToAdd": "დასამატებელი დახატული NLDI ობიექტები არ არის.",
+    "layersAdded_one": "{{count}} NLDI ფენა დაემატა ერთ ჯგუფს „USGS NLDI შედეგები“.",
+    "layersAdded_other": "{{count}} NLDI ფენა დაემატა ერთ ჯგუფს „USGS NLDI შედეგები“.",
+    "layerGroupName": "USGS NLDI შედეგები",
+    "layerFlowline": "NLDI ნაკადის ხაზი",
+    "layerRaindrop": "NLDI წვიმის წვეთის გზა",
+    "layerSelectedPoint": "NLDI არჩეული წერტილი",
+    "layerBasin": "NLDI ზემო დინების აუზი",
+    "layerNavigation": "NLDI ნავიგაცია {{index}}",
+    "resultCleared": "NLDI შედეგი გასუფთავდა.",
+    "directionalUnavailable": "მიმართულებითი ნაკადის ტრასირება მიუწვდომელია, სანამ USGS-ის პროცესი ხაზგარეშეა. აირჩიეთ „სრული ნაკადის ხაზი“ ან სცადეთ მოგვიანებით.",
+    "noFlowlineNearby": "NLDI-მ ამ წერტილთან ახლოს ნაკადის ხაზი ვერ იპოვა.",
+    "httpError": "USGS NLDI-მ დააბრუნა HTTP {{status}}",
+    "httpErrorDetail": "USGS NLDI-მ დააბრუნა HTTP {{status}}: {{detail}}",
+    "noAttributes": "NLDI-მ ატრიბუტები არ დააბრუნა.",
+    "catalogCaGages": "კალიფორნიის ჰიდროსაგუშაგოები (ca_gages)",
+    "catalogNwisSite": "NWIS ზედაპირული წყლის პუნქტები (ჰიდროსაგუშაგოები)",
+    "catalogNwisGw": "NWIS მიწისქვეშა წყლის ჭაბურღილები",
+    "catalogGfv11Pois": "USGS Geospatial Fabric-ის წერტილები",
+    "catalogHuc12pp": "HUC12 ჩამონადენის წერტილები",
+    "catalogNmwdiSt": "ნიუ-მექსიკოს წყლის პუნქტები",
+    "catalogFlowlines": "NHDPlus ნაკადის ხაზები"
   }
 }

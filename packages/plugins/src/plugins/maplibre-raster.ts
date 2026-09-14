@@ -4,6 +4,8 @@ import type {
   RasterControl,
   RasterControlEventHandler,
   RasterLayerState,
+  RasterWindowOptions,
+  RasterWindowReading,
   RasterSampleDataset,
   PixelReading,
   RenderEngine,
@@ -28,6 +30,7 @@ import {
   unwireRasterStoreSync,
   wireRasterStoreSync,
 } from "./raster-layer-sync";
+import { isAbbreviatedJpegCompression } from "./cog-compression";
 import {
   activateRasterClassification,
   disposeAllRasterClassification,
@@ -36,6 +39,7 @@ import {
 import { disposeAllPaletteLegends, disposePaletteLegend } from "./raster-palette";
 import { isNonTiledRasterError } from "./non-tiled-raster-error";
 import { convertTiffYCbCrToRgb } from "./tiff-ycbcr";
+import { readableStacLayerHref } from "./stac-signing";
 
 const rasterControlPosition: GeoLibreMapControlPosition = "top-left";
 const RASTER_PANEL_CLASS = "geolibre-raster-panel";
@@ -118,7 +122,7 @@ const SAMPLE_RASTER_DATASETS: RasterSampleDataset[] = [
 // so a rename in a future release degrades to a no-op rather than a crash --
 // re-verify these names AND the .mlr-control-close selector in
 // wireRasterCloseButton when bumping the dependency.
-type RasterControlInternals = {
+export type RasterControlInternals = {
   _layerManager?: RasterLayerManagerInternals;
   _panel?: HTMLElement;
 };
@@ -136,6 +140,12 @@ type MapControlHost = {
 };
 type MapboxOverlayConstructor = new (props: Record<string, unknown>) => OverlayLike;
 type RasterLayerManagerInternals = {
+  // Comparison-mirror readiness reads the real MapboxOverlay. The main-map
+  // shared-overlay proxy need not expose these fields. Verified with 0.14.11.
+  _overlay?: {
+    _deck?: { isInitialized: boolean };
+    _props?: { layers?: { isLoaded: boolean }[] };
+  };
   /** The currently selected raster id (read to restore it after inspect). */
   selectedId?: string | null;
   _device?: unknown;
@@ -152,6 +162,8 @@ type RasterLayerManagerInternals = {
 };
 type CogTilerModule = {
   openCog: (source: unknown) => Promise<unknown>;
+  /** cog-tiler-wasm >= 0.3.6: where lerc's wasm is served from. */
+  configureLercDecoder?: (options: { wasmUrl?: string | null }) => void;
   [key: string]: unknown;
 };
 type GeoTiffImage = {
@@ -533,6 +545,24 @@ export function getRasterMainVisibility(layerId: string): boolean {
   return rasterControl?.getRaster(layerId)?.state.visible ?? true;
 }
 
+/** Live header state; saved project metadata is not evidence of a completed load. */
+export function getRasterLoadState(layerId: string) {
+  const raster = rasterControl?.getRaster(layerId);
+  const native = rasterControl ? rendersNativeMapLibreLayer(rasterControl.getEngine()) : false;
+  return {
+    loading: !raster || raster.loading,
+    error: raster?.error?.message ?? null,
+    native,
+    // The deck.gl engine only routes through the shared interleaved overlay --
+    // and so is only visible to getSharedDeckLoadState -- when the control was
+    // created interleaved. On Tauri it renders overlaid, into its own deck
+    // canvas that never calls setSharedDeckLayers (see
+    // patchWebRasterOverlayFactory), so the control's own header state above is
+    // the only load signal there.
+    deckTracked: !native && rasterControl !== null && rasterControlInterleaved,
+  };
+}
+
 export function closeRasterLayerPanel(app: GeoLibreAppAPI): void {
   if (restorePanelExpandTimeout !== null) {
     window.clearTimeout(restorePanelExpandTimeout);
@@ -601,6 +631,14 @@ export function readRasterPixel(
   return rasterControl?.readRasterPixel(layerId, lngLat, options) ?? Promise.resolve(null);
 }
 
+/** Read a sampled raster window for viewport statistics in one batched request. */
+export function readRasterWindow(
+  layerId: string,
+  options: RasterWindowOptions,
+): Promise<RasterWindowReading | null> {
+  return rasterControl?.readRasterWindow(layerId, options) ?? Promise.resolve(null);
+}
+
 /**
  * Replays rasters from the loaded project into the control and drops control
  * rasters the project does not contain. Called by the desktop shell whenever a
@@ -628,6 +666,26 @@ export function restoreRasterLayers(app: GeoLibreAppAPI): void {
     // early, and the next control event would then prune the not-yet-replayed
     // layers out of the store.
     const localFiles = await readLocalRasterFiles(control);
+    const remoteSources = new Map(
+      await Promise.all(
+        useAppStore
+          .getState()
+          .layers.filter(isRasterControlStoreLayer)
+          .flatMap((layer) => {
+            const url =
+              typeof layer.source.url === "string" && layer.source.url
+                ? layer.source.url
+                : undefined;
+            return url
+              ? [
+                  readableStacLayerHref(layer, url).then(
+                    (href) => [layer.id, { sourceUrl: url, href }] as const,
+                  ),
+                ]
+              : [];
+          }),
+      ),
+    );
 
     // Re-read the store after the await: the project may have changed while
     // the control class was loading.
@@ -668,8 +726,13 @@ export function restoreRasterLayers(app: GeoLibreAppAPI): void {
         if (!isRasterControlStoreLayer(layer)) continue;
         if (control.getRaster(layer.id)) continue;
 
-        const url =
+        const storedUrl =
           typeof layer.source.url === "string" && layer.source.url ? layer.source.url : undefined;
+        const resolvedSource = remoteSources.get(layer.id);
+        const url =
+          resolvedSource && resolvedSource.sourceUrl === storedUrl
+            ? resolvedSource.href
+            : storedUrl;
         // A local file that was re-read above replays from its bytes; the
         // control re-derives its own blob URL from the File, as on a fresh add.
         const source = url ?? localFiles.get(layer.id);
@@ -840,6 +903,7 @@ function patchCogTilerJpegTables(control: RasterControl): void {
   const loadCogTiler = deps.loadCogTiler;
   deps.loadCogTiler = async () => {
     const module = await loadCogTiler();
+    await configureLercWasmUrl(module);
     return {
       ...module,
       openCog: async (input: unknown) => patchJpegCogSource(await module.openCog(input)),
@@ -848,11 +912,34 @@ function patchCogTilerJpegTables(control: RasterControl): void {
   deps.geolibreJpegTablesPatched = true;
 }
 
+/**
+ * Point cog-tiler-wasm's mask-aware LERC decoder (#2339) at lerc's wasm.
+ *
+ * lerc locates `lerc-wasm.wasm` relative to its own module URL, which Vite's
+ * hashed build output and dev pre-bundling do not rewrite: the fetch lands on
+ * index.html and the wasm compile aborts. Vite's `?url` import resolves the
+ * served asset in both modes. It is a dynamic import so the Node test runner,
+ * which cannot resolve the `?url` suffix, never evaluates it; a resolution
+ * failure leaves lerc's own lookup in place rather than breaking the tiler.
+ */
+async function configureLercWasmUrl(module: CogTilerModule): Promise<void> {
+  if (typeof module.configureLercDecoder !== "function") return;
+  try {
+    const { default: wasmUrl } = await import("lerc/lerc-wasm.wasm?url");
+    module.configureLercDecoder({ wasmUrl });
+  } catch (error) {
+    console.warn(
+      "[GeoLibre] Could not resolve lerc's wasm URL; LERC nodata may decode as 0",
+      error,
+    );
+  }
+}
+
 function patchJpegCogSource(source: unknown): unknown {
   const cog = source as CogSourceInternals;
   if (
     cog.geolibreJpegTablesPatched ||
-    !/jpeg/i.test(cog.levels?.[0]?.compression ?? "") ||
+    !isAbbreviatedJpegCompression(cog.levels?.[0]?.compression) ||
     !cog.tiff ||
     !cog._tiffImage ||
     !cog._assembleWindow

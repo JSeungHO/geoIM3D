@@ -40,6 +40,7 @@ import { isMenuItemVisible } from "../../../lib/ui-profile";
 import type { ShareHostStatus } from "../../../lib/share-geolibre";
 import { CapabilityNotice, capabilityNoticeId } from "./CapabilityNotice";
 import { formatRecentProjectTime, type ToolbarChrome } from "./constants";
+import { useMapCapabilities } from "../../../hooks/useMapCapabilities";
 
 // aria-describedby targets for the "sharing server unavailable" explanation.
 const SHARE_UNAVAILABLE_ID = "project-menu-share-unavailable";
@@ -106,6 +107,9 @@ export function ProjectMenu({
 }: ProjectMenuProps) {
   const { t } = useTranslation();
   const projectPath = useAppStore((s) => s.projectPath);
+  // The offline-region export walks the basemap's style document to collect the
+  // tiles it needs, so it depends on the Style Spec rather than on the renderer.
+  const capabilities = useMapCapabilities();
   const recentProjects = useAppStore((s) => s.recentProjects);
   const forgetRecentProject = useAppStore((s) => s.forgetRecentProject);
   const clearRecentProjects = useAppStore((s) => s.clearRecentProjects);
@@ -417,7 +421,7 @@ export function ProjectMenu({
         {show("project.offlineRegion") && (
           <DropdownMenuItem
             onSelect={onOpenOfflineBasemap}
-            disabled={!exportDataCapability.granted}
+            disabled={!capabilities.styleSpec || !exportDataCapability.granted}
             aria-describedby={exportDataDeniedBy}
           >
             <HardDriveDownload className="me-2 h-3.5 w-3.5" />

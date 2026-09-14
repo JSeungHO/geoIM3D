@@ -276,6 +276,10 @@
         "label": "WMS-Ebene hinzufügen",
         "description": "Fügt einen WMS-GetMap-Dienst als gekachelte Rasterebene hinzu."
       },
+      "csw": {
+        "label": "CSW-Katalog durchsuchen",
+        "description": "Einen OGC-Katalogdienst nach Datensätzen durchsuchen und unterstützte Webressourcen zur Karte hinzufügen."
+      },
       "wfs": {
         "label": "WFS-Ebene hinzufügen",
         "description": "Fügt WFS-Objekte hinzu, indem GeoJSON von einem GetFeature-Dienst angefordert wird."
@@ -343,6 +347,18 @@
       "polyline": {
         "label": "Kodierte Polyline-Ebene hinzufügen",
         "description": "Kodierte Polyline-Zeichenfolgen (Google, OSRM, Valhalla) aus Text oder Dateien als Vektorlinien importieren."
+      },
+      "cesiumIon": {
+        "label": "Cesium-Ion-Asset hinzufügen",
+        "description": "Fügen Sie ein 3D-Tiles-Tileset oder Bilddaten aus Cesium Ion per Asset-ID hinzu. Wird mit Ihrem Cesium-Ion-Token auf dem 3D-Globus dargestellt."
+      },
+      "czml": {
+        "label": "Dynamische CZML-3D-Ebene hinzufügen",
+        "description": "Laden Sie ein dynamisches Cesium-Language-Dokument (CZML), das Umlaufbahnen, Trajektorien, Fahrzeugpfade und zeitabhängige 3D-Szenen auf dem Globus beschreibt."
+      },
+      "kml": {
+        "label": "KML / KMZ",
+        "description": "KML oder KMZ mit nativen Stilen, Overlays und Netzwerklinks auf dem Globus laden."
       }
     },
     "shared": {
@@ -400,6 +416,37 @@
       "importedWithDropped_one": "{{count}} Dienst importiert ({{dropped}} übersprungen — Bibliothek voll).",
       "importedWithDropped_other": "{{count}} Dienste importiert ({{dropped}} übersprungen — Bibliothek voll)."
     },
+    "cesiumIon": {
+      "defaultName": "Cesium-Ion-Asset",
+      "assetId": "Asset-ID",
+      "kindTileset": "3D Tiles",
+      "kindImagery": "Bilddaten",
+      "altitudeOffset": "Höhenversatz (m)",
+      "quickPicks": "Schnellauswahl",
+      "hint": "Asset-IDs finden Sie unter „My Assets“ auf ion.cesium.com. Das Asset muss für das in den Einstellungen konfigurierte Token freigegeben sein.",
+      "errorAssetId": "Geben Sie eine Cesium-Ion-Asset-ID ein (eine positive ganze Zahl).",
+      "errorAltitude": "Geben Sie den Höhenversatz als Zahl in Metern ein.",
+      "tokenMissing": "Es ist kein Cesium-Ion-Token konfiguriert. Fügen Sie eines unter Einstellungen → Umgebungsvariablen (VITE_CESIUM_TOKEN) hinzu, sonst kann das Asset nicht geladen werden."
+    },
+    "czml": {
+      "defaultName": "Dynamische CZML-Szene",
+      "url": "CZML-URL",
+      "sourceModeUrl": "URL",
+      "sourceModeFile": "Lokale Datei",
+      "file": "Datei",
+      "quickPicks": "Dynamische Beispielszenen",
+      "hint": "CZML-Streams oder -Dateien beschreiben dynamische 3D-Positionen, Animationen und Umlaufbahnen, die mit der Uhr des Globus synchronisiert sind.",
+      "errorUrl": "Geben Sie eine gültige CZML-Endpunkt-URL ein.",
+      "errorChooseFile": "Wählen Sie eine CZML-Datei (.czml oder .json) zum Laden aus.",
+      "errorFileMissing": "Die ausgewählte Datei konnte nicht gelesen werden.",
+      "errorInvalidCzml": "Die Datei enthält kein gültiges CZML-Dokument (erwartet wird ein JSON-Array oder ein Paketobjekt).",
+      "readError": "CZML-Daten konnten nicht gelesen werden."
+    },
+    "kml": {
+      "defaultName": "KML / KMZ",
+      "url": "KML-/KMZ-URL",
+      "errorSource": "Geben Sie eine KML/KMZ-URL ein oder wählen Sie eine Datei."
+    },
     "xyz": {
       "defaultName": "XYZ-Ebene",
       "sampleLabel": "USGS-Luftbilder",
@@ -426,6 +473,21 @@
       "noLayersFound": "Für diesen Dienst wurden keine Ebenen gefunden.",
       "retrieveError": "Ebenen konnten nicht von diesem Dienst abgerufen werden.",
       "version": "WMS-Version"
+    },
+    "csw": {
+      "defaultName": "CSW-Katalog",
+      "urlPlaceholder": "https://example.com/csw",
+      "keyword": "Stichwort",
+      "search": "Suchen",
+      "searching": "Suche läuft …",
+      "results": "Katalogergebnisse",
+      "errorUrl": "Geben Sie eine gültige HTTP- oder HTTPS-URL eines CSW-Dienstes ein.",
+      "searchError": "Dieser Katalog konnte nicht durchsucht werden.",
+      "noResults": "Es wurden keine passenden Datensätze gefunden.",
+      "invalidGeoJson": "Die ausgewählte Ressource ist keine GeoJSON-FeatureCollection.",
+      "addError": "Diese Katalogressource konnte nicht hinzugefügt werden.",
+      "addResource": "{{kind}} hinzufügen",
+      "noSupportedResources": "Es wurde keine unterstützte WMS-, WFS-, ArcGIS- oder GeoJSON-Ressource angeboten."
     },
     "wfs": {
       "defaultName": "WFS-Ebene",
@@ -624,6 +686,7 @@
       "errorRetrieveColumns": "Spaltennamen konnten nicht abgerufen werden.",
       "url": "URL für trennzeichengetrennten Text",
       "file": "Trennzeichengetrennte Textdatei",
+      "fileFilter": "CSV / TSV / TXT / Excel",
       "urlPlaceholder": "https://example.com/data.csv",
       "retrieving": "Wird abgerufen …",
       "retrieveColumns": "Spalten abrufen",
@@ -892,7 +955,16 @@
       "cellSize": "Zellgröße",
       "lineWidth": "Linienbreite",
       "extrusion": "3D-Extrusion",
-      "modelUrlPlaceholder": "https://example.com/model.glb"
+      "modelUrlPlaceholder": "https://example.com/model.glb",
+      "chooseModelFile": "Lokales Modell auswählen",
+      "sampleDataset": "Beispieldatensatz",
+      "sampleCustom": "Eigenes Modell",
+      "sampleAirplane": "Flugzeug — San Francisco",
+      "sampleShanghai": "Shanghai — Stadtzentrum",
+      "modelFileHint": "Wählen Sie eine GLB- oder eigenständige glTF-Datei aus. Lokale Modelle werden in gespeicherte Projekte eingebettet, wodurch die Projektgröße zunimmt.",
+      "modelExternalResources": "Dieses Modell verweist auf separate Dateien. Exportieren Sie es als GLB mit eingebetteten Texturen und Puffern und versuchen Sie es erneut.",
+      "modelTooLarge": "Dieses Modell überschreitet das Limit von {{limit}} MB für die Einbettung in ein Projekt. Hosten Sie es stattdessen und fügen Sie es per URL hinzu.",
+      "modelFileError": "Dieses Modell konnte nicht gelesen werden. Wählen Sie eine gültige glTF-2.0- oder GLB-Datei aus."
     },
     "nonGeographicCoordinates": "Die Koordinaten in {{names}} sind keine geografische Länge/Breite, daher wird nichts auf der Karte gezeichnet. Das CRS ist falsch angegeben — projizieren Sie die Daten um (oder korrigieren Sie die .prj) und laden Sie sie erneut."
   },
@@ -1334,6 +1406,12 @@
     "errorFallback": "Das Projekt konnte nicht geteilt werden.",
     "usernameRequired": "Legen Sie einen Benutzernamen für Ihr {{shareHost}}-Konto fest, bevor Sie teilen. Öffnen Sie Ihre Kontoeinstellungen, um einen auszuwählen, und versuchen Sie es erneut.",
     "openAccountSettings": "Kontoeinstellungen öffnen",
+    "shareAnyway": "Trotzdem teilen",
+    "localWarningTitle_one": "{{count}} Ebene wird in der geteilten Karte fehlen",
+    "localWarningTitle_other": "{{count}} Ebenen werden in der geteilten Karte fehlen",
+    "localWarningBody": "{{shareHost}} speichert nur die Projektdatei, niemals die Dateien auf Ihrem Computer. Empfänger öffnen das Projekt im Browser, der nicht auf Ihre Festplatte zugreifen kann, daher sind diese Ebenen für alle außer Ihnen leer.",
+    "localWarningAdvice": "Um sie einzubeziehen, konvertieren Sie Raster in Cloud Optimized GeoTIFF und Vektoren in PMTiles oder GeoParquet, hosten Sie die Dateien auf einem öffentlichen HTTPS-Server wie GitHub oder Hugging Face, fügen Sie sie per URL zur Karte hinzu und teilen Sie erneut. Kleine lokale Vektorebenen werden automatisch in das Projekt eingebettet.",
+    "localWarningLearnMore": "Mehr erfahren",
     "readinessChecking": "Es wird geprüft, ob Empfänger Ihre Daten laden können…",
     "readinessUnavailable": "Die Prüfung der Datenquellen konnte nicht ausgeführt werden.",
     "readinessAllReachable_one": "{{count}} Datenquelle scheint für Empfänger erreichbar zu sein.",
@@ -1414,7 +1492,7 @@
   },
   "printLayout": {
     "title": "Drucklayout",
-    "description": "Erstellen Sie eine druckfertige Karte mit Titel, Legende, Maßstabsleiste und Nordpfeil und exportieren Sie sie als PNG oder PDF.",
+    "description": "Erstellen Sie eine druckfertige Karte mit Titel, Legende, Maßstabsleiste und Nordpfeil und exportieren Sie sie als PNG, PDF oder SVG.",
     "preview": "Vorschau",
     "resizeControls": "Bedienfeld in der Größe ändern",
     "resizeDialog": "Dialog in der Größe ändern",
@@ -1422,6 +1500,7 @@
     "copyToClipboard": "In die Zwischenablage kopieren",
     "copied": "Kopiert",
     "exportPng": "PNG exportieren",
+    "exportSvg": "SVG exportieren",
     "exportPdf": "PDF exportieren",
     "titleLabel": "Titel",
     "titlePlaceholder": "Kartentitel",
@@ -1848,7 +1927,22 @@
     "show3d": "Karte {{number}} als 3D-Globus anzeigen",
     "show2d": "Karte {{number}} als 2D-Karte anzeigen",
     "only2d": "Nur 2D",
+    "only3d": "Nur 3D",
     "cesiumTokenHint": "Fügen Sie in den Einstellungen ein Cesium-Ion-Token für Gelände und Ion-Bilder hinzu"
+  },
+  "renderer": {
+    "basemap": "Hintergrundkarte",
+    "imagery": "Bilddaten",
+    "projectBasemap": "Hintergrundkarte des Projekts",
+    "layerUnsupported": "Wird vom 3D-Globus nicht dargestellt",
+    "layerCesiumOnly": "Wird nur vom 3D-Globus dargestellt",
+    "resetView": "Ansicht zurücksetzen",
+    "scene3D": "3D-Globus",
+    "scene2D": "2D-Karte",
+    "sceneColumbus": "Columbus-Ansicht",
+    "fullscreenEnter": "Vollbild",
+    "fullscreenExit": "Vollbild beenden",
+    "fullscreenUnavailable": "Vollbild nicht verfügbar"
   },
   "mapContextMenu": {
     "copyCoordinatesHint": "Koordinaten in die Zwischenablage kopieren",
@@ -2437,6 +2531,7 @@
       "mbtiles": "MBTiles-Ebene",
       "xyz": "XYZ-Ebene",
       "wms": "WMS-Ebene",
+      "csw": "CSW-Katalog",
       "wfs": "WFS-Ebene",
       "wmts": "WMTS-Ebene",
       "ogcFeatures": "OGC API - Features",
@@ -2445,6 +2540,8 @@
       "georss": "GeoRSS-Ebene",
       "video": "Video-Ebene",
       "deckglViz": "Deck.gl-Ebene",
+      "cesiumIon": "Cesium-Ion-Asset",
+      "czml": "Dynamische CZML-3D-Szene",
       "gltfModel": "3D-Modell (glTF)",
       "postgres": "PostgreSQL-Ebene",
       "iceberg": "Apache-Iceberg-Ebene"
@@ -2700,6 +2797,9 @@
       "splitViewGrid2x3": "2 × 3-Raster",
       "splitViewGrid3x3": "3 × 3-Raster",
       "splitViewSync": "Ansichten synchronisieren",
+      "renderingEngine": "Rendering-Engine",
+      "rendererMapLibre": "MapLibre",
+      "rendererCesium": "Cesium",
       "viewInGoogleMaps": "In Google Maps ansehen",
       "viewInGoogleEarth": "In Google Earth ansehen",
       "zoomIn": "Vergrößern",
@@ -2852,6 +2952,7 @@
       "saveProjectAsTitle": "Projekt speichern unter",
       "saveProjectAsDesc": "Geben Sie einen Dateinamen ein. Das Projekt wird beim Klicken auf Speichern in den Downloads-Ordner Ihres Browsers heruntergeladen.",
       "embedVectorTitle": "Lokale Vektordaten einbetten?",
+      "embedEditedGeometryDesc": "Dieses Projekt enthält bearbeitete Geometrien. Betten Sie die Vektordaten ein (etwa {{size}}), um sie zu erhalten. Ohne Einbettung werden referenzierte Layer mit ihren ursprünglichen Geometrien geöffnet und lokale Daten sind möglicherweise nicht verfügbar.",
       "embedVectorDesc": "Dieses Projekt enthält {{count}} lokale Vektorebene(n), die von Ihrem Computer geladen wurden. Der Browser kann sie beim erneuten Öffnen des Projekts nicht erneut einlesen, daher müssen ihre Daten in die Projektdatei eingebettet werden, damit sie wiederhergestellt werden können. Das Einbetten fügt der Datei etwa {{size}} hinzu.",
       "embedVectorDescDesktop": "Dieses Projekt enthält {{count}} lokale Vektorebene(n), die von Ihrem Computer geladen wurden. Betten Sie ihre Daten ein, um das Projekt eigenständig zu machen (fügt etwa {{size}} hinzu), oder speichern Sie Dateiverweise, die beim erneuten Öffnen des Projekts von der Festplatte neu geladen werden. Verweise halten die Datei klein, funktionieren aber nicht mehr, wenn eine Quelldatei später verschoben oder gelöscht wird.",
       "embedVectorDescMas": "Dieses Projekt enthält {{count}} lokale Vektorebene(n), die von Ihrem Computer geladen wurden. Die Mac App Store-Sandbox kann den Zugriff auf diese Dateien nach dem Schließen von GeoLibre nicht beibehalten. Daher müssen ihre Daten in die Projektdatei eingebettet werden, damit sie wiederhergestellt werden können. Das Einbetten fügt der Datei etwa {{size}} hinzu.",
@@ -2902,6 +3003,7 @@
     },
     "plugin": {
       "maplibre-gl-annotations": "Anmerkungen",
+      "maplibre-gl-dimensions": "Bemaßung",
       "maplibre-gl-streetview": "Straßenansicht",
       "maplibre-gl-time-slider": "Zeitschieberegler",
       "geolibre-timelapse": "Zeitraffer",
@@ -3094,9 +3196,14 @@
     "openBuilder": "Ausdruckseditor...",
     "invalidExpression": "Geben Sie einen gültigen booleschen Ausdruck ein.",
     "select": "Objekte auswählen",
+    "applyLayerFilter": "Ebene filtern",
+    "clearLayerFilter": "Ebenenfilter leeren",
+    "layerFilteredHint": "Ein dauerhafter Filter blendet einen Teil der Objekte dieser Ebene aus.",
+    "layerFilteredBothHint": "Ein dauerhafter Filter und ein Schnellfilter blenden einen Teil der Objekte dieser Ebene aus.",
     "noLayers": "Fügen Sie eine Vektorebene mit Objekten hinzu, um eine Auswahl zu treffen.",
     "needTwoLayers": "Die Auswahl nach Position erfordert zwei Vektorebenen mit Objekten.",
     "summary": "{{selected}} von {{total}} Objekt(en) ausgewählt ({{matched}} Treffer).",
+    "filterSummary": "Ebenenfilter angewendet: {{matched}} von {{total}} Objekt(en) stimmen überein.",
     "evaluationErrors": "{{count}} Objekt(e) konnten nicht ausgewertet werden und wurden nicht berücksichtigt.",
     "unevaluableDisjoint": "{{count}} Objekt(e) wurden ausgeschlossen, da ihre Geometrie nicht ausgewertet werden konnte.",
     "tooManyPairs": "Dieser Vergleich erfordert {{pairs}} Objektpaar-Tests (Limit {{limit}}). Verwenden Sie stattdessen Verarbeitung → GeoLibre → Vektor → Nach Position auswählen mit der Sidecar-Engine.",
@@ -3509,6 +3616,7 @@
     "search": "Suchen",
     "searchCurrentView": "Aktuellen Kartenbereich durchsuchen",
     "enterKeyword": "Geben Sie ein Stichwort ein, um zu beginnen.",
+    "viewUnavailable": "Der aktuelle Kartenausschnitt ist nicht verfügbar; deaktivieren Sie den Kartenausschnitt-Filter, um zu suchen.",
     "loadMore": "Weitere laden",
     "searching": "Wird gesucht…",
     "loadingMore": "Weitere Datensätze werden geladen…",
@@ -3551,10 +3659,14 @@
     "title": "STAC-Kataloge",
     "footprintLayerName": "STAC-Suchumrisse",
     "catalogSearch": "Öffentlichen Katalog im STAC Index finden",
+    "portolanCatalogSearch": "Öffentlichen Katalog im Portolan Registry finden",
     "catalogSearchPlaceholder": "Katalognamen suchen…",
     "indexLoading": "STAC Index wird geladen…",
+    "portolanIndexLoading": "Portolan Registry wird geladen…",
     "indexUnavailable": "STAC Index nicht verfügbar: URL eingeben",
+    "portolanIndexUnavailable": "Portolan Registry nicht verfügbar: URL eingeben",
     "indexLoadFailed": "STAC Index konnte nicht geladen werden",
+    "portolanIndexLoadFailed": "Portolan Registry konnte nicht geladen werden",
     "urlLabel": "STAC-Katalog- oder API-URL",
     "connect": "Verbinden",
     "connecting": "Verbindung zu STAC wird hergestellt…",
@@ -3907,6 +4019,28 @@
     "saveElement": "Element speichern",
     "atPoint": "Am Punkt",
     "pinnedToExtent": "An Ausdehnung geheftet"
+  },
+  "dimensions": {
+    "toolbar": "Bemaßungswerkzeuge",
+    "layerName": "Bemaßungen",
+    "tools": {
+      "linear": "Lineare Bemaßung",
+      "angular": "Winkelbemaßung"
+    },
+    "unit": "Einheit",
+    "snap": "An Stützpunkten fangen",
+    "color": "Bemaßungsfarbe",
+    "width": "Linienbreite",
+    "widthOptions": {
+      "thin": "Dünn",
+      "medium": "Mittel",
+      "thick": "Dick"
+    },
+    "deleteLast": "Letzte Bemaßung löschen",
+    "clearAll": "Alle Bemaßungen löschen",
+    "newLayer": "Neue Bemaßungsebene",
+    "confirmClearAll_one": "Diese Bemaßung löschen? Dies kann nicht rückgängig gemacht werden.",
+    "confirmClearAll_other": "Alle {{count}} Bemaßungen in dieser Ebene löschen? Dies kann nicht rückgängig gemacht werden."
   },
   "pythonConsole": {
     "title": "Python-Konsole",
@@ -4509,6 +4643,15 @@
                 "kilometers": "Kilometer",
                 "meters": "Meter",
                 "miles": "Meilen"
+              }
+            },
+            "side": {
+              "label": "Pufferseite",
+              "description": "Außen vergrößert jedes Objekt, Innen verkleinert es, und Beide Seiten behält nur die Zone innerhalb der Distanz beiderseits seiner Grenze. Innen benötigt Polygone — ein Punkt oder eine Linie hat kein Inneres.",
+              "options": {
+                "outside": "Außen (vergrößern)",
+                "inside": "Innen (verkleinern)",
+                "both": "Beide Seiten"
               }
             }
           }
@@ -6325,6 +6468,7 @@
     "description": "Speichern, durchsuchen und wenden Sie wiederverwendbare Stile, Symbole, Beschriftungsvorlagen und Farbverläufe über Ebenen und Projekte hinweg an.",
     "searchPlaceholder": "Stile und Tags durchsuchen…",
     "presetsSection": "Integrierte Vorlagen",
+    "presetActions": "Vorlagenaktionen",
     "librarySection": "Meine Bibliothek",
     "projectSection": "Dieses Projekt",
     "empty": "Keine gespeicherten Stile passen. Speichern Sie den Stil einer Ebene oder importieren Sie eine Bibliothek, um zu beginnen.",
@@ -6425,7 +6569,6 @@
       "remove": "Verknüpfung entfernen",
       "enabledTitle": "Diese Verknüpfung anwenden",
       "missingLayer": "Verknüpfungslayer nicht gefunden",
-      "noCandidates": "Kein anderer Layer hat eine Attributtabelle zum Verknüpfen",
       "statsMatched": "{{matched}} von {{total}} Objekten zugeordnet",
       "statsUnmatchedJoin_one": "{{count}} Tabellenzeile ohne Treffer",
       "statsUnmatchedJoin_other": "{{count}} Tabellenzeilen ohne Treffer"
@@ -6482,6 +6625,11 @@
       "offsetY": "Versatz Y (em)",
       "rotation": "Rotation (°)",
       "maxWidth": "Umbruchbreite (em)",
+      "numberFormat": "Zahlen formatieren",
+      "numberFormatHint": "Numerische Werte werden mit Tausender- und Dezimaltrennzeichen beschriftet, z. B. {{sample}}. Textwerte bleiben unverändert, und ein Beschriftungsausdruck formatiert seine eigene Ausgabe.",
+      "numberDecimals": "Dezimalstellen",
+      "numberLocale": "Trennzeichen",
+      "numberLocaleApp": "Sprache der App übernehmen",
       "transform": "Groß-/Kleinschreibung",
       "transformNone": "Wie eingegeben",
       "transformUppercase": "GROSSBUCHSTABEN",
@@ -6635,6 +6783,7 @@
       "categories": "Kategorien",
       "classColor": "Farbe für Klasse {{index}}",
       "classColorPick": "Farbe für Klasse {{index}} vom Bildschirm auswählen",
+      "classOpacity": "Deckkraft für Klasse {{index}}",
       "classValue": "Wert für Klasse {{index}}",
       "colorExpression": "Farbausdruck",
       "applyStyleType": "Stiltyp anwenden",
@@ -6644,6 +6793,8 @@
       "pointRendererClustered": "Geclustert",
       "heatmapRadius": "Heatmap-Radius",
       "heatmapIntensity": "Heatmap-Intensität",
+      "heatmapWeightField": "Gewichtungsfeld",
+      "heatmapEqualWeight": "Keines (gleiche Gewichtung)",
       "clusterRadius": "Cluster-Radius (px)",
       "clusterMaxZoom": "Cluster max. Zoom",
       "strokeWidthUnit": "Einheit der Strichstärke",
@@ -6680,10 +6831,12 @@
     "mode2d": "2D",
     "mode3dExtrusion": "3D-Extrusion",
     "noControls": "Stil-Steuerelemente sind für diesen Ebenentyp noch nicht verfügbar.",
+    "tilesetSymbology": "Farben und Filter gelten für dieses Tileset auf dem 3D-Globus.",
     "selectedLayerType": "Ausgewählter Ebenentyp: {{type}}",
     "footerDeck": "Änderungen werden sofort auf die deck.gl-Ebenengestaltung von DuckDB angewendet.",
     "footerMaplibre": "Änderungen werden sofort auf die MapLibre-Paint-Eigenschaften angewendet.",
     "pluginPaintedFooter": "Diese Ebene wird von ihrem Plugin gezeichnet, das eigene Steuerelemente für die Gestaltung bereitstellt.",
+    "serviceStyledFooter": "Diese Ebene behält die eigene Gestaltung ihres Dienstes; Deckkraft, Reihenfolge, Zoombereich und Filter gelten weiterhin.",
     "extrusion": {
       "color": "Extrusionsfarbe",
       "opacity": "Extrusionsdeckkraft",
@@ -6780,6 +6933,7 @@
         "upcase": "Wandelt eine Zeichenkette in Großbuchstaben um.",
         "downcase": "Wandelt eine Zeichenkette in Kleinbuchstaben um.",
         "slice": "Gibt einen Abschnitt einer Zeichenkette oder eines Arrays zurück.",
+        "numberFormat": "Formatiert eine Zahl als Text mit den Tausender- und Dezimaltrennzeichen einer Sprachregion, optional mit fester Anzahl an Dezimalstellen.",
         "toNumber": "Wandelt einen Wert in eine Zahl um.",
         "toString": "Wandelt einen Wert in eine Zeichenkette um.",
         "toBoolean": "Wandelt einen Wert in wahr oder falsch um.",
@@ -6939,6 +7093,7 @@
     "allFieldsUsed": "Jedes Feld hat bereits einen Filter",
     "removeAll": "Alle entfernen",
     "clearAll": "Filter leeren",
+    "clearAllWithExpression": "Filter und gespeicherten Ausdruck leeren",
     "clearOne": "Diesen Filter leeren",
     "clearOneNamed": "Filter für {{field}} leeren",
     "remove": "Filter entfernen",
@@ -7072,6 +7227,8 @@
     "saveEditsSuccess": "{{count}} Objekt(e) in der Quelldatei gespeichert.",
     "saveEditsNoFeatures": "Diese Ebene enthält keine zu speichernden Objekte.",
     "saveEditsError": "Änderungen konnten nicht in der Quelldatei gespeichert werden.",
+    "saveEditsToArcgis": "Änderungen im ArcGIS-Dienst speichern",
+    "saveEditsArcgisSuccess": "In ArcGIS gespeichert: {{inserted}} eingefügt, {{updated}} aktualisiert, {{deleted}} gelöscht.",
     "saveEditsToPostgis": "Änderungen in PostGIS-Tabelle speichern",
     "saveEditsPostgisSuccess": "In {{table}} gespeichert: {{inserted}} eingefügt, {{updated}} aktualisiert, {{deleted}} gelöscht.",
     "saveEditsPostgisSkippedFields": "Felder ohne passende Tabellenspalte wurden nicht gespeichert: {{fields}}.",
@@ -7229,6 +7386,18 @@
     "stretchLinear": "Linear",
     "stretchLog": "Logarithmisch",
     "stretchSqrt": "Quadratwurzel",
+    "viewportStretch": "Ansichtsspreizung",
+    "viewportMinMax": "Min. / Max. der Ansicht",
+    "viewportPercentile": "5–95-Perzentil der Ansicht",
+    "viewportStddev": "Mittelwert ± 2 Standardabweichungen der Ansicht",
+    "viewportApply": "Auf Ansicht anwenden",
+    "viewportStretching": "Ansicht wird gelesen…",
+    "viewportStretchApplied": "Ansichtsspreizung angewendet",
+    "viewportAuto": "Automatisch aktualisieren, wenn die Karte bewegt wird",
+    "viewportStretchNoView": "Die Kartenansicht ist nicht verfügbar.",
+    "viewportStretchNoValues": "In der Ansicht wurden keine Rasterwerte gefunden.",
+    "viewportStretchNoRange": "Die Werte der Ansicht ergeben keinen Wertebereich.",
+    "viewportStretchMoved": "Die Karte wurde bewegt, bevor das Lesen abgeschlossen war. Wenden Sie sie erneut an.",
     "index": "Index",
     "classifyToggle": "In diskrete Klassen einteilen",
     "method": "Methode",
@@ -7730,5 +7899,66 @@
       "downloadsStarted": "Gestartete Downloads: {{started}}. Fehlgeschlagen: {{failed}}.",
       "downloadCancelled": "Download abgebrochen oder fehlgeschlagen."
     }
+  },
+  "usgsNldi": {
+    "panelTitle": "USGS NLDI",
+    "title": "USGS-NLDI-Netzwerkwerkzeuge",
+    "hint": "Wählen Sie zuerst eine Fließrichtung und klicken Sie auf die Karte. Wählen Sie dann eine Navigationsrichtung, drücken Sie die hervorgehobene Schaltfläche, um die verfügbaren Kataloge zu laden, wählen Sie einen Katalog wie Pegel oder Brunnen aus und drücken Sie sie erneut, um diesen Katalog darzustellen.",
+    "directionComplete": "Vollständige Gewässerlinie — liefert den gesamten NHD-Abschnitt",
+    "directionUp": "Nur flussaufwärts — liefert den Abschnitt oberhalb des Punktes",
+    "directionDown": "Nur flussabwärts — liefert den Abschnitt unterhalb des Punktes",
+    "basinButton": "Einzugsgebiet aus Hydrolokation",
+    "navigationPlaceholder": "Richtung wählen — vor der Darstellung erforderlich",
+    "navigationUpstreamMain": "Flussaufwärts Hauptlauf — dem Hauptgerinne folgen",
+    "navigationUpstreamTributaries": "Flussaufwärts Zuflüsse — zufließende Verzweigungen finden",
+    "navigationDownstreamMain": "Flussabwärts Hauptlauf — dem Hauptgerinne folgen",
+    "navigationDownstreamDiversions": "Flussabwärts Ableitungen — Abzweigungen folgen",
+    "sourcePlaceholder": "Zuerst „Quellen laden & darstellen“ drücken",
+    "distancePlaceholder": "Entfernung (km)",
+    "navigationButton": "1. Quellen laden & Navigation darstellen",
+    "navigationButtonAgain": "Weitere Navigationsebene darstellen",
+    "exportButton": "Dargestellte Ergebnisse als GeoJSON exportieren",
+    "addLayersButton": "Dargestellte Ergebnisse zu den GeoLibre-Ebenen hinzufügen",
+    "clearButton": "NLDI-Ergebnis löschen",
+    "noComid": "Für diesen Punkt wurde keine COMID zurückgegeben.",
+    "requestingBasin": "Oberliegendes Einzugsgebiet wird angefordert …",
+    "basinRendered": "Oberliegendes Einzugsgebiet für COMID {{comid}} dargestellt.",
+    "basinFailed": "Anfrage für das Einzugsgebiet fehlgeschlagen.",
+    "selectNavigation": "Wählen Sie nach dem Verfolgen eines Punktes eine Navigationsmethode.",
+    "invalidDistance": "Die Entfernung muss zwischen 1 und 9999 km liegen.",
+    "discoveringSources": "NLDI-Navigationsquellen werden ermittelt …",
+    "navigationUnavailable": "Diese Navigationsmethode ist für diese COMID nicht verfügbar.",
+    "noPlottableSource": "NLDI hat keine darstellbare Navigationsquelle zurückgegeben.",
+    "navigationEmpty": "{{source}} hat für diese Navigation keine kartierbaren Objekte zurückgegeben.",
+    "navigationAdded": "{{source}} über {{navigation}} für COMID {{comid}} ({{km}} km) hinzugefügt. Vorhandene Navigationsebenen bleiben auf der Karte.",
+    "navigationFailed": "Navigationsanfrage fehlgeschlagen.",
+    "tracing": "Verfolgung zur nächstgelegenen NHD-Gewässerlinie …",
+    "flowline": "Gewässerlinie dargestellt.",
+    "flowlineComid": "Gewässerlinie dargestellt; COMID {{comid}} ist bereit für Einzugsgebiets-Workflows.",
+    "flowlineFallback": "Gewässerlinie über den NLDI-Hydrolokations-Fallback dargestellt.",
+    "flowlineFallbackComid": "Gewässerlinie über den NLDI-Hydrolokations-Fallback dargestellt; COMID {{comid}} ist bereit für Einzugsgebiets-Workflows.",
+    "requestFailed": "NLDI-Anfrage fehlgeschlagen.",
+    "nothingToAdd": "Es sind keine dargestellten NLDI-Objekte zum Hinzufügen vorhanden.",
+    "layersAdded_one": "{{count}} NLDI-Ebene zu einer Gruppe „USGS-NLDI-Ergebnisse“ hinzugefügt.",
+    "layersAdded_other": "{{count}} NLDI-Ebenen zu einer Gruppe „USGS-NLDI-Ergebnisse“ hinzugefügt.",
+    "layerGroupName": "USGS-NLDI-Ergebnisse",
+    "layerFlowline": "NLDI-Gewässerlinie",
+    "layerRaindrop": "NLDI-Regentropfenpfad",
+    "layerSelectedPoint": "NLDI-ausgewählter Punkt",
+    "layerBasin": "NLDI-Einzugsgebiet oberhalb",
+    "layerNavigation": "NLDI-Navigation {{index}}",
+    "resultCleared": "NLDI-Ergebnis gelöscht.",
+    "directionalUnavailable": "Die gerichtete Fließverfolgung ist nicht verfügbar, solange der USGS-Dienst offline ist. Wählen Sie „Vollständige Gewässerlinie“ oder versuchen Sie es später erneut.",
+    "noFlowlineNearby": "NLDI konnte in der Nähe dieses Punktes keine Gewässerlinie finden.",
+    "httpError": "USGS NLDI hat HTTP {{status}} zurückgegeben",
+    "httpErrorDetail": "USGS NLDI hat HTTP {{status}} zurückgegeben: {{detail}}",
+    "noAttributes": "Von NLDI wurden keine Attribute zurückgegeben.",
+    "catalogCaGages": "Pegel in Kalifornien (ca_gages)",
+    "catalogNwisSite": "NWIS-Oberflächenwassermessstellen (Pegel)",
+    "catalogNwisGw": "NWIS-Grundwasserbrunnen",
+    "catalogGfv11Pois": "Punkte des USGS Geospatial Fabric",
+    "catalogHuc12pp": "HUC12-Abflusspunkte",
+    "catalogNmwdiSt": "Wassermessstellen in New Mexico",
+    "catalogFlowlines": "NHDPlus-Gewässerlinien"
   }
 }

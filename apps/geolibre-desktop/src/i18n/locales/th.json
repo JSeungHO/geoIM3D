@@ -274,6 +274,10 @@
         "label": "เพิ่มเลเยอร์ WMS",
         "description": "เพิ่มบริการ WMS GetMap เป็นเลเยอร์แรสเตอร์แบบไทล์"
       },
+      "csw": {
+        "label": "ค้นหาแคตาล็อก CSW",
+        "description": "ค้นหาชุดข้อมูลจากบริการแคตาล็อก OGC และเพิ่มทรัพยากรเว็บที่รองรับลงในแผนที่"
+      },
       "wfs": {
         "label": "เพิ่มเลเยอร์ WFS",
         "description": "เพิ่มฟีเจอร์จาก WFS โดยร้องขอ GeoJSON จากบริการ GetFeature"
@@ -341,6 +345,18 @@
       "polyline": {
         "label": "เพิ่มเลเยอร์โพลีไลน์ที่เข้ารหัส",
         "description": "นำเข้าสตริงโพลีไลน์ที่เข้ารหัส (Google, OSRM, Valhalla) จากข้อความหรือไฟล์เป็นเส้นเวกเตอร์"
+      },
+      "cesiumIon": {
+        "label": "เพิ่มแอสเซ็ต Cesium Ion",
+        "description": "เพิ่มไทล์เซ็ต 3D Tiles หรือภาพถ่ายจาก Cesium Ion ด้วย id ของแอสเซ็ต แสดงผลบนลูกโลก 3 มิติด้วยโทเค็น Cesium Ion ของคุณ"
+      },
+      "czml": {
+        "label": "เพิ่มเลเยอร์ 3 มิติไดนามิก CZML",
+        "description": "โหลดเอกสาร Cesium Language (CZML) แบบไดนามิกที่อธิบายวงโคจร วิถี เส้นทางยานพาหนะ และฉาก 3 มิติที่เปลี่ยนตามเวลาบนลูกโลก"
+      },
+      "kml": {
+        "label": "KML / KMZ",
+        "description": "โหลด KML หรือ KMZ บนลูกโลกโดยคงรูปแบบต้นฉบับ ภาพซ้อนทับ และลิงก์เครือข่าย"
       }
     },
     "shared": {
@@ -396,6 +412,37 @@
       "imported_other": "นำเข้าบริการแล้ว {{count}} รายการ",
       "importedWithDropped_other": "นำเข้าบริการแล้ว {{count}} รายการ (ข้าม {{dropped}} รายการ — คลังเต็ม)"
     },
+    "cesiumIon": {
+      "defaultName": "แอสเซ็ต Cesium Ion",
+      "assetId": "ID ของแอสเซ็ต",
+      "kindTileset": "3D Tiles",
+      "kindImagery": "ภาพถ่าย",
+      "altitudeOffset": "ค่าชดเชยความสูง (ม.)",
+      "quickPicks": "ตัวเลือกด่วน",
+      "hint": "ดู id ของแอสเซ็ตได้ที่ My Assets บน ion.cesium.com แอสเซ็ตต้องถูกแชร์กับโทเค็นที่ตั้งค่าไว้ในการตั้งค่า",
+      "errorAssetId": "ป้อน id ของแอสเซ็ต Cesium Ion (จำนวนเต็มบวก)",
+      "errorAltitude": "ป้อนค่าชดเชยความสูงเป็นตัวเลขหน่วยเมตร",
+      "tokenMissing": "ยังไม่ได้ตั้งค่าโทเค็น Cesium Ion โปรดเพิ่มในการตั้งค่า → ตัวแปรสภาพแวดล้อม (VITE_CESIUM_TOKEN) มิฉะนั้นจะโหลดแอสเซ็ตไม่สำเร็จ"
+    },
+    "czml": {
+      "defaultName": "ฉากไดนามิก CZML",
+      "url": "URL ของ CZML",
+      "sourceModeUrl": "URL",
+      "sourceModeFile": "ไฟล์ในเครื่อง",
+      "file": "ไฟล์",
+      "quickPicks": "ฉากไดนามิกตัวอย่าง",
+      "hint": "สตรีมหรือไฟล์ CZML กำหนดตำแหน่ง 3 มิติแบบไดนามิก แอนิเมชัน และวงโคจรที่ซิงก์กับนาฬิกาของลูกโลก",
+      "errorUrl": "ป้อน URL ของเอนด์พอยต์ CZML ที่ถูกต้อง",
+      "errorChooseFile": "เลือกไฟล์ CZML (.czml หรือ .json) ที่จะโหลด",
+      "errorFileMissing": "ไม่สามารถอ่านไฟล์ที่เลือกได้",
+      "errorInvalidCzml": "ไฟล์ไม่มีเอกสาร CZML ที่ถูกต้อง (ต้องเป็นอาร์เรย์ JSON หรือออบเจ็กต์แพ็กเก็ต)",
+      "readError": "อ่านข้อมูล CZML ไม่สำเร็จ"
+    },
+    "kml": {
+      "defaultName": "KML / KMZ",
+      "url": "URL ของ KML / KMZ",
+      "errorSource": "ป้อน URL ของ KML/KMZ หรือเลือกไฟล์"
+    },
     "xyz": {
       "defaultName": "เลเยอร์ XYZ",
       "sampleLabel": "ภาพถ่าย USGS",
@@ -421,6 +468,21 @@
       "noLayersFound": "ไม่พบเลเยอร์สำหรับบริการนี้",
       "retrieveError": "ไม่สามารถดึงรายการเลเยอร์จากบริการนี้ได้",
       "version": "เวอร์ชัน WMS"
+    },
+    "csw": {
+      "defaultName": "แคตาล็อก CSW",
+      "urlPlaceholder": "https://example.com/csw",
+      "keyword": "คำสำคัญ",
+      "search": "ค้นหา",
+      "searching": "กำลังค้นหา…",
+      "results": "ผลลัพธ์จากแคตาล็อก",
+      "errorUrl": "โปรดป้อน URL ของบริการ CSW แบบ HTTP หรือ HTTPS ที่ถูกต้อง",
+      "searchError": "ไม่สามารถค้นหาในแคตาล็อกนี้ได้",
+      "noResults": "ไม่พบชุดข้อมูลที่ตรงกัน",
+      "invalidGeoJson": "ทรัพยากรที่เลือกไม่ใช่ FeatureCollection ของ GeoJSON",
+      "addError": "ไม่สามารถเพิ่มทรัพยากรจากแคตาล็อกนี้ได้",
+      "addResource": "เพิ่ม{{kind}}",
+      "noSupportedResources": "ไม่มีการประกาศทรัพยากร WMS, WFS, ArcGIS หรือ GeoJSON ที่รองรับ"
     },
     "wfs": {
       "defaultName": "เลเยอร์ WFS",
@@ -615,6 +677,7 @@
       "errorRetrieveColumns": "ไม่สามารถดึงชื่อคอลัมน์ได้",
       "url": "URL ของข้อความคั่นด้วยตัวแบ่ง",
       "file": "ไฟล์ข้อความคั่นด้วยตัวแบ่ง",
+      "fileFilter": "CSV / TSV / TXT / Excel",
       "urlPlaceholder": "https://example.com/data.csv",
       "retrieving": "กำลังดึงข้อมูล...",
       "retrieveColumns": "ดึงรายการคอลัมน์",
@@ -871,7 +934,16 @@
       "cellSize": "ขนาดเซลล์",
       "lineWidth": "ความหนาเส้น",
       "extrusion": "การยกตัวแบบ 3 มิติ",
-      "modelUrlPlaceholder": "https://example.com/model.glb"
+      "modelUrlPlaceholder": "https://example.com/model.glb",
+      "chooseModelFile": "เลือกโมเดลในเครื่อง",
+      "sampleDataset": "ชุดข้อมูลตัวอย่าง",
+      "sampleCustom": "โมเดลกำหนดเอง",
+      "sampleAirplane": "เครื่องบิน — ซานฟรานซิสโก",
+      "sampleShanghai": "เซี่ยงไฮ้ — ใจกลางเมือง",
+      "modelFileHint": "เลือกไฟล์ GLB หรือไฟล์ glTF แบบครบในตัว โมเดลในเครื่องจะถูกฝังในโปรเจกต์ที่บันทึก ทำให้ขนาดโปรเจกต์ใหญ่ขึ้น",
+      "modelExternalResources": "โมเดลนี้อ้างอิงไฟล์แยกต่างหาก โปรดส่งออกเป็น GLB ที่ฝังพื้นผิวและบัฟเฟอร์ไว้ในตัว แล้วลองอีกครั้ง",
+      "modelTooLarge": "โมเดลนี้มีขนาดเกินขีดจำกัด {{limit}} MB สำหรับการฝังในโปรเจกต์ โปรดโฮสต์ไฟล์แล้วเพิ่มผ่าน URL แทน",
+      "modelFileError": "ไม่สามารถอ่านโมเดลนี้ได้ โปรดเลือกไฟล์ glTF 2.0 หรือ GLB ที่ถูกต้อง"
     },
     "nonGeographicCoordinates": "พิกัดใน {{names}} ไม่ใช่ลองจิจูด/ละติจูด จึงจะไม่มีสิ่งใดถูกวาดบนแผนที่ ระบบพิกัดระบุไว้ผิด — โปรดฉายพิกัดข้อมูลใหม่ (หรือแก้ไฟล์ .prj) แล้วโหลดอีกครั้ง"
   },
@@ -1298,6 +1370,11 @@
     "errorFallback": "ไม่สามารถแชร์โปรเจกต์ได้",
     "usernameRequired": "กรุณาตั้งชื่อผู้ใช้ในบัญชี {{shareHost}} ของคุณก่อนแชร์ เปิดการตั้งค่าบัญชีเพื่อเลือกชื่อผู้ใช้แล้วลองใหม่",
     "openAccountSettings": "เปิดการตั้งค่าบัญชี",
+    "shareAnyway": "แชร์ต่อไป",
+    "localWarningTitle_other": "แผนที่ที่แชร์จะขาดเลเยอร์ {{count}} รายการ",
+    "localWarningBody": "{{shareHost}} จัดเก็บเฉพาะไฟล์โปรเจกต์เท่านั้น ไม่เก็บไฟล์ในคอมพิวเตอร์ของคุณ ผู้รับจะเปิดโปรเจกต์ในเบราว์เซอร์ซึ่งอ่านดิสก์ของคุณไม่ได้ ดังนั้นเลเยอร์เหล่านี้จะว่างเปล่าสำหรับทุกคนยกเว้นคุณ",
+    "localWarningAdvice": "หากต้องการรวมเลเยอร์เหล่านี้ ให้แปลงแรสเตอร์เป็น Cloud Optimized GeoTIFF และเวกเตอร์เป็น PMTiles หรือ GeoParquet โฮสต์ไฟล์บนเซิร์ฟเวอร์ HTTPS สาธารณะ เช่น GitHub หรือ Hugging Face เพิ่มลงแผนที่ผ่าน URL แล้วแชร์อีกครั้ง เลเยอร์เวกเตอร์ในเครื่องขนาดเล็กจะถูกฝังในโปรเจกต์โดยอัตโนมัติ",
+    "localWarningLearnMore": "เรียนรู้เพิ่มเติม",
     "readinessChecking": "กำลังตรวจสอบว่าผู้รับจะโหลดข้อมูลของคุณได้หรือไม่…",
     "readinessUnavailable": "ไม่สามารถเรียกใช้การตรวจสอบแหล่งข้อมูลได้",
     "readinessAllReachable_other": "แหล่งข้อมูลทั้ง {{count}} รายการดูเหมือนว่าผู้รับจะเข้าถึงได้",
@@ -1375,7 +1452,7 @@
   },
   "printLayout": {
     "title": "เลย์เอาต์สำหรับพิมพ์",
-    "description": "จัดองค์ประกอบแผนที่พร้อมพิมพ์ ด้วยชื่อเรื่อง คำอธิบายสัญลักษณ์ มาตราส่วน และลูกศรทิศเหนือ แล้วส่งออกเป็น PNG หรือ PDF",
+    "description": "จัดองค์ประกอบแผนที่พร้อมพิมพ์ ด้วยชื่อเรื่อง คำอธิบายสัญลักษณ์ มาตราส่วน และลูกศรทิศเหนือ แล้วส่งออกเป็น PNG, PDF หรือ SVG",
     "preview": "ตัวอย่าง",
     "resizeControls": "ปรับขนาดแผงควบคุม",
     "resizeDialog": "ปรับขนาดกล่องโต้ตอบ",
@@ -1383,6 +1460,7 @@
     "copyToClipboard": "คัดลอกไปยังคลิปบอร์ด",
     "copied": "คัดลอกแล้ว",
     "exportPng": "ส่งออก PNG",
+    "exportSvg": "ส่งออก SVG",
     "exportPdf": "ส่งออก PDF",
     "titleLabel": "ชื่อเรื่อง",
     "titlePlaceholder": "ชื่อแผนที่",
@@ -1803,7 +1881,22 @@
     "show3d": "แสดงแผนที่ {{number}} เป็นลูกโลก 3 มิติ",
     "show2d": "แสดงแผนที่ {{number}} เป็นแผนที่ 2 มิติ",
     "only2d": "2 มิติเท่านั้น",
+    "only3d": "3 มิติเท่านั้น",
     "cesiumTokenHint": "เพิ่มโทเค็น Cesium Ion ในการตั้งค่าเพื่อใช้ข้อมูลภูมิประเทศและภาพถ่ายจาก Ion"
+  },
+  "renderer": {
+    "basemap": "แผนที่ฐาน",
+    "imagery": "ภาพถ่าย",
+    "projectBasemap": "แผนที่ฐานของโครงการ",
+    "layerUnsupported": "ไม่แสดงผลบนลูกโลก 3 มิติ",
+    "layerCesiumOnly": "แสดงผลบนลูกโลก 3 มิติเท่านั้น",
+    "resetView": "รีเซ็ตมุมมอง",
+    "scene3D": "ลูกโลก 3 มิติ",
+    "scene2D": "แผนที่ 2 มิติ",
+    "sceneColumbus": "มุมมองโคลัมบัส",
+    "fullscreenEnter": "เต็มหน้าจอ",
+    "fullscreenExit": "ออกจากเต็มหน้าจอ",
+    "fullscreenUnavailable": "ไม่รองรับเต็มหน้าจอ"
   },
   "mapContextMenu": {
     "copyCoordinatesHint": "คัดลอกพิกัดไปยังคลิปบอร์ด",
@@ -2390,6 +2483,7 @@
       "mbtiles": "เลเยอร์ MBTiles",
       "xyz": "เลเยอร์ XYZ",
       "wms": "เลเยอร์ WMS",
+      "csw": "แคตาล็อก CSW",
       "wfs": "เลเยอร์ WFS",
       "wmts": "เลเยอร์ WMTS",
       "ogcFeatures": "OGC API - Features",
@@ -2398,6 +2492,8 @@
       "georss": "เลเยอร์ GeoRSS",
       "video": "เลเยอร์วิดีโอ",
       "deckglViz": "เลเยอร์ Deck.gl",
+      "cesiumIon": "แอสเซ็ต Cesium Ion",
+      "czml": "ฉาก 3 มิติไดนามิก CZML",
       "gltfModel": "โมเดล 3 มิติ (glTF)",
       "postgres": "เลเยอร์ PostgreSQL",
       "iceberg": "เลเยอร์ Apache Iceberg"
@@ -2653,6 +2749,9 @@
       "splitViewGrid2x3": "กริด 2 × 3",
       "splitViewGrid3x3": "กริด 3 × 3",
       "splitViewSync": "ซิงค์มุมมอง",
+      "renderingEngine": "เอนจินการแสดงผล",
+      "rendererMapLibre": "MapLibre",
+      "rendererCesium": "Cesium",
       "viewInGoogleMaps": "ดูใน Google Maps",
       "viewInGoogleEarth": "ดูใน Google Earth",
       "zoomIn": "ซูมเข้า",
@@ -2802,6 +2901,7 @@
       "saveProjectAsTitle": "บันทึกโปรเจกต์เป็น",
       "saveProjectAsDesc": "ป้อนชื่อไฟล์ โปรเจกต์จะถูกดาวน์โหลดไปยังโฟลเดอร์ดาวน์โหลดของเบราว์เซอร์เมื่อคุณคลิกบันทึก",
       "embedVectorTitle": "ฝังข้อมูลเวกเตอร์ในเครื่องหรือไม่?",
+      "embedEditedGeometryDesc": "โปรเจกต์นี้มีรูปทรงเรขาคณิตที่แก้ไขแล้ว ฝังข้อมูลเวกเตอร์ (ประมาณ {{size}}) เพื่อเก็บการเปลี่ยนแปลงไว้ หากไม่ฝังข้อมูล ชั้นข้อมูลที่อ้างอิงจะเปิดใหม่ด้วยรูปทรงเดิม และข้อมูลในเครื่องอาจไม่พร้อมใช้งาน",
       "embedVectorDesc": "โปรเจกต์นี้มีเลเยอร์เวกเตอร์ในเครื่อง {{count}} เลเยอร์ที่โหลดมาจากคอมพิวเตอร์ของคุณ เบราว์เซอร์ไม่สามารถอ่านไฟล์เหล่านั้นซ้ำได้เมื่อเปิดโปรเจกต์อีกครั้ง จึงต้องฝังข้อมูลไว้ในไฟล์โปรเจกต์เพื่อให้กู้คืนได้ การฝังข้อมูลจะเพิ่มขนาดไฟล์ประมาณ {{size}}",
       "embedVectorDescDesktop": "โปรเจกต์นี้มีเลเยอร์เวกเตอร์ในเครื่อง {{count}} เลเยอร์ที่โหลดมาจากคอมพิวเตอร์ของคุณ คุณสามารถฝังข้อมูลเพื่อให้โปรเจกต์สมบูรณ์ในตัว (เพิ่มขนาดประมาณ {{size}}) หรือบันทึกเป็นการอ้างอิงไฟล์ที่จะโหลดจากดิสก์เมื่อเปิดโปรเจกต์อีกครั้ง การอ้างอิงจะทำให้ไฟล์มีขนาดเล็ก แต่จะใช้ไม่ได้หากไฟล์ต้นทางถูกย้ายหรือลบในภายหลัง",
       "embedVectorDescMas": "โปรเจกต์นี้มีเลเยอร์เวกเตอร์ในเครื่อง {{count}} เลเยอร์ที่โหลดจากคอมพิวเตอร์ของคุณ แซนด์บ็อกซ์ของ Mac App Store ไม่สามารถคงสิทธิ์การเข้าถึงไฟล์เหล่านี้ไว้หลังจากปิด GeoLibre ได้ จึงต้องฝังข้อมูลไว้ในไฟล์โปรเจกต์เพื่อให้กู้คืนได้ การฝังจะเพิ่มขนาดไฟล์ประมาณ {{size}}",
@@ -2852,6 +2952,7 @@
     },
     "plugin": {
       "maplibre-gl-annotations": "คำอธิบายประกอบ",
+      "maplibre-gl-dimensions": "เส้นบอกขนาด",
       "maplibre-gl-streetview": "Street View",
       "maplibre-gl-time-slider": "แถบเลื่อนเวลา",
       "geolibre-timelapse": "ภาพเคลื่อนไหวตามช่วงเวลา",
@@ -3036,9 +3137,14 @@
     "openBuilder": "ตัวสร้างนิพจน์...",
     "invalidExpression": "ป้อนนิพจน์แบบบูลีนที่ถูกต้อง",
     "select": "เลือกฟีเจอร์",
+    "applyLayerFilter": "กรองเลเยอร์",
+    "clearLayerFilter": "ล้างตัวกรองเลเยอร์",
+    "layerFilteredHint": "ตัวกรองถาวรกำลังซ่อนฟีเจอร์บางส่วนของเลเยอร์นี้อยู่",
+    "layerFilteredBothHint": "ตัวกรองถาวรและตัวกรองด่วนกำลังซ่อนฟีเจอร์บางส่วนของเลเยอร์นี้อยู่",
     "noLayers": "เพิ่มเลเยอร์เวกเตอร์ที่มีฟีเจอร์เพื่อทำการเลือก",
     "needTwoLayers": "การเลือกตามตำแหน่งต้องใช้เลเยอร์เวกเตอร์ที่มีฟีเจอร์สองเลเยอร์",
     "summary": "เลือกแล้ว {{selected}} จาก {{total}} ฟีเจอร์ (ตรงกัน {{matched}} รายการ)",
+    "filterSummary": "ใช้ตัวกรองเลเยอร์แล้ว: ตรงกัน {{matched}} จาก {{total}} ฟีเจอร์",
     "evaluationErrors": "มี {{count}} ฟีเจอร์ที่ประเมินค่าไม่ได้และไม่ถูกนับว่าตรงกัน",
     "unevaluableDisjoint": "มี {{count}} ฟีเจอร์ที่ถูกคัดออกเนื่องจากประเมินค่าเรขาคณิตไม่ได้",
     "tooManyPairs": "การเปรียบเทียบนี้ต้องทดสอบคู่ฟีเจอร์ {{pairs}} คู่ (ขีดจำกัด {{limit}}) กรุณาใช้ ประมวลผล → GeoLibre → เวกเตอร์ → เลือกตามตำแหน่ง ด้วยเอนจิน Sidecar แทน",
@@ -3451,6 +3557,7 @@
     "search": "ค้นหา",
     "searchCurrentView": "ค้นหาในพื้นที่แผนที่ปัจจุบัน",
     "enterKeyword": "ป้อนคำค้นหาเพื่อเริ่มต้น",
+    "viewUnavailable": "ไม่สามารถระบุพื้นที่แผนที่ปัจจุบันได้ ปิดตัวกรองพื้นที่แผนที่เพื่อค้นหา",
     "loadMore": "โหลดเพิ่มเติม",
     "searching": "กำลังค้นหา…",
     "loadingMore": "กำลังโหลดชุดข้อมูลเพิ่มเติม…",
@@ -3493,10 +3600,14 @@
     "title": "แคตตาล็อก STAC",
     "footprintLayerName": "ขอบเขตผลการค้นหา STAC",
     "catalogSearch": "ค้นหาแคตตาล็อกสาธารณะจาก STAC Index",
+    "portolanCatalogSearch": "ค้นหาแคตตาล็อกสาธารณะจาก Portolan Registry",
     "catalogSearchPlaceholder": "ค้นหาชื่อแคตตาล็อก…",
     "indexLoading": "กำลังโหลด STAC Index…",
+    "portolanIndexLoading": "กำลังโหลด Portolan Registry…",
     "indexUnavailable": "ไม่สามารถใช้ STAC Index ได้ — กรุณาป้อน URL",
+    "portolanIndexUnavailable": "ไม่สามารถใช้ Portolan Registry ได้: กรุณาป้อน URL",
     "indexLoadFailed": "ไม่สามารถโหลด STAC Index ได้",
+    "portolanIndexLoadFailed": "ไม่สามารถโหลด Portolan Registry ได้",
     "urlLabel": "URL ของแคตตาล็อกหรือ API แบบ STAC",
     "connect": "เชื่อมต่อ",
     "connecting": "กำลังเชื่อมต่อ STAC…",
@@ -3843,6 +3954,27 @@
     "saveElement": "บันทึกองค์ประกอบ",
     "atPoint": "ที่จุด",
     "pinnedToExtent": "ตรึงกับขอบเขต"
+  },
+  "dimensions": {
+    "toolbar": "เครื่องมือเส้นบอกขนาด",
+    "layerName": "เส้นบอกขนาด",
+    "tools": {
+      "linear": "เส้นบอกขนาดเชิงเส้น",
+      "angular": "เส้นบอกขนาดเชิงมุม"
+    },
+    "unit": "หน่วย",
+    "snap": "สแนปเข้ากับจุดยอด",
+    "color": "สีเส้นบอกขนาด",
+    "width": "ความหนาเส้น",
+    "widthOptions": {
+      "thin": "บาง",
+      "medium": "ปานกลาง",
+      "thick": "หนา"
+    },
+    "deleteLast": "ลบเส้นบอกขนาดล่าสุด",
+    "clearAll": "ล้างเส้นบอกขนาดทั้งหมด",
+    "newLayer": "เลเยอร์เส้นบอกขนาดใหม่",
+    "confirmClearAll_other": "ลบเส้นบอกขนาดทั้ง {{count}} รายการในเลเยอร์นี้หรือไม่ การกระทำนี้ไม่สามารถย้อนกลับได้"
   },
   "pythonConsole": {
     "title": "คอนโซล Python",
@@ -4438,6 +4570,15 @@
                 "kilometers": "กิโลเมตร",
                 "meters": "เมตร",
                 "miles": "ไมล์"
+              }
+            },
+            "side": {
+              "label": "ด้านของบัฟเฟอร์",
+              "description": "ด้านนอกขยายแต่ละฟีเจอร์ ด้านในย่อฟีเจอร์ และทั้งสองด้านเก็บเฉพาะพื้นที่ภายในระยะที่กำหนดทั้งสองข้างของขอบเขต ด้านในต้องใช้ชั้นข้อมูลรูปหลายเหลี่ยม — จุดหรือเส้นไม่มีพื้นที่ภายใน",
+              "options": {
+                "outside": "ด้านนอก (ขยาย)",
+                "inside": "ด้านใน (ย่อ)",
+                "both": "ทั้งสองด้าน"
               }
             }
           }
@@ -6251,6 +6392,7 @@
     "description": "บันทึก เรียกดู และนำสไตล์ สัญลักษณ์ ค่าตั้งต้นของป้ายกำกับ และไล่เฉดสีที่นำกลับมาใช้ใหม่ได้ไปใช้กับเลเยอร์และโปรเจกต์ต่าง ๆ",
     "searchPlaceholder": "ค้นหาสไตล์และแท็ก…",
     "presetsSection": "ค่าตั้งต้นในตัว",
+    "presetActions": "การดำเนินการกับค่าตั้งต้น",
     "librarySection": "คลังของฉัน",
     "projectSection": "โปรเจกต์นี้",
     "empty": "ไม่มีสไตล์ที่บันทึกไว้ตรงกัน กรุณาบันทึกสไตล์ของเลเยอร์หรือนำเข้าคลังเพื่อเริ่มต้น",
@@ -6349,7 +6491,6 @@
       "remove": "นำการเชื่อมข้อมูลออก",
       "enabledTitle": "ใช้การเชื่อมข้อมูลนี้",
       "missingLayer": "ไม่พบเลเยอร์ที่จะเชื่อม",
-      "noCandidates": "ไม่มีเลเยอร์อื่นที่มีตารางแอตทริบิวต์ให้เชื่อมข้อมูล",
       "statsMatched": "ตรงกัน {{matched}} จาก {{total}} ฟีเจอร์",
       "statsUnmatchedJoin_other": "มีแถวของเลเยอร์ที่เชื่อม {{count}} แถวที่ไม่ตรงกัน"
     },
@@ -6404,6 +6545,11 @@
       "offsetY": "ระยะเยื้องแกน Y (em)",
       "rotation": "การหมุน (°)",
       "maxWidth": "ความกว้างก่อนขึ้นบรรทัดใหม่ (em)",
+      "numberFormat": "จัดรูปแบบตัวเลข",
+      "numberFormatHint": "ค่าที่เป็นตัวเลขจะแสดงพร้อมตัวคั่นหลักพันและจุดทศนิยม เช่น {{sample}} ส่วนค่าที่เป็นข้อความจะไม่เปลี่ยนแปลง และนิพจน์ป้ายกำกับจะจัดรูปแบบผลลัพธ์ของตัวเอง",
+      "numberDecimals": "ตำแหน่งทศนิยม",
+      "numberLocale": "ตัวคั่น",
+      "numberLocaleApp": "ตามภาษาของแอป",
       "transform": "ตัวพิมพ์",
       "transformNone": "ตามที่ป้อน",
       "transformUppercase": "ตัวพิมพ์ใหญ่ทั้งหมด",
@@ -6557,6 +6703,7 @@
       "categories": "หมวดหมู่",
       "classColor": "สีของชั้นข้อมูลที่ {{index}}",
       "classColorPick": "เลือกสีของชั้นข้อมูลที่ {{index}} จากหน้าจอ",
+      "classOpacity": "ความทึบของชั้นข้อมูลที่ {{index}}",
       "classValue": "ค่าของชั้นข้อมูลที่ {{index}}",
       "colorExpression": "นิพจน์สี",
       "applyStyleType": "ใช้ชนิดของสไตล์นี้",
@@ -6566,6 +6713,8 @@
       "pointRendererClustered": "จัดกลุ่ม",
       "heatmapRadius": "รัศมีของแผนที่ความร้อน",
       "heatmapIntensity": "ความเข้มของแผนที่ความร้อน",
+      "heatmapWeightField": "ฟิลด์น้ำหนัก",
+      "heatmapEqualWeight": "ไม่มี (น้ำหนักเท่ากัน)",
       "clusterRadius": "รัศมีของกลุ่ม (พิกเซล)",
       "clusterMaxZoom": "ระดับซูมสูงสุดที่ยังจัดกลุ่ม",
       "strokeWidthUnit": "หน่วยความหนาเส้น",
@@ -6602,10 +6751,12 @@
     "mode2d": "2 มิติ",
     "mode3dExtrusion": "การยกตัวแบบ 3 มิติ",
     "noControls": "ยังไม่มีตัวควบคุมสไตล์สำหรับเลเยอร์ชนิดนี้",
+    "tilesetSymbology": "สีและตัวกรองมีผลกับชุดไทล์นี้บนลูกโลก 3 มิติ",
     "selectedLayerType": "ชนิดของเลเยอร์ที่เลือก: {{type}}",
     "footerDeck": "การเปลี่ยนแปลงจะมีผลทันทีกับการจัดสไตล์เลเยอร์ deck.gl ของ DuckDB",
     "footerMaplibre": "การเปลี่ยนแปลงจะมีผลทันทีกับคุณสมบัติการวาดของ MapLibre",
     "pluginPaintedFooter": "เลเยอร์นี้ถูกวาดโดยปลั๊กอินของตัวเอง ซึ่งมีตัวควบคุมสไตล์ของมันเอง",
+    "serviceStyledFooter": "เลเยอร์นี้คงรูปแบบของบริการต้นทางไว้ ส่วนความทึบ ลำดับ ช่วงการซูม และตัวกรองยังคงมีผล",
     "extrusion": {
       "color": "สีของส่วนที่ยกตัว",
       "opacity": "ความทึบของส่วนที่ยกตัว",
@@ -6702,6 +6853,7 @@
         "upcase": "แปลงข้อความเป็นตัวพิมพ์ใหญ่",
         "downcase": "แปลงข้อความเป็นตัวพิมพ์เล็ก",
         "slice": "คืนส่วนหนึ่งของข้อความหรืออาร์เรย์",
+        "numberFormat": "จัดรูปแบบตัวเลขเป็นข้อความโดยใช้ตัวคั่นหลักพันและจุดทศนิยมของโลแคล พร้อมกำหนดจำนวนตำแหน่งทศนิยมคงที่ได้",
         "toNumber": "แปลงค่าเป็นตัวเลข",
         "toString": "แปลงค่าเป็นข้อความ",
         "toBoolean": "แปลงค่าเป็นจริงหรือเท็จ",
@@ -6861,6 +7013,7 @@
     "allFieldsUsed": "ทุกฟิลด์มีตัวกรองอยู่แล้ว",
     "removeAll": "นำออกทั้งหมด",
     "clearAll": "ล้างตัวกรอง",
+    "clearAllWithExpression": "ล้างตัวกรองและนิพจน์ที่บันทึกไว้",
     "clearOne": "ล้างตัวกรองนี้",
     "clearOneNamed": "ล้างตัวกรองบน {{field}}",
     "remove": "นำตัวกรองออก",
@@ -6993,6 +7146,8 @@
     "saveEditsSuccess": "บันทึก {{count}} ฟีเจอร์ลงไฟล์ต้นทางแล้ว",
     "saveEditsNoFeatures": "เลเยอร์นี้ไม่มีฟีเจอร์ให้บันทึก",
     "saveEditsError": "ไม่สามารถบันทึกการแก้ไขลงไฟล์ต้นทางได้",
+    "saveEditsToArcgis": "บันทึกการแก้ไขลงบริการ ArcGIS",
+    "saveEditsArcgisSuccess": "บันทึกลง ArcGIS แล้ว: เพิ่ม {{inserted}} แก้ไข {{updated}} ลบ {{deleted}}",
     "saveEditsToPostgis": "บันทึกการแก้ไขลงตาราง PostGIS",
     "saveEditsPostgisSuccess": "บันทึกลง {{table}} แล้ว: เพิ่ม {{inserted}} แก้ไข {{updated}} ลบ {{deleted}}",
     "saveEditsPostgisSkippedFields": "ฟิลด์ที่ไม่มีคอลัมน์ในตารางที่ตรงกันจะไม่ถูกบันทึก: {{fields}}",
@@ -7150,6 +7305,18 @@
     "stretchLinear": "เชิงเส้น",
     "stretchLog": "ลอการิทึม",
     "stretchSqrt": "รากที่สอง",
+    "viewportStretch": "การยืดค่าตามมุมมอง",
+    "viewportMinMax": "ค่าต่ำสุด / สูงสุดของมุมมอง",
+    "viewportPercentile": "เปอร์เซ็นไทล์ 5–95 ของมุมมอง",
+    "viewportStddev": "ค่าเฉลี่ยของมุมมอง ± 2 ส่วนเบี่ยงเบนมาตรฐาน",
+    "viewportApply": "ใช้กับมุมมองปัจจุบัน",
+    "viewportStretching": "กำลังอ่านมุมมอง…",
+    "viewportStretchApplied": "ใช้การยืดค่าตามมุมมองแล้ว",
+    "viewportAuto": "อัปเดตอัตโนมัติเมื่อแผนที่เลื่อน",
+    "viewportStretchNoView": "ไม่มีมุมมองแผนที่ให้ใช้งาน",
+    "viewportStretchNoValues": "ไม่พบค่าแรสเตอร์ในมุมมอง",
+    "viewportStretchNoRange": "ค่าในมุมมองไม่สามารถกำหนดช่วงได้",
+    "viewportStretchMoved": "แผนที่เลื่อนก่อนที่การอ่านจะเสร็จ โปรดใช้อีกครั้ง",
     "index": "ดัชนี",
     "classifyToggle": "จัดเป็นชั้นข้อมูลแบบไม่ต่อเนื่อง",
     "method": "วิธีการ",
@@ -7646,5 +7813,65 @@
       "downloadsStarted": "เริ่มดาวน์โหลด {{started}} รายการ ล้มเหลว {{failed}} รายการ",
       "downloadCancelled": "การดาวน์โหลดถูกยกเลิกหรือล้มเหลว"
     }
+  },
+  "usgsNldi": {
+    "panelTitle": "USGS NLDI",
+    "title": "เครื่องมือโครงข่าย USGS NLDI",
+    "hint": "ก่อนอื่นให้เลือกทิศทางของเส้นทางน้ำแล้วคลิกบนแผนที่ จากนั้นเลือกทิศทางการนำทาง กดปุ่มที่ถูกเน้นเพื่อโหลดแคตาล็อกที่มีอยู่ เลือกแคตาล็อกเช่นสถานีวัดน้ำท่าหรือบ่อน้ำบาดาล แล้วกดอีกครั้งเพื่อพล็อตแคตาล็อกนั้น",
+    "directionComplete": "เส้นทางน้ำทั้งเส้น — คืนค่าช่วงลำน้ำ NHD ทั้งหมด",
+    "directionUp": "เฉพาะต้นน้ำ — คืนค่าช่วงลำน้ำเหนือจุดที่เลือก",
+    "directionDown": "เฉพาะปลายน้ำ — คืนค่าช่วงลำน้ำใต้จุดที่เลือก",
+    "basinButton": "ลุ่มน้ำจากตำแหน่งอุทกวิทยา",
+    "navigationPlaceholder": "เลือกทิศทาง — จำเป็นก่อนพล็อต",
+    "navigationUpstreamMain": "ลำน้ำสายหลักต้นน้ำ — ตามลำน้ำสายหลัก",
+    "navigationUpstreamTributaries": "ลำน้ำสาขาต้นน้ำ — ค้นหาสาขาที่ไหลมาสมทบ",
+    "navigationDownstreamMain": "ลำน้ำสายหลักปลายน้ำ — ตามลำน้ำสายหลัก",
+    "navigationDownstreamDiversions": "การผันน้ำปลายน้ำ — ตามเส้นทางน้ำที่แยกออก",
+    "sourcePlaceholder": "กด “โหลดแหล่งข้อมูลและพล็อต” ก่อน",
+    "distancePlaceholder": "ระยะทาง (กม.)",
+    "navigationButton": "1. โหลดแหล่งข้อมูลและพล็อตการนำทาง",
+    "navigationButtonAgain": "พล็อตเลเยอร์การนำทางอีกชุด",
+    "exportButton": "ส่งออกผลลัพธ์ที่พล็อตเป็น GeoJSON",
+    "addLayersButton": "เพิ่มผลลัพธ์ที่พล็อตไปยังเลเยอร์ของ GeoLibre",
+    "clearButton": "ล้างผลลัพธ์ NLDI",
+    "noComid": "ไม่มีการคืนค่า COMID สำหรับจุดนี้",
+    "requestingBasin": "กำลังขอข้อมูลลุ่มน้ำต้นน้ำ…",
+    "basinRendered": "พล็อตลุ่มน้ำต้นน้ำสำหรับ COMID {{comid}} แล้ว",
+    "basinFailed": "คำขอข้อมูลลุ่มน้ำล้มเหลว",
+    "selectNavigation": "เลือกวิธีการนำทางหลังจากลากเส้นจากจุดแล้ว",
+    "invalidDistance": "ระยะทางต้องอยู่ระหว่าง 1 ถึง 9999 กม.",
+    "discoveringSources": "กำลังค้นหาแหล่งข้อมูลการนำทางของ NLDI…",
+    "navigationUnavailable": "วิธีการนำทางนั้นใช้ไม่ได้กับ COMID นี้",
+    "noPlottableSource": "NLDI ไม่ได้คืนค่าแหล่งข้อมูลการนำทางที่พล็อตได้",
+    "navigationEmpty": "{{source}} ไม่ได้คืนค่าฟีเจอร์ที่แสดงบนแผนที่ได้สำหรับการนำทางนี้",
+    "navigationAdded": "เพิ่ม {{source}} ผ่าน {{navigation}} สำหรับ COMID {{comid}} ({{km}} กม.) แล้ว เลเยอร์การนำทางเดิมยังคงอยู่บนแผนที่",
+    "navigationFailed": "คำขอการนำทางล้มเหลว",
+    "tracing": "กำลังลากเส้นไปยังเส้นทางน้ำ NHD ที่ใกล้ที่สุด…",
+    "flowline": "พล็อตเส้นทางน้ำแล้ว",
+    "flowlineComid": "พล็อตเส้นทางน้ำแล้ว COMID {{comid}} พร้อมใช้กับกระบวนงานลุ่มน้ำ",
+    "flowlineFallback": "พล็อตเส้นทางน้ำโดยใช้ตำแหน่งอุทกวิทยาสำรองของ NLDI",
+    "flowlineFallbackComid": "พล็อตเส้นทางน้ำโดยใช้ตำแหน่งอุทกวิทยาสำรองของ NLDI COMID {{comid}} พร้อมใช้กับกระบวนงานลุ่มน้ำ",
+    "requestFailed": "คำขอ NLDI ล้มเหลว",
+    "nothingToAdd": "ไม่มีฟีเจอร์ NLDI ที่พล็อตไว้ให้เพิ่ม",
+    "layersAdded_other": "เพิ่มเลเยอร์ NLDI {{count}} เลเยอร์ไปยังกลุ่ม “ผลลัพธ์ USGS NLDI” หนึ่งกลุ่มแล้ว",
+    "layerGroupName": "ผลลัพธ์ USGS NLDI",
+    "layerFlowline": "เส้นทางน้ำ NLDI",
+    "layerRaindrop": "เส้นทางหยดน้ำฝน NLDI",
+    "layerSelectedPoint": "จุดที่เลือกของ NLDI",
+    "layerBasin": "ลุ่มน้ำต้นน้ำ NLDI",
+    "layerNavigation": "การนำทาง NLDI {{index}}",
+    "resultCleared": "ล้างผลลัพธ์ NLDI แล้ว",
+    "directionalUnavailable": "การลากเส้นทางน้ำแบบมีทิศทางใช้ไม่ได้ขณะที่กระบวนการของ USGS ออฟไลน์ โปรดเลือก “เส้นทางน้ำทั้งเส้น” หรือลองใหม่ภายหลัง",
+    "noFlowlineNearby": "NLDI ไม่พบเส้นทางน้ำใกล้กับจุดนี้",
+    "httpError": "USGS NLDI คืนค่า HTTP {{status}}",
+    "httpErrorDetail": "USGS NLDI คืนค่า HTTP {{status}}: {{detail}}",
+    "noAttributes": "NLDI ไม่ได้คืนค่าแอตทริบิวต์ใด ๆ",
+    "catalogCaGages": "สถานีวัดน้ำท่าในแคลิฟอร์เนีย (ca_gages)",
+    "catalogNwisSite": "สถานีตรวจวัดน้ำผิวดินของ NWIS (สถานีวัดน้ำท่า)",
+    "catalogNwisGw": "บ่อน้ำบาดาลของ NWIS",
+    "catalogGfv11Pois": "จุดข้อมูล USGS Geospatial Fabric",
+    "catalogHuc12pp": "จุดระบายน้ำ HUC12",
+    "catalogNmwdiSt": "สถานีตรวจวัดน้ำในรัฐนิวเม็กซิโก",
+    "catalogFlowlines": "เส้นทางน้ำ NHDPlus"
   }
 }

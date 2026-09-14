@@ -1,4 +1,4 @@
-import { getCesiumIonToken, useAppStore } from "@geolibre/core";
+import { isCesiumOnlyLayer, useAppStore } from "@geolibre/core";
 import { CesiumCanvas, isCesiumSupportedLayerType, SecondaryMapCanvas } from "@geolibre/map";
 import {
   Button,
@@ -10,30 +10,9 @@ import {
   DropdownMenuTrigger,
 } from "@geolibre/ui";
 import { Globe, Layers, Map as MapIcon, X } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-
-/**
- * The current Cesium Ion token, re-resolved whenever the runtime environment
- * changes. It can come from the build (the `CESIUM_TOKEN` env var) or from
- * Settings → Environment variables (`VITE_CESIUM_TOKEN`), so it can be supplied
- * at runtime in the web build with no rebuild.
- *
- * The globe is offered either way: it renders the project basemap as its base
- * imagery, which needs no token. A token adds Cesium World Terrain (relief on
- * tilted views) and Ion World Imagery as the fallback for a basemap with no
- * raster form, so without one the pane shows a hint rather than disappearing.
- */
-function useCesiumIonToken(): string | undefined {
-  const [token, setToken] = useState<string | undefined>(() => getCesiumIonToken());
-  useEffect(() => {
-    const refresh = () => setToken(getCesiumIonToken());
-    refresh();
-    window.addEventListener("geolibre:runtime-env-change", refresh);
-    return () => window.removeEventListener("geolibre:runtime-env-change", refresh);
-  }, []);
-  return token;
-}
+import { useCesiumIonToken } from "../../hooks/useCesiumIonToken";
 
 /**
  * An editable label shown centered at the top of a map pane. Empty by default;
@@ -248,6 +227,7 @@ function PaneLayerToggle({ viewId, index, is3d }: PaneLayerToggleProps) {
             const override = layerVisibility?.[layer.id];
             const visible = override === undefined ? layer.visible : override;
             const only2d = is3d && !isCesiumSupportedLayerType(layer);
+            const only3d = !is3d && isCesiumOnlyLayer(layer);
             return (
               <DropdownMenuCheckboxItem
                 key={layer.id}
@@ -260,9 +240,9 @@ function PaneLayerToggle({ viewId, index, is3d }: PaneLayerToggleProps) {
                 onSelect={(event: Event) => event.preventDefault()}
               >
                 <span className="truncate">{layer.name}</span>
-                {only2d ? (
+                {only2d || only3d ? (
                   <span className="ms-auto shrink-0 ps-2 text-xs text-muted-foreground">
-                    {t("mapGrid.only2d")}
+                    {t(only2d ? "mapGrid.only2d" : "mapGrid.only3d")}
                   </span>
                 ) : null}
               </DropdownMenuCheckboxItem>

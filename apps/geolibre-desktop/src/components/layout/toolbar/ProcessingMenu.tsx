@@ -26,6 +26,7 @@ import { WHITEBOX_MENU_CATALOG } from "../../../lib/whitebox-menu-catalog";
 import { DOWNLOAD_GLOBAL_DEM_TOOL_ID } from "../../../lib/global-dem";
 import { CapabilityNotice, capabilityNoticeId, useCapabilityReason } from "./CapabilityNotice";
 import type { ToolbarChrome } from "./constants";
+import { useMapCapabilities } from "../../../hooks/useMapCapabilities";
 
 // aria-describedby targets for the "your role does not allow this" explanations.
 // One per privilege rather than one per item: several denied entries share a
@@ -77,6 +78,10 @@ export function ProcessingMenu({
   const setSegmentationOpen = useAppStore((s) => s.setSegmentationOpen);
   const setObjectDetectionOpen = useAppStore((s) => s.setObjectDetectionOpen);
   const setSegmentEverythingOpen = useAppStore((s) => s.setSegmentEverythingOpen);
+  // Object detection and segment-everything read pixels off the MapLibre canvas
+  // and drive the map directly, so they need a live native map instance — not
+  // merely "not Cesium".
+  const capabilities = useMapCapabilities();
   const setSqlWorkspaceOpen = useAppStore((s) => s.setSqlWorkspaceOpen);
   const setPythonConsoleOpen = useAppStore((s) => s.setPythonConsoleOpen);
   const setNotebookOpen = useAppStore((s) => s.setNotebookOpen);
@@ -702,14 +707,20 @@ export function ProcessingMenu({
               {/* Detection runs client-side (onnxruntime-web), not via the sidecar,
             so it stays available on mobile/web clients (no `!mobile` gate). */}
               {show("processing.objectDetection") && (
-                <DropdownMenuItem onSelect={() => setObjectDetectionOpen(true)}>
+                <DropdownMenuItem
+                  disabled={!capabilities.nativeMapInstance}
+                  onSelect={() => setObjectDetectionOpen(true)}
+                >
                   {t("toolbar.command.objectDetection")}
                 </DropdownMenuItem>
               )}
               {/* SlimSAM "segment everything" also runs client-side (onnxruntime-web),
             so it stays available on mobile/web clients (no `!mobile` gate). */}
               {show("processing.segmentEverything") && (
-                <DropdownMenuItem onSelect={() => setSegmentEverythingOpen(true)}>
+                <DropdownMenuItem
+                  disabled={!capabilities.nativeMapInstance}
+                  onSelect={() => setSegmentEverythingOpen(true)}
+                >
                   {t("toolbar.command.segmentEverything")}
                 </DropdownMenuItem>
               )}

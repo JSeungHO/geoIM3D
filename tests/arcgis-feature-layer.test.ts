@@ -4,6 +4,7 @@ import { useAppStore } from "@geolibre/core";
 import type { GeoLibreAppAPI } from "../packages/plugins/src/types";
 import {
   addArcGISLayer,
+  setArcGISFetch,
   refreshArcGISFeatureLayer,
   reloadArcGISViewportLayer,
   restoreArcGISViewportLayers,
@@ -247,8 +248,42 @@ describe("addArcGISLayer (feature layer)", () => {
   });
 
   afterEach(() => {
+    setArcGISFetch(null);
     globalThis.fetch = originalFetch;
   });
+
+  for (const supportsPagination of [true, false]) {
+    it(`uses the installed transport for metadata, counts, paging, and refresh (pagination=${supportsPagination})`, async () => {
+      const service = fakeArcGISService({ total: 5, maxRecordCount: 2, supportsPagination });
+      const urls: string[] = [];
+      globalThis.fetch = async () => {
+        throw new TypeError("Browser fetch blocked by CORS");
+      };
+      setArcGISFetch(async (input, init) => {
+        urls.push(String(input));
+        return service.fetch(input, init);
+      });
+      const id = await addArcGISLayer(app, {
+        layerType: "feature",
+        sourceType: "url",
+        url: SERVICE_URL,
+        name: "Native cities",
+      });
+      const layer = useAppStore.getState().layers.find((entry) => entry.id === id)!;
+      assert.equal(layer.geojson?.features.length, 5);
+      assert.ok(urls.some((url) => url.includes("returnCountOnly=true")));
+      if (!supportsPagination) assert.ok(urls.some((url) => url.includes("returnIdsOnly=true")));
+      const refreshed = await refreshArcGISFeatureLayer({
+        queryUrl: String(layer.source.arcgisQueryUrl),
+      });
+      assert.equal(refreshed.features.length, 5);
+      setArcGISFetch(null);
+      await assert.rejects(
+        refreshArcGISFeatureLayer({ queryUrl: String(layer.source.arcgisQueryUrl) }),
+        /Browser fetch blocked/,
+      );
+    });
+  }
 
   it("loads a feature layer as a GeoJSON layer with its attributes intact", async () => {
     const id = await addArcGISLayer(app, {
@@ -1156,4 +1191,40 @@ describe("addArcGISLayer (feature layer)", () => {
       "expected the resolved service URL to be queried",
     );
   });
+});
+
+it("keeps pending viewport edits and their baseline when the map moves", async () => {
+  useAppStore.setState({ layers: [] });
+  const viewport = fakeViewportMap([-160, 18, -154, 23]);
+  let queries = 0;
+  setArcGISFetch(async (input) => {
+    if (String(input).includes("/query")) {
+      queries++;
+      return Response.json({ type: "FeatureCollection", features: [viewportFeature(1)] });
+    }
+    return Response.json(VIEWPORT_LAYER_INFO);
+  });
+  try {
+    const id = await addArcGISLayer(
+      { getMap: () => viewport.map, fitBounds() {} } as unknown as GeoLibreAppAPI,
+      { layerType: "feature", sourceType: "url", url: SERVICE_URL, maxFeatures: 1 },
+    );
+    await settle();
+    const before = useAppStore.getState().layers.find((l) => l.id === id)!;
+    const edited = structuredClone(before.geojson!);
+    edited.features[0].properties!.NAME = "Pending";
+    useAppStore.getState().updateLayer(id, { geojson: edited });
+    const requestsBeforePan = queries;
+    viewport.setBounds([10, 20, 15, 25]);
+    viewport.listeners.get("moveend")!();
+    await settle();
+    assert.equal(queries, requestsBeforePan);
+    const after = useAppStore.getState().layers.find((l) => l.id === id)!;
+    assert.deepEqual(after.geojson, edited);
+    assert.deepEqual(after.metadata.arcgisEditBaseline, before.metadata.arcgisEditBaseline);
+    assert.deepEqual(await reloadArcGISViewportLayer(id), edited);
+  } finally {
+    useAppStore.setState({ layers: [] });
+    setArcGISFetch(null);
+  }
 });

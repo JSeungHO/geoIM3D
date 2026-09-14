@@ -276,6 +276,10 @@
         "label": "WMS Katmanı Ekle",
         "description": "Bir WMS GetMap servisini döşenmiş raster katman olarak ekleyin."
       },
+      "csw": {
+        "label": "CSW Kataloğunda Ara",
+        "description": "Bir OGC Katalog Servisinde veri kümeleri arayın ve desteklenen web kaynaklarını haritaya ekleyin."
+      },
       "wfs": {
         "label": "WFS Katmanı Ekle",
         "description": "Bir GetFeature servisinden GeoJSON isteyerek WFS öğelerini ekleyin."
@@ -343,6 +347,18 @@
       "polyline": {
         "label": "Kodlanmış Çoklu Çizgi Katmanı Ekle",
         "description": "Kodlanmış çoklu çizgi dizelerini (Google, OSRM, Valhalla) metin veya dosyalardan vektör çizgiler olarak içe aktarın."
+      },
+      "cesiumIon": {
+        "label": "Cesium Ion Varlığı Ekle",
+        "description": "Varlık kimliğiyle Cesium Ion'dan bir 3D Tiles tileset'i veya görüntü ekleyin. Cesium Ion belirtecinizle 3B kürede çizilir."
+      },
+      "czml": {
+        "label": "CZML Dinamik 3B Katmanı Ekle",
+        "description": "Küre üzerinde yörüngeleri, izleri, araç rotalarını ve zamanla değişen 3B sahneleri tanımlayan dinamik bir Cesium Language (CZML) belgesi yükleyin."
+      },
+      "kml": {
+        "label": "KML / KMZ",
+        "description": "KML veya KMZ dosyalarını özgün stiller, kaplamalar ve ağ bağlantılarıyla küreye yükleyin."
       }
     },
     "shared": {
@@ -400,6 +416,37 @@
       "importedWithDropped_one": "{{count}} servis içe aktarıldı ({{dropped}} tanesi atlandı — kitaplık dolu).",
       "importedWithDropped_other": "{{count}} servis içe aktarıldı ({{dropped}} tanesi atlandı — kitaplık dolu)."
     },
+    "cesiumIon": {
+      "defaultName": "Cesium Ion varlığı",
+      "assetId": "Varlık kimliği",
+      "kindTileset": "3D Tiles",
+      "kindImagery": "Görüntü",
+      "altitudeOffset": "Yükseklik kaydırması (m)",
+      "quickPicks": "Hızlı seçimler",
+      "hint": "Varlık kimliklerini ion.cesium.com adresindeki My Assets altında bulabilirsiniz. Varlık, Ayarlar'da yapılandırılan belirteçle paylaşılmış olmalıdır.",
+      "errorAssetId": "Bir Cesium Ion varlık kimliği girin (pozitif bir tam sayı).",
+      "errorAltitude": "Yükseklik kaydırmasını metre cinsinden bir sayı olarak girin.",
+      "tokenMissing": "Yapılandırılmış bir Cesium Ion belirteci yok. Ayarlar → Ortam değişkenleri (VITE_CESIUM_TOKEN) altından bir tane ekleyin, aksi halde varlık yüklenemez."
+    },
+    "czml": {
+      "defaultName": "CZML Dinamik Sahne",
+      "url": "CZML URL'si",
+      "sourceModeUrl": "URL",
+      "sourceModeFile": "Yerel dosya",
+      "file": "Dosya",
+      "quickPicks": "Örnek dinamik sahneler",
+      "hint": "CZML akışları veya dosyaları, küre saatiyle eşitlenmiş dinamik 3B konumları, animasyonları ve yörüngeleri tanımlar.",
+      "errorUrl": "Geçerli bir CZML uç noktası URL'si girin.",
+      "errorChooseFile": "Yüklemek için bir CZML (.czml veya .json) dosyası seçin.",
+      "errorFileMissing": "Seçilen dosya okunamadı.",
+      "errorInvalidCzml": "Dosya geçerli bir CZML belgesi içermiyor (JSON dizisi veya paket nesnesi bekleniyordu).",
+      "readError": "CZML verisi okunamadı."
+    },
+    "kml": {
+      "defaultName": "KML / KMZ",
+      "url": "KML / KMZ URL'si",
+      "errorSource": "Bir KML/KMZ URL’si girin veya dosya seçin."
+    },
     "xyz": {
       "defaultName": "XYZ Katmanı",
       "sampleLabel": "USGS uydu görüntüsü",
@@ -426,6 +473,21 @@
       "noLayersFound": "Bu servis için katman bulunamadı.",
       "retrieveError": "Bu servisten katmanlar alınamadı.",
       "version": "WMS sürümü"
+    },
+    "csw": {
+      "defaultName": "CSW Kataloğu",
+      "urlPlaceholder": "https://example.com/csw",
+      "keyword": "Anahtar kelime",
+      "search": "Ara",
+      "searching": "Aranıyor…",
+      "results": "Katalog sonuçları",
+      "errorUrl": "Geçerli bir HTTP veya HTTPS CSW servis URL'si girin.",
+      "searchError": "Bu katalogda arama yapılamadı.",
+      "noResults": "Eşleşen veri kümesi bulunamadı.",
+      "invalidGeoJson": "Seçilen kaynak bir GeoJSON FeatureCollection değil.",
+      "addError": "Bu katalog kaynağı eklenemedi.",
+      "addResource": "{{kind}} ekle",
+      "noSupportedResources": "Desteklenen bir WMS, WFS, ArcGIS veya GeoJSON kaynağı sunulmadı."
     },
     "wfs": {
       "defaultName": "WFS Katmanı",
@@ -624,6 +686,7 @@
       "errorRetrieveColumns": "Sütun adları alınamadı.",
       "url": "Sınırlayıcılı metin URL'si",
       "file": "Sınırlayıcılı metin dosyası",
+      "fileFilter": "CSV / TSV / TXT / Excel",
       "urlPlaceholder": "https://example.com/data.csv",
       "retrieving": "Alınıyor...",
       "retrieveColumns": "Sütunları getir",
@@ -892,7 +955,16 @@
       "cellSize": "Hücre boyutu",
       "lineWidth": "Çizgi kalınlığı",
       "extrusion": "3B yükseltme",
-      "modelUrlPlaceholder": "https://example.com/model.glb"
+      "modelUrlPlaceholder": "https://example.com/model.glb",
+      "chooseModelFile": "Yerel model seç",
+      "sampleDataset": "Örnek veri kümesi",
+      "sampleCustom": "Özel model",
+      "sampleAirplane": "Uçak — San Francisco",
+      "sampleShanghai": "Şanghay — şehir merkezi",
+      "modelFileHint": "Bir GLB veya kendi içinde bütün bir glTF dosyası seçin. Yerel modeller kaydedilen projelere gömülür ve proje boyutunu artırır.",
+      "modelExternalResources": "Bu model ayrı dosyalara başvuruyor. Dokuları ve arabellekleri gömülü bir GLB olarak dışa aktarıp tekrar deneyin.",
+      "modelTooLarge": "Bu model, bir projeye gömme için {{limit}} MB sınırından büyük. Bunun yerine bir sunucuda barındırıp URL ile ekleyin.",
+      "modelFileError": "Bu model okunamadı. Geçerli bir glTF 2.0 veya GLB dosyası seçin."
     },
     "nonGeographicCoordinates": "{{names}} içindeki koordinatlar boylam/enlem değil, bu yüzden haritaya hiçbir şey çizilmeyecek. CRS bilgisi yanlış — verileri yeniden projelendirin (veya .prj dosyasını düzeltin) ve tekrar yükleyin."
   },
@@ -1334,6 +1406,12 @@
     "errorFallback": "Proje paylaşılamadı.",
     "usernameRequired": "Paylaşmadan önce {{shareHost}} hesabınızda bir kullanıcı adı belirleyin. Bir tane seçmek için hesap ayarlarınızı açın, ardından tekrar deneyin.",
     "openAccountSettings": "Hesap ayarlarını aç",
+    "shareAnyway": "Yine de paylaş",
+    "localWarningTitle_one": "{{count}} katman paylaşılan haritada eksik olacak",
+    "localWarningTitle_other": "{{count}} katman paylaşılan haritada eksik olacak",
+    "localWarningBody": "{{shareHost}} yalnızca proje dosyasını saklar, bilgisayarınızdaki dosyaları asla saklamaz. Alıcılar projeyi diskinizi okuyamayan bir tarayıcıda açar; bu nedenle bu katmanlar sizin dışınızdaki herkes için boş olur.",
+    "localWarningAdvice": "Bunları dahil etmek için rasterleri Cloud Optimized GeoTIFF'e, vektörleri PMTiles veya GeoParquet'e dönüştürün, dosyaları GitHub veya Hugging Face gibi herkese açık bir HTTPS sunucusunda barındırın, URL ile haritaya ekleyin ve yeniden paylaşın. Küçük yerel vektör katmanları projeye otomatik olarak gömülür.",
+    "localWarningLearnMore": "Daha fazla bilgi",
     "readinessChecking": "Alıcıların verilerinizi yükleyip yükleyemeyeceği denetleniyor…",
     "readinessUnavailable": "Veri kaynağı denetimi çalıştırılamadı.",
     "readinessAllReachable_one": "{{count}} veri kaynağı alıcılar için erişilebilir görünüyor.",
@@ -1414,7 +1492,7 @@
   },
   "printLayout": {
     "title": "Yazdırma Düzeni",
-    "description": "Başlık, lejant, ölçek çubuğu ve kuzey oku ile yazdırmaya hazır bir harita oluşturun, ardından PNG veya PDF olarak dışa aktarın.",
+    "description": "Başlık, lejant, ölçek çubuğu ve kuzey oku ile yazdırmaya hazır bir harita oluşturun, ardından PNG, PDF veya SVG olarak dışa aktarın.",
     "preview": "Önizleme",
     "resizeControls": "Denetimler panelini yeniden boyutlandır",
     "resizeDialog": "İletişim kutusunu yeniden boyutlandır",
@@ -1422,6 +1500,7 @@
     "copyToClipboard": "Panoya Kopyala",
     "copied": "Kopyalandı",
     "exportPng": "PNG Dışa Aktar",
+    "exportSvg": "SVG Dışa Aktar",
     "exportPdf": "PDF Dışa Aktar",
     "titleLabel": "Başlık",
     "titlePlaceholder": "Harita başlığı",
@@ -1848,7 +1927,22 @@
     "show3d": "{{number}} numaralı haritayı 3B küre olarak göster",
     "show2d": "{{number}} numaralı haritayı 2B harita olarak göster",
     "only2d": "Yalnızca 2B",
+    "only3d": "Yalnızca 3B",
     "cesiumTokenHint": "Arazi ve Ion görüntüleri için Ayarlar'dan bir Cesium Ion belirteci ekleyin"
+  },
+  "renderer": {
+    "basemap": "Altlık harita",
+    "imagery": "Görüntü",
+    "projectBasemap": "Proje altlık haritası",
+    "layerUnsupported": "3D küre tarafından çizilmiyor",
+    "layerCesiumOnly": "Yalnızca 3B küre tarafından çiziliyor",
+    "resetView": "Görünümü Sıfırla",
+    "scene3D": "3B küre",
+    "scene2D": "2B harita",
+    "sceneColumbus": "Columbus görünümü",
+    "fullscreenEnter": "Tam ekran",
+    "fullscreenExit": "Tam ekrandan çık",
+    "fullscreenUnavailable": "Tam ekran kullanılamıyor"
   },
   "mapContextMenu": {
     "copyCoordinatesHint": "Koordinatları panoya kopyala",
@@ -2437,6 +2531,7 @@
       "mbtiles": "MBTiles Katmanı",
       "xyz": "XYZ Katmanı",
       "wms": "WMS Katmanı",
+      "csw": "CSW Kataloğu",
       "wfs": "WFS Katmanı",
       "wmts": "WMTS Katmanı",
       "ogcFeatures": "OGC API - Features",
@@ -2445,6 +2540,8 @@
       "georss": "GeoRSS Katmanı",
       "video": "Video Katmanı",
       "deckglViz": "Deck.gl Katmanı",
+      "cesiumIon": "Cesium Ion Varlığı",
+      "czml": "CZML Dinamik 3B Sahne",
       "gltfModel": "3D Model (glTF)",
       "postgres": "PostgreSQL Katmanı",
       "iceberg": "Apache Iceberg Katmanı"
@@ -2700,6 +2797,9 @@
       "splitViewGrid2x3": "2 × 3 ızgara",
       "splitViewGrid3x3": "3 × 3 ızgara",
       "splitViewSync": "Görünümleri eşzamanla",
+      "renderingEngine": "Çizim motoru",
+      "rendererMapLibre": "MapLibre",
+      "rendererCesium": "Cesium",
       "viewInGoogleMaps": "Google Haritalar'da görüntüle",
       "viewInGoogleEarth": "Google Earth'te görüntüle",
       "zoomIn": "Yakınlaştır",
@@ -2852,6 +2952,7 @@
       "saveProjectAsTitle": "Projeyi farklı kaydet",
       "saveProjectAsDesc": "Bir dosya adı girin. Kaydet'e tıkladığınızda proje tarayıcınızın indirilenler klasörüne indirilir.",
       "embedVectorTitle": "Yerel vektör verisi gömülsün mü?",
+      "embedEditedGeometryDesc": "Bu proje düzenlenmiş geometriler içeriyor. Bunları korumak için vektör verilerini gömün (yaklaşık {{size}}). Gömülmezse referans verilen katmanlar özgün geometrileriyle yeniden açılır ve yerel veriler kullanılamayabilir.",
       "embedVectorDesc": "Bu projede bilgisayarınızdan yüklenmiş {{count}} yerel vektör katmanı var. Tarayıcı, proje yeniden açıldığında bunları yeniden okuyamaz; bu nedenle geri yüklenebilmeleri için verilerinin proje dosyasına gömülmesi gerekir. Gömme, dosyaya yaklaşık {{size}} ekler.",
       "embedVectorDescDesktop": "Bu projede bilgisayarınızdan yüklenmiş {{count}} yerel vektör katmanı var. Projeyi kendi kendine yeterli hale getirmek için verilerini gömün (yaklaşık {{size}} ekler) veya proje yeniden açıldığında diskten yeniden yüklenen dosya referansları kaydedin. Referanslar dosyayı küçük tutar ancak kaynak dosya daha sonra taşınır veya silinirse bozulur.",
       "embedVectorDescMas": "Bu projede bilgisayarınızdan yüklenmiş {{count}} yerel vektör katmanı var. Mac App Store korumalı alanı, GeoLibre kapatıldıktan sonra bu dosyalara erişimi koruyamaz; bu nedenle geri yüklenebilmeleri için verileri proje dosyasına gömülmelidir. Gömme, dosyaya yaklaşık {{size}} ekler.",
@@ -2902,6 +3003,7 @@
     },
     "plugin": {
       "maplibre-gl-annotations": "Ek açıklamalar",
+      "maplibre-gl-dimensions": "Ölçülendirme",
       "maplibre-gl-streetview": "Sokak Görünümü",
       "maplibre-gl-time-slider": "Zaman Kaydırıcısı",
       "geolibre-timelapse": "Timelapse",
@@ -3094,9 +3196,14 @@
     "openBuilder": "İfade oluşturucu...",
     "invalidExpression": "Geçerli bir mantıksal ifade girin.",
     "select": "Öğeleri seç",
+    "applyLayerFilter": "Katmanı filtrele",
+    "clearLayerFilter": "Katman filtresini temizle",
+    "layerFilteredHint": "Kalıcı bir filtre bu katmanın öğelerinin bir kısmını gizliyor.",
+    "layerFilteredBothHint": "Kalıcı bir filtre ve bir hızlı filtre bu katmanın öğelerinin bir kısmını gizliyor.",
     "noLayers": "Seçim yapmak için öğeleri olan bir vektör katmanı ekleyin.",
     "needTwoLayers": "Konuma göre seçim, öğeleri olan iki vektör katmanı gerektirir.",
     "summary": "{{total}} öğeden {{selected}} tanesi seçildi ({{matched}} eşleşti).",
+    "filterSummary": "Katman filtresi uygulandı: {{total}} öğeden {{matched}} tanesi eşleşiyor.",
     "evaluationErrors": "{{count}} öğe değerlendirilemedi ve eşleştirilmedi.",
     "unevaluableDisjoint": "{{count}} öğe, geometrileri değerlendirilemediği için hariç tutuldu.",
     "tooManyPairs": "Bu karşılaştırma {{pairs}} öğe-çifti testi gerektiriyor (sınır {{limit}}). Bunun yerine İşleme → GeoLibre → Vektör → Konuma göre seç aracını Sidecar motoruyla kullanın.",
@@ -3509,6 +3616,7 @@
     "search": "Ara",
     "searchCurrentView": "Geçerli harita alanında ara",
     "enterKeyword": "Başlamak için bir anahtar kelime girin.",
+    "viewUnavailable": "Geçerli harita alanı kullanılamıyor; arama yapmak için harita alanı filtresini kapatın.",
     "loadMore": "Daha fazla yükle",
     "searching": "Aranıyor…",
     "loadingMore": "Daha fazla veri kümesi yükleniyor…",
@@ -3551,10 +3659,14 @@
     "title": "STAC Katalogları",
     "footprintLayerName": "STAC arama sınırları",
     "catalogSearch": "STAC Index'te herkese açık katalog bul",
+    "portolanCatalogSearch": "Portolan Registry'te herkese açık katalog bul",
     "catalogSearchPlaceholder": "Katalog adlarında ara…",
     "indexLoading": "STAC Index yükleniyor…",
+    "portolanIndexLoading": "Portolan Registry yükleniyor…",
     "indexUnavailable": "STAC Index kullanılamıyor: bir URL girin",
+    "portolanIndexUnavailable": "Portolan Registry kullanılamıyor: bir URL girin",
     "indexLoadFailed": "STAC Index yüklenemedi",
+    "portolanIndexLoadFailed": "Portolan Registry yüklenemedi",
     "urlLabel": "STAC katalog veya API URL'si",
     "connect": "Bağlan",
     "connecting": "STAC'a bağlanılıyor…",
@@ -3907,6 +4019,28 @@
     "saveElement": "Ögeyi Kaydet",
     "atPoint": "Noktada",
     "pinnedToExtent": "Kapsama Sabitlendi"
+  },
+  "dimensions": {
+    "toolbar": "Ölçülendirme araçları",
+    "layerName": "Ölçüler",
+    "tools": {
+      "linear": "Doğrusal ölçü",
+      "angular": "Açısal ölçü"
+    },
+    "unit": "Birim",
+    "snap": "Köşe noktalarına yapış",
+    "color": "Ölçü rengi",
+    "width": "Çizgi kalınlığı",
+    "widthOptions": {
+      "thin": "İnce",
+      "medium": "Orta",
+      "thick": "Kalın"
+    },
+    "deleteLast": "Son ölçüyü sil",
+    "clearAll": "Tüm ölçüleri temizle",
+    "newLayer": "Yeni ölçülendirme katmanı",
+    "confirmClearAll_one": "Bu ölçü silinsin mi? Bu işlem geri alınamaz.",
+    "confirmClearAll_other": "Bu katmandaki {{count}} ölçünün tamamı silinsin mi? Bu işlem geri alınamaz."
   },
   "pythonConsole": {
     "title": "Python Konsolu",
@@ -4509,6 +4643,15 @@
                 "kilometers": "Kilometre",
                 "meters": "Metre",
                 "miles": "Mil"
+              }
+            },
+            "side": {
+              "label": "Tampon yönü",
+              "description": "Dış her nesneyi büyütür, İç küçültür ve Her iki taraf yalnızca sınırın her iki yanında belirtilen mesafe içindeki bölgeyi tutar. İç için poligon katmanı gerekir — noktanın veya çizginin iç alanı yoktur.",
+              "options": {
+                "outside": "Dış (büyüt)",
+                "inside": "İç (küçült)",
+                "both": "Her iki taraf"
               }
             }
           }
@@ -6325,6 +6468,7 @@
     "description": "Katmanlar ve projeler arasında yeniden kullanılabilir stilleri, sembolleri, etiket ön ayarlarını ve renk geçişlerini kaydedin, göz atın ve uygulayın.",
     "searchPlaceholder": "Stilleri ve etiketleri ara…",
     "presetsSection": "Yerleşik ön ayarlar",
+    "presetActions": "Ön ayar eylemleri",
     "librarySection": "Kitaplığım",
     "projectSection": "Bu proje",
     "empty": "Eşleşen kayıtlı stil yok. Başlamak için bir katmanın stilini kaydedin veya bir kitaplık içe aktarın.",
@@ -6425,7 +6569,6 @@
       "remove": "Birleştirmeyi kaldır",
       "enabledTitle": "Bu birleştirmeyi uygula",
       "missingLayer": "Birleştirme katmanı bulunamadı",
-      "noCandidates": "Birleştirilecek öznitelik tablosu olan başka katman yok",
       "statsMatched": "{{total}} öğeden {{matched}} tanesi eşleşti",
       "statsUnmatchedJoin_one": "Eşleşmeyen {{count}} tablo satırı",
       "statsUnmatchedJoin_other": "Eşleşmeyen {{count}} tablo satırı"
@@ -6482,6 +6625,11 @@
       "offsetY": "Kaydırma Y (em)",
       "rotation": "Döndürme (°)",
       "maxWidth": "Sarma genişliği (em)",
+      "numberFormat": "Sayıları biçimlendir",
+      "numberFormatHint": "Sayısal değerler binlik ve ondalık ayırıcılarla etiketlenir, ör. {{sample}}. Metin değerleri değişmez ve etiket ifadesi kendi çıktısını biçimlendirir.",
+      "numberDecimals": "Ondalık basamak",
+      "numberLocale": "Ayırıcılar",
+      "numberLocaleApp": "Uygulama diliyle aynı",
       "transform": "Harf durumu",
       "transformNone": "Girildiği gibi",
       "transformUppercase": "BÜYÜK HARF",
@@ -6635,6 +6783,7 @@
       "categories": "Kategoriler",
       "classColor": "Sınıf {{index}} rengi",
       "classColorPick": "Sınıf {{index}} rengini ekrandan seç",
+      "classOpacity": "Sınıf {{index}} opaklığı",
       "classValue": "Sınıf {{index}} değeri",
       "colorExpression": "Renk ifadesi",
       "applyStyleType": "Stil türünü uygula",
@@ -6644,6 +6793,8 @@
       "pointRendererClustered": "Kümelenmiş",
       "heatmapRadius": "Isı haritası yarıçapı",
       "heatmapIntensity": "Isı haritası yoğunluğu",
+      "heatmapWeightField": "Ağırlık alanı",
+      "heatmapEqualWeight": "Yok (eşit ağırlık)",
       "clusterRadius": "Küme yarıçapı (px)",
       "clusterMaxZoom": "Maksimum küme yakınlaştırması",
       "strokeWidthUnit": "Kenarlık kalınlığı birimi",
@@ -6680,10 +6831,12 @@
     "mode2d": "2D",
     "mode3dExtrusion": "3B yükseltme",
     "noControls": "Bu katman türü için stil denetimleri henüz kullanılamıyor.",
+    "tilesetSymbology": "Renkler ve filtreler bu döşeme kümesine 3B küre üzerinde uygulanır.",
     "selectedLayerType": "Seçili katman türü: {{type}}",
     "footerDeck": "Değişiklikler, DuckDB deck.gl katman stiline anlık olarak uygulanır.",
     "footerMaplibre": "Değişiklikler, MapLibre paint özelliklerine anlık olarak uygulanır.",
     "pluginPaintedFooter": "Bu katman kendi eklentisi tarafından çizilir ve eklenti kendi stil denetimlerini sağlar.",
+    "serviceStyledFooter": "Bu katman servisinin kendi stilini korur; opaklık, sıra, yakınlaştırma aralığı ve filtreler yine de uygulanır.",
     "extrusion": {
       "color": "Yükseltme rengi",
       "opacity": "Yükseltme opaklığı",
@@ -6780,6 +6933,7 @@
         "upcase": "Bir dizeyi büyük harfe dönüştürür.",
         "downcase": "Bir dizeyi küçük harfe dönüştürür.",
         "slice": "Bir dizenin veya dizinin bir bölümünü döndürür.",
+        "numberFormat": "Bir sayıyı, seçilen yerel ayarın binlik ve ondalık ayırıcılarıyla metne dönüştürür; isteğe bağlı olarak sabit ondalık basamak kullanır.",
         "toNumber": "Bir değeri sayıya dönüştürür.",
         "toString": "Bir değeri dizeye dönüştürür.",
         "toBoolean": "Bir değeri doğru veya yanlışa dönüştürür.",
@@ -6939,6 +7093,7 @@
     "allFieldsUsed": "Her alanın zaten bir filtresi var",
     "removeAll": "Tümünü kaldır",
     "clearAll": "Filtreleri temizle",
+    "clearAllWithExpression": "Filtreleri ve kayıtlı ifadeyi temizle",
     "clearOne": "Bu filtreyi temizle",
     "clearOneNamed": "{{field}} alanındaki filtreyi temizle",
     "remove": "Filtreyi kaldır",
@@ -7072,6 +7227,8 @@
     "saveEditsSuccess": "{{count}} öğe kaynak dosyaya kaydedildi.",
     "saveEditsNoFeatures": "Bu katmanda kaydedilecek öğe yok.",
     "saveEditsError": "Düzenlemeler kaynak dosyaya kaydedilemedi.",
+    "saveEditsToArcgis": "Düzenlemeleri ArcGIS servisine kaydet",
+    "saveEditsArcgisSuccess": "ArcGIS hizmetine kaydedildi: {{inserted}} eklendi, {{updated}} güncellendi, {{deleted}} silindi.",
     "saveEditsToPostgis": "Düzenlemeleri PostGIS tablosuna kaydet",
     "saveEditsPostgisSuccess": "{{table}} tablosuna kaydedildi: {{inserted}} eklendi, {{updated}} güncellendi, {{deleted}} silindi.",
     "saveEditsPostgisSkippedFields": "Eşleşen tablo sütunu olmayan alanlar kaydedilmedi: {{fields}}.",
@@ -7229,6 +7386,18 @@
     "stretchLinear": "Doğrusal",
     "stretchLog": "Logaritmik",
     "stretchSqrt": "Karekök",
+    "viewportStretch": "Görünüm germesi",
+    "viewportMinMax": "Görünüm min / maks",
+    "viewportPercentile": "Görünüm 5–95 yüzdelik",
+    "viewportStddev": "Görünüm ortalaması ± 2 standart sapma",
+    "viewportApply": "Görünüme uygula",
+    "viewportStretching": "Görünüm okunuyor…",
+    "viewportStretchApplied": "Görünüm germesi uygulandı",
+    "viewportAuto": "Harita hareket ettiğinde otomatik güncelle",
+    "viewportStretchNoView": "Harita görünümü kullanılamıyor.",
+    "viewportStretchNoValues": "Görünümde raster değeri bulunamadı.",
+    "viewportStretchNoRange": "Görünümdeki değerler bir aralık tanımlamıyor.",
+    "viewportStretchMoved": "Okuma bitmeden harita hareket etti. Yeniden uygulayın.",
     "index": "İndeks",
     "classifyToggle": "Ayrık sınıflara ayır",
     "method": "Yöntem",
@@ -7730,5 +7899,66 @@
       "downloadsStarted": "{{started}} indirme başlatıldı. {{failed}} başarısız oldu.",
       "downloadCancelled": "İndirme iptal edildi veya başarısız oldu."
     }
+  },
+  "usgsNldi": {
+    "panelTitle": "USGS NLDI",
+    "title": "USGS NLDI ağ araçları",
+    "hint": "Önce bir akış hattı yönü seçip haritaya tıklayın. Ardından bir gezinme yönü seçin, mevcut katalogları yüklemek için vurgulanan düğmeye basın, akış gözlem istasyonları veya kuyular gibi bir katalog seçin ve o kataloğu çizmek için düğmeye tekrar basın.",
+    "directionComplete": "Tam akış hattı — NHD kolunun tamamını döndürür",
+    "directionUp": "Yalnızca memba — noktanın yukarısındaki kolu döndürür",
+    "directionDown": "Yalnızca mansap — noktanın aşağısındaki kolu döndürür",
+    "basinButton": "Hidrokonumdan havza",
+    "navigationPlaceholder": "Yön seçin — çizimden önce gereklidir",
+    "navigationUpstreamMain": "Memba ana kol — birincil kanalı izler",
+    "navigationUpstreamTributaries": "Memba yan kolları — besleyen kolları bulur",
+    "navigationDownstreamMain": "Mansap ana kol — birincil kanalı izler",
+    "navigationDownstreamDiversions": "Mansap saptırmaları — ayrılan akış yollarını izler",
+    "sourcePlaceholder": "Önce «Kaynakları yükle ve çiz»e basın",
+    "distancePlaceholder": "Mesafe (km)",
+    "navigationButton": "1. Kaynakları yükle ve gezinmeyi çiz",
+    "navigationButtonAgain": "Başka bir gezinme katmanı çiz",
+    "exportButton": "Çizilen sonuçları GeoJSON olarak dışa aktar",
+    "addLayersButton": "Çizilen sonuçları GeoLibre Katmanlarına ekle",
+    "clearButton": "NLDI sonucunu temizle",
+    "noComid": "Bu nokta için COMID döndürülmedi.",
+    "requestingBasin": "Memba havzası isteniyor…",
+    "basinRendered": "COMID {{comid}} için memba havzası çizildi.",
+    "basinFailed": "Havza isteği başarısız oldu.",
+    "selectNavigation": "Bir noktayı izledikten sonra bir gezinme yöntemi seçin.",
+    "invalidDistance": "Mesafe 1 ile 9999 km arasında olmalıdır.",
+    "discoveringSources": "NLDI gezinme kaynakları keşfediliyor…",
+    "navigationUnavailable": "Bu gezinme yöntemi bu COMID için kullanılamıyor.",
+    "noPlottableSource": "NLDI çizilebilir bir gezinme kaynağı döndürmedi.",
+    "navigationEmpty": "{{source}} bu gezinme için haritalanabilir öğe döndürmedi.",
+    "navigationAdded": "COMID {{comid}} için {{navigation}} üzerinden {{source}} eklendi ({{km}} km). Mevcut gezinme katmanları haritada kalır.",
+    "navigationFailed": "Gezinme isteği başarısız oldu.",
+    "tracing": "En yakın NHD akış hattına izleniyor…",
+    "flowline": "Akış hattı çizildi.",
+    "flowlineComid": "Akış hattı çizildi; COMID {{comid}} havza iş akışları için hazır.",
+    "flowlineFallback": "Akış hattı NLDI hidrokonum yedeği kullanılarak çizildi.",
+    "flowlineFallbackComid": "Akış hattı NLDI hidrokonum yedeği kullanılarak çizildi; COMID {{comid}} havza iş akışları için hazır.",
+    "requestFailed": "NLDI isteği başarısız oldu.",
+    "nothingToAdd": "Eklenecek çizilmiş NLDI öğesi yok.",
+    "layersAdded_one": "{{count}} NLDI katmanı tek bir «USGS NLDI sonuçları» grubuna eklendi.",
+    "layersAdded_other": "{{count}} NLDI katmanı tek bir «USGS NLDI sonuçları» grubuna eklendi.",
+    "layerGroupName": "USGS NLDI sonuçları",
+    "layerFlowline": "NLDI akış hattı",
+    "layerRaindrop": "NLDI yağmur damlası izi",
+    "layerSelectedPoint": "NLDI seçili nokta",
+    "layerBasin": "NLDI memba havzası",
+    "layerNavigation": "NLDI gezinmesi {{index}}",
+    "resultCleared": "NLDI sonucu temizlendi.",
+    "directionalUnavailable": "USGS süreci çevrimdışıyken yönlü akış izleme kullanılamaz. «Tam akış hattı»nı seçin veya daha sonra tekrar deneyin.",
+    "noFlowlineNearby": "NLDI bu noktanın yakınında bir akış hattı bulamadı.",
+    "httpError": "USGS NLDI HTTP {{status}} döndürdü",
+    "httpErrorDetail": "USGS NLDI HTTP {{status}} döndürdü: {{detail}}",
+    "noAttributes": "NLDI tarafından öznitelik döndürülmedi.",
+    "catalogCaGages": "Kaliforniya akış gözlem istasyonları (ca_gages)",
+    "catalogNwisSite": "NWIS yüzey suyu istasyonları (akış gözlem)",
+    "catalogNwisGw": "NWIS yeraltı suyu kuyuları",
+    "catalogGfv11Pois": "USGS Geospatial Fabric noktaları",
+    "catalogHuc12pp": "HUC12 çıkış noktaları",
+    "catalogNmwdiSt": "New Mexico su istasyonları",
+    "catalogFlowlines": "NHDPlus akış hatları"
   }
 }

@@ -1,3 +1,4 @@
+import { normalizeCesiumBasemap } from "./cesium-imagery";
 import { v4 as uuidv4 } from "uuid";
 import {
   DEFAULT_BASEMAP,
@@ -6,6 +7,7 @@ import {
   DEFAULT_PROJECT_PREFERENCES,
   DEFAULT_DASHBOARD_COLUMNS,
   DEFAULT_MAP_GRID_LAYOUT,
+  DEFAULT_PRIMARY_RENDERER,
   DEFAULT_STORY_MAP,
   MAX_DASHBOARD_COLUMNS,
   MAX_MAP_GRID_DIM,
@@ -24,6 +26,7 @@ import {
   type LegendCustomItem,
   type LegendItemOverride,
   type MapGridLayout,
+  type MapRendererKind,
   type MapScaleUnit,
   type MapViewState,
   MAX_PROCESSING_HISTORY,
@@ -57,6 +60,7 @@ import {
 import { DEFAULT_LAYER_GROUP_OPACITY, normalizeGroupContiguity } from "./layer-groups";
 import { normalizeStyleLibraryEntries } from "./style-library";
 import { normalizeLayerCapabilities } from "./capabilities";
+import { validateMapExpression } from "./expressions";
 import {
   createDefaultPrintLayout,
   isDefaultPrintLayout,
@@ -395,6 +399,11 @@ export function parseProject(json: string): GeoLibreProject {
             ? { primaryMapLabel: normalizeString(data.primaryMapLabel) }
             : {}),
         }
+      : {}),
+    // The primary renderer is independent of the grid, so it sits outside the
+    // `mapLayout` block above: a 1x1 Cesium project has no grid to persist.
+    ...(normalizePrimaryRenderer(data.primaryRenderer)
+      ? { primaryRenderer: "cesium" as const }
       : {}),
     ...(styleLibrary.length > 0 ? { styleLibrary } : {}),
     ...(parsedComments.length > 0 ? { comments: parsedComments } : {}),
@@ -995,6 +1004,19 @@ export function normalizeMapLayout(value: unknown): MapGridLayout | null {
 }
 
 /**
+ * Coerce an untrusted `primaryRenderer` into a known engine id (issue #2217).
+ *
+ * Returns null for the default 2D map — absent, unknown, or an explicit
+ * `"maplibre"` — because the field is only written when it is not the default,
+ * so a MapLibre project serializes byte-identically to before this existed.
+ * The return type is narrowed to `"cesium" | null` rather than the full
+ * {@link MapRendererKind} for that reason: `"maplibre"` is never a result.
+ */
+export function normalizePrimaryRenderer(value: unknown): "cesium" | null {
+  return value === "cesium" ? "cesium" : null;
+}
+
+/**
  * Coerce an untrusted `secondaryMapViews` array into valid
  * {@link SecondaryMapView} records, dropping entries without a usable id and
  * de-duplicating by id. Returns null when none are valid.
@@ -1277,6 +1299,9 @@ function normalizeProjectPreferences(preferences: unknown): ProjectPreferences {
         (map as Partial<ProjectPreferences["map"]>).showPointerElevation,
         DEFAULT_PROJECT_PREFERENCES.map.showPointerElevation,
       ),
+      cesiumBasemap: normalizeCesiumBasemap(
+        (map as Partial<ProjectPreferences["map"]>).cesiumBasemap,
+      ),
       // Older projects omit this field and continue to open with terrain off.
       terrainEnabled: normalizeBoolean(
         (map as Partial<ProjectPreferences["map"]>).terrainEnabled,
@@ -1497,8 +1522,14 @@ function normalizeLayer(layer: GeoLibreLayer): GeoLibreLayer {
   // that normalizes to nothing (`{}`, an array, a string, an object with no
   // boolean flag) must not survive into the normalized layer and be written
   // back out on the next save.
-  const { capabilities: rawCapabilities, ...rest } = layer;
+  const { capabilities: rawCapabilities, filterExpression: rawFilterExpression, ...rest } = layer;
   const capabilities = normalizeLayerCapabilities(rawCapabilities);
+  const filterExpression =
+    Array.isArray(rawFilterExpression) &&
+    rawFilterExpression.length > 0 &&
+    validateMapExpression(JSON.stringify(rawFilterExpression), { expectedType: "boolean" }).ok
+      ? rawFilterExpression
+      : undefined;
   return {
     ...rest,
     style: { ...DEFAULT_LAYER_STYLE, ...layer.style },
@@ -1507,6 +1538,7 @@ function normalizeLayer(layer: GeoLibreLayer): GeoLibreLayer {
     metadata: layer.metadata ?? {},
     source: layer.source ?? {},
     ...(capabilities ? { capabilities } : {}),
+    ...(filterExpression ? { filterExpression } : {}),
   };
 }
 
@@ -1626,6 +1658,7 @@ export function projectFromStore(state: {
   mapLayout?: MapGridLayout;
   secondaryMapViews?: SecondaryMapView[];
   primaryMapLabel?: string;
+  primaryRenderer?: MapRendererKind;
   /** Project-scoped Style Manager entries (the store's `projectStyleLibrary`). */
   styleLibrary?: StyleLibraryEntry[] | null;
   comments?: ProjectComment[] | null;
@@ -1704,6 +1737,12 @@ export function projectFromStore(state: {
             : {}),
         }
       : {}),
+    // Written only for the non-default renderer, and independently of the grid:
+    // a single-pane Cesium project persists `primaryRenderer` with no
+    // `mapLayout`, and a MapLibre project writes neither.
+    ...(normalizePrimaryRenderer(state.primaryRenderer)
+      ? { primaryRenderer: "cesium" as const }
+      : {}),
     ...(styleLibrary.length > 0 ? { styleLibrary } : {}),
     ...(comments.length > 0 ? { comments } : {}),
     metadata: state.metadata,
@@ -1726,6 +1765,13 @@ function hasRestorableSourceUrl(layer: GeoLibreLayer): boolean {
 }
 
 function prepareLayerForSave(layer: GeoLibreLayer): GeoLibreLayer {
+  // This flag describes unsaved changes to the live source, not persisted
+  // project state. A reference-only save reloads the original geometries;
+  // carrying the flag into that project would warn about nonexistent edits.
+  if (layer.metadata.geometryEdited !== undefined) {
+    const { geometryEdited: _geometryEdited, ...metadata } = layer.metadata;
+    layer = { ...layer, metadata };
+  }
   // The live time filter is derived from the Time Slider's current date, so it
   // is transient: strip it before saving so a reopened project never starts
   // with a stale time-window filter hiding most of a layer's features. The
@@ -1841,6 +1887,7 @@ export function applyProjectToStore(project: GeoLibreProject): {
   mapLayout: MapGridLayout;
   secondaryMapViews: SecondaryMapView[];
   primaryMapLabel: string;
+  primaryRenderer: MapRendererKind;
   projectStyleLibrary: StyleLibraryEntry[];
   comments: ProjectComment[];
   metadata: Record<string, unknown>;
@@ -1944,6 +1991,9 @@ export function applyProjectToStore(project: GeoLibreProject): {
     mapLayout,
     secondaryMapViews,
     primaryMapLabel: normalizeString(project.primaryMapLabel),
+    // An unknown or absent value resolves to the 2D map, so a project written
+    // before #2217 (and any hand-edited one) opens on MapLibre as before.
+    primaryRenderer: normalizePrimaryRenderer(project.primaryRenderer) ?? DEFAULT_PRIMARY_RENDERER,
     projectStyleLibrary: normalizeStyleLibraryEntries(project.styleLibrary),
     comments: scrubbedComments,
     metadata: project.metadata,

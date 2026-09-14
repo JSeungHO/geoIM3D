@@ -21,6 +21,7 @@ function layer(patch: Partial<ExportableLayer> & { style?: LayerStyle } = {}): E
     visible: patch.visible ?? true,
     style: patch.style ?? style(),
     ...(patch.quickFilters ? { quickFilters: patch.quickFilters } : {}),
+    ...(patch.filterExpression ? { filterExpression: patch.filterExpression } : {}),
   };
 }
 
@@ -101,6 +102,24 @@ describe("buildMapboxStyle base document", () => {
     assert.equal(circle?.type, "circle");
     const paint = (circle as { paint: Record<string, unknown> }).paint;
     assert.equal(paint["circle-color"], "#ff0000");
+  });
+});
+
+describe("persistent expression filters", () => {
+  it("writes the layer filter into every exported render layer", () => {
+    const filterExpression = [">=", ["get", "value"], 10];
+    const { style: doc } = buildMapboxStyle(layer({ filterExpression }), mixedGeom());
+
+    assert.deepEqual(layerById(doc, "my-layer-fill")?.filter, [
+      "all",
+      ["match", ["geometry-type"], ["Polygon", "MultiPolygon"], true, false],
+      filterExpression,
+    ]);
+    assert.deepEqual(layerById(doc, "my-layer-circle")?.filter, [
+      "all",
+      ["match", ["geometry-type"], ["Point", "MultiPoint"], true, false],
+      filterExpression,
+    ]);
   });
 });
 
@@ -284,6 +303,36 @@ describe("geometry-gated warnings", () => {
     assert.ok(!mixed.warnings.some((w) => w.toLowerCase().includes("duplicate-label")));
     const pointsOnly = buildMapboxStyle(layer({ style: style({ labels }) }), points());
     assert.ok(pointsOnly.warnings.some((w) => w.toLowerCase().includes("duplicate-label")));
+  });
+
+  it("exports the number-formatted text-field for a numeric label field", () => {
+    // The export shares labelFieldTextField with the live map so the two agree;
+    // this pins the wiring, which the shared builder's own unit tests cannot.
+    const labels = {
+      ...DEFAULT_LAYER_STYLE.labels,
+      enabled: true,
+      field: "pop",
+      numberFormatEnabled: true,
+      numberDecimals: 2,
+      numberLocale: "en-US",
+    };
+    const { style: exported } = buildMapboxStyle(layer({ style: style({ labels }) }), points());
+    const symbol = exported.layers.find((l) => l.type === "symbol");
+    assert.ok(symbol, "expected a symbol layer");
+    const textField = JSON.stringify((symbol.layout as Record<string, unknown>)["text-field"]);
+    assert.ok(textField.includes("number-format"), textField);
+    assert.ok(textField.includes("en-US"), textField);
+    assert.ok(textField.includes("min-fraction-digits"), textField);
+  });
+
+  it("exports a plain text-field when number formatting is off", () => {
+    const labels = { ...DEFAULT_LAYER_STYLE.labels, enabled: true, field: "pop" };
+    const { style: exported } = buildMapboxStyle(layer({ style: style({ labels }) }), points());
+    const symbol = exported.layers.find((l) => l.type === "symbol");
+    assert.deepEqual((symbol?.layout as Record<string, unknown>)["text-field"], [
+      "to-string",
+      ["coalesce", ["get", "pop"], ""],
+    ]);
   });
 
   it("does not warn about dedupe when labeling by expression (no field)", () => {

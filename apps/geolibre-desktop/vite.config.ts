@@ -487,6 +487,7 @@ function gdal3CdnPaths(): { wasm: string; data: string } | null {
 const GDAL3_CDN_PATHS = gdal3CdnPaths();
 const WMS_PROXY_PATH = "/__geolibre_wms_proxy";
 const WFS_PROXY_PATH = "/__geolibre_wfs_proxy";
+const CSW_PROXY_PATH = "/__geolibre_csw_proxy";
 const GPX_PROXY_PATH = "/__geolibre_gpx_proxy";
 const RASTER_PROXY_PATH = "/__geolibre_raster_proxy";
 // VWorld serves its JSON and WMS endpoints without CORS headers, and data.go.kr
@@ -638,6 +639,16 @@ function wmsProxyPlugin(): Plugin {
           await proxyBinaryRequestGuarded(req, res, WFS_PROXY_PATH);
         } catch (error) {
           const message = error instanceof Error ? error.message : "WFS proxy request failed";
+          res.statusCode = 502;
+          res.setHeader("content-type", "text/plain");
+          res.end(message);
+        }
+      });
+      server.middlewares.use(CSW_PROXY_PATH, async (req, res) => {
+        try {
+          await proxyBinaryRequestGuarded(req, res, CSW_PROXY_PATH);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "CSW proxy request failed";
           res.statusCode = 502;
           res.setHeader("content-type", "text/plain");
           res.end(message);
@@ -1157,6 +1168,18 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    // Bind the IPv4 loopback explicitly. Vite's default (`localhost`) resolves
+    // through the OS, which on a dual-stack Linux box binds `[::1]` only — so a
+    // reverse proxy dialing `127.0.0.1:5173` (e.g. `tailscale serve`, which
+    // targets IPv4 loopback by default) gets connection-refused and returns
+    // 502. Still loopback-only: this does not expose the dev server on the LAN.
+    host: "127.0.0.1",
+    // Vite rejects requests whose Host header it does not recognise. Reaching
+    // the dev server over Tailscale (`tailscale serve --bg 5173`) forwards the
+    // original `<machine>.<tailnet>.ts.net` Host, which would otherwise be
+    // answered with "Blocked request". `.ts.net` names are only resolvable
+    // inside the tailnet, so allowing them does not widen public exposure.
+    allowedHosts: [".ts.net"],
     watch: {
       // Never watch the Rust side. `tauri dev` runs this dev server as its
       // `beforeDevCommand` and then starts cargo in the same tree, so the
@@ -1200,6 +1223,14 @@ export default defineConfig({
       // pre-bundled via the deck.gl-geotiff static import.)
       "proj4",
       "geotiff-geokeys-to-proj4",
+      // cog-tiler-wasm's mask-aware LERC decoder (lerc-decoder.js) reaches
+      // these through dynamic import() the first time a LERC COG opens; they
+      // are geotiff's own codec packages, listed here for the same
+      // discover-and-reload reason as above. The raster loader supplies LERC's
+      // WASM URL explicitly, so its ESM decoder can also be pre-bundled.
+      "lerc",
+      "pako",
+      "zstddec",
       // Cesium (the 3D-globe view). Pre-bundle it up front so esbuild applies
       // CJS→ESM interop to its CommonJS transitive deps (e.g. mersenne-twister,
       // which has no ESM entry): without this, the dev server serves those raw
@@ -1223,6 +1254,12 @@ export default defineConfig({
       // leave `@cesium/engine` to be discovered on first open — the full-page
       // reload this list exists to prevent.
       "@cesium/engine",
+      // Cesium's toolbar widgets (the globe's home and scene-mode buttons),
+      // reached through a second lazy import in CesiumCanvas's mount effect.
+      // Listed for the same reason as the engine above: without it Vite
+      // discovers the package on first open of the globe and triggers a
+      // full-page reload to re-optimize.
+      "@cesium/widgets",
     ],
     // PGlite ships its own WASM + filesystem bundles and must not be pre-bundled
     // by esbuild, which mangles those asset references (per PGlite's Vite guide).

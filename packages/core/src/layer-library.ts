@@ -10,6 +10,7 @@
 // memory (drawn features, processing output) or only in a local file have no
 // re-fetchable source, so those embed their features behind a size cap.
 
+import { cesiumIonAssetId } from "./cesium-ion";
 import type { FeatureCollection } from "geojson";
 import {
   DEFAULT_LAYER_STYLE,
@@ -57,8 +58,9 @@ export const MAX_LAYER_LIBRARY_ENTRIES = 500;
  * Metadata keys dropped when capturing an entry. `resolvedUrl` is the dev-server
  * proxy rewrite of an XYZ template — a per-session artifact that must not be
  * baked into a saved source (the same reason `prepareLayerForSave` strips it).
+ * `geometryEdited` tracks changes to the live layer, not a library source.
  */
-const TRANSIENT_METADATA_KEYS = ["resolvedUrl"] as const;
+const TRANSIENT_METADATA_KEYS = ["resolvedUrl", "geometryEdited"] as const;
 
 function nonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim() !== "";
@@ -81,6 +83,9 @@ export function hasRestorableLayerSource(
   if (nonEmptyString(source.url)) return true;
   if (nonEmptyString(source.data)) return true;
   if (Array.isArray(source.tiles) && source.tiles.some(nonEmptyString)) return true;
+  // A Cesium Ion asset is re-fetched from its id alone (under the cesium-ion
+  // source kind, the same contract the globe loads it by).
+  if (cesiumIonAssetId(layer) !== null) return true;
   return nonEmptyString((layer.metadata ?? {}).originalUrl);
 }
 
