@@ -23,6 +23,13 @@ v3.0.0에서 겪은 것:
   얹을 때는 상위의 최신 아키텍처(예: I3S의 `entryTilesets()` 다중 타일셋
   순회)에 맞춰 이식하지, 옛 코드를 그대로 붙여넣지 않습니다** — 그대로
   붙이면 I3S 같은 상위의 새 하위 종류를 놓칩니다.
+  **다시 얹은 뒤에는 `geoim3d-*.ts` 모듈을 상위 파일이 직접 import하게
+  두지 말고, 상위가 이미 쓰는 DI 통로(`CesiumLayerSyncDeps`의
+  `onTilesetFields`처럼)에 옵션 필드를 추가해 그쪽으로 연결합니다.**
+  fork 모듈 import는 그 DI를 실제로 채워주는 호스트 쪽(`cesium-engine.ts`)
+  에만 남깁니다 — `cesium-layer-sync.ts` 자체는 상위 코드만 아는 상태로
+  유지되어, 다음 병합에서 그 파일의 diff가 "옵션 필드 몇 개 추가"로만
+  보입니다.
 - **URL 프로토콜 리졸버(`setCesiumTileUrlResolver`)가 상위 기능에 완전히
   흡수됨.** VWorld 같은 `vworld://` 커스텀 스킴을 globe에서 재작성해 주던
   우리 훅은, 상위가 새로 만든 `hasRegisteredProtocol` +
