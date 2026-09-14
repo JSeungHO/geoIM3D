@@ -33,6 +33,12 @@ import type { MapRenderSurface } from "./map-engine";
 import type { ExtentDrawingOptions, MapExtent } from "./map-engine";
 import { CesiumLayerSync } from "./cesium-layer-sync";
 import { getLayerBounds } from "./geojson-loader";
+import {
+  cesiumSplitDirectionFor,
+  getCesiumSwipeState,
+  subscribeCesiumSwipe,
+} from "./geoim3d-cesium-swipe";
+import { setTilesetLoadProgress } from "./geoim3d-tileset-loading";
 import type {
   BuiltInMapControl,
   IdentifiedFeature,
@@ -312,6 +318,10 @@ export class CesiumEngine implements MapEngine {
       options.viewId === undefined ? CESIUM_CAPABILITIES : CESIUM_PANE_CAPABILITIES;
     this.layerSync = new CesiumLayerSync(Cesium, viewer, undefined, {
       onTilesetFields: publishTilesetFields,
+      onTilesetProgress: setTilesetLoadProgress,
+      splitPosition: () => getCesiumSwipeState()?.position,
+      splitDirectionFor: cesiumSplitDirectionFor,
+      onSplitChange: subscribeCesiumSwipe,
     });
     this.terrainExaggeration = viewer.scene.verticalExaggeration ?? 1;
     this.installInputTracking();

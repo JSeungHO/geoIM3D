@@ -30,12 +30,6 @@ import {
 import { drapeSignature, isDrapedLayer, MapLibreDrape } from "./cesium-drape";
 import { createFeatureStyleResolver, type FeatureStyleResolver } from "./cesium-feature-style";
 import { createCesiumLabeler, pickLabelPart } from "./cesium-labels";
-import {
-  cesiumSplitDirectionFor,
-  getCesiumSwipeState,
-  subscribeCesiumSwipe,
-} from "./geoim3d-cesium-swipe";
-import { setTilesetLoadProgress } from "./geoim3d-tileset-loading";
 import { readTilesetPlacement, tilesetPlacementMatrix } from "./geoim3d-tileset-placement";
 import {
   buildPointCloudCollection,
@@ -902,6 +896,31 @@ export interface CesiumLayerSyncDeps {
    * control-managed vector layers; omitted, the discovery is skipped.
    */
   onTilesetFields?: (layerId: string, fields: string[]) => void;
+  /**
+   * Reports a tileset's outstanding tile count as it streams in, and clears it
+   * (`null`) when the layer is removed; omitted, no progress is reported
+   * (geoIM3D — the panel that opened the layer shows it).
+   */
+  onTilesetProgress?: (
+    layerId: string,
+    progress: { pending: number; processing: number } | null,
+  ) => void;
+  /**
+   * Layer Swipe, mirrored onto the globe (geoIM3D). The host owns the actual
+   * swipe UI and its side/position state; this only asks for the current
+   * reading and a way to hear about changes to it — Cesium splits the whole
+   * scene at one position and asks each object which side it is on, so a
+   * swipe here is two property writes rather than the clipped second map the
+   * 2D control builds.
+   */
+  splitPosition?: () => number | undefined;
+  /**
+   * Which side a layer draws on, given the current swipe: Cesium's own
+   * `SplitDirection` values (-1 left, 1 right, 0 unsplit).
+   */
+  splitDirectionFor?: (layerId: string) => -1 | 0 | 1;
+  /** Subscribes to the swipe changing; returns the unsubscribe function. */
+  onSplitChange?: (listener: () => void) => () => void;
 }
 
 async function readSharedPMTilesHeader(url: string): Promise<PMTilesRasterHeader | undefined> {
@@ -1140,7 +1159,7 @@ export class CesiumLayerSync {
     private readonly deps: CesiumLayerSyncDeps = {},
   ) {
     this.applySwipe();
-    this.unsubscribeSwipe = subscribeCesiumSwipe(() => this.applySwipe());
+    this.unsubscribeSwipe = this.deps.onSplitChange?.(() => this.applySwipe()) ?? (() => {});
   }
 
   /**
@@ -1157,9 +1176,8 @@ export class CesiumLayerSync {
     // assumes a live viewer with every method a real one has.
     const scene = this.viewer.scene as CesiumWidget["scene"] | undefined;
     if (!scene) return;
-    const swipe = getCesiumSwipeState();
     // Cesium's default is 0.5, and a scene with nothing split ignores it.
-    scene.splitPosition = swipe?.position ?? 0.5;
+    scene.splitPosition = this.deps.splitPosition?.() ?? 0.5;
     for (const entry of this.entries.values()) this.applyAppearance(entry);
     scene.requestRender?.();
   }
@@ -2558,7 +2576,7 @@ export class CesiumLayerSync {
         // outstanding work so the panel that opened it can show progress
         // (geoIM3D).
         tileset.loadProgress.addEventListener((pending: number, processing: number) => {
-          setTilesetLoadProgress(layer.id, { pending, processing });
+          this.deps.onTilesetProgress?.(layer.id, { pending, processing });
         });
         this.discoverTilesetFields(entry, tileset);
         this.applyAppearance(entry);
@@ -2616,7 +2634,7 @@ export class CesiumLayerSync {
       entry.handle = tileset;
       // See the matching listener above: same streaming-progress report (geoIM3D).
       tileset.loadProgress.addEventListener((pending: number, processing: number) => {
-        setTilesetLoadProgress(layer.id, { pending, processing });
+        this.deps.onTilesetProgress?.(layer.id, { pending, processing });
       });
       this.discoverTilesetFields(entry, tileset);
       this.applyAppearance(entry);
@@ -2691,9 +2709,10 @@ export class CesiumLayerSync {
       imagery.saturation = colour.saturation;
       imagery.hue = colour.hue;
       // Layer Swipe: the globe splits natively, so a side assignment is one
-      // property rather than a clipped copy of the map (geoIM3D). See
-      // geoim3d-cesium-swipe.ts.
-      imagery.splitDirection = cesiumSplitDirectionFor(layer.id) as ImageryLayer["splitDirection"];
+      // property rather than a clipped copy of the map (geoIM3D).
+      imagery.splitDirection = this.deps.splitDirectionFor?.(
+        layer.id,
+      ) as ImageryLayer["splitDirection"];
     } else if (entry.kind === "geojson") {
       (handle as DataSource).show = layer.visible;
       this.applyGeoJsonStyle(entry);
@@ -2723,7 +2742,9 @@ export class CesiumLayerSync {
       // (geoIM3D). Applied instead of the one-shot altitudeOffset set at
       // creation, not on top of it — both write modelMatrix.
       this.applyTilesetPlacement(entry);
-      const splitDirection = cesiumSplitDirectionFor(layer.id) as ImageryLayer["splitDirection"];
+      const splitDirection = this.deps.splitDirectionFor?.(
+        layer.id,
+      ) as ImageryLayer["splitDirection"];
       for (const tileset of this.entryTilesets(entry)) tileset.splitDirection = splitDirection;
       this.applyTilesetStyle(entry);
     }
@@ -3264,7 +3285,7 @@ export class CesiumLayerSync {
         // Its progress goes with it; a tileset removed mid-stream would
         // otherwise leave the panel waiting on tiles nothing is fetching
         // (geoIM3D).
-        setTilesetLoadProgress(entry.layer.id, null);
+        this.deps.onTilesetProgress?.(entry.layer.id, null);
       }
       this.viewer.scene.primitives.remove(
         handle as Cesium3DTileset | I3SDataProvider | PointPrimitiveCollection,
