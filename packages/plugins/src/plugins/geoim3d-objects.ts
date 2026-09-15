@@ -792,12 +792,11 @@ let detachPitchSync: (() => void) | null = null;
 let nextObjectSequence = 1;
 
 /**
- * Objects shipped in `public/objects/`, read once at activation.
- *
- * Same-origin URLs, so they need neither the file picker nor the native
- * fetcher, and the CSP has nothing to refuse. Empty until the manifest is read
- * — and empty for good if there is none, which is the normal case for a build
- * that ships no objects.
+ * The samples themselves are tens of megabytes each and no longer shipped in
+ * `public/objects/` — {@link BUNDLED_OBJECTS_MANIFEST} now names a file server
+ * instead, so the app carries none of that weight. Empty until the manifest
+ * is read — and empty for good if it cannot be reached, which is the normal
+ * case for a build that ships no objects.
  */
 let bundledPresets: ObjectPreset[] = [];
 
@@ -810,9 +809,8 @@ async function loadBundledPresets(app: GeoLibreAppAPI): Promise<void> {
   const base = typeof document === "undefined" ? "" : document.baseURI;
   if (!base) return;
   try {
-    const response = await fetch(new URL(BUNDLED_OBJECTS_MANIFEST, base).href);
-    if (!response.ok) return;
-    bundledPresets = parseBundledManifest(await response.text(), base);
+    const manifestUrl = new URL(BUNDLED_OBJECTS_MANIFEST, base).href;
+    bundledPresets = parseBundledManifest(await fetchManifestText(manifestUrl), base);
   } catch {
     // No manifest is the normal case, not a fault worth reporting.
     return;
@@ -1150,6 +1148,28 @@ async function resolveReadableUrl(source: string): Promise<{ url: string; revoca
     return { url: source, revocable: false };
   }
   throw new Error("http-unavailable");
+}
+
+/**
+ * Fetches the bundled-objects manifest as text, wherever it lives.
+ *
+ * The manifest itself is small — it is the samples it points at
+ * ({@link BUNDLED_OBJECTS_MANIFEST}'s file server) that are heavy — but once
+ * that URL names a different host than the app's own, it needs the same
+ * cross-origin workarounds an individual object does: {@link resolveReadableUrl}.
+ *
+ * @param url - The manifest's URL.
+ * @returns Its raw text.
+ */
+async function fetchManifestText(url: string): Promise<string> {
+  const readable = await resolveReadableUrl(url);
+  try {
+    const response = await fetch(readable.url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.text();
+  } finally {
+    if (readable.revocable) URL.revokeObjectURL(readable.url);
+  }
 }
 
 /**

@@ -176,8 +176,17 @@ export function savePresets(presets: readonly ObjectPreset[]): void {
 /* Bundled objects                                                              */
 /* -------------------------------------------------------------------------- */
 
-/** Where the shipped objects and their placements live, relative to the app. */
-export const BUNDLED_OBJECTS_MANIFEST = "objects/manifest.json";
+/**
+ * Where the sample objects and their placements are listed.
+ *
+ * Points at geoIM3D's own file server rather than `public/objects/` in the
+ * app bundle — the samples are tens of megabytes each, and hosting them
+ * remotely keeps the installer from carrying that weight. The manifest
+ * itself still names a `baseUrl` for its entries' files/tilesets (see
+ * `parseBundledManifest`); this constant only says where the manifest is.
+ */
+export const BUNDLED_OBJECTS_MANIFEST =
+  "http://remote.ejbt.co.kr:45673/files/objects/manifest.json";
 
 /** Marks a preset that ships with the app, so the UI does not offer to delete it. */
 export const BUNDLED_PRESET_ID_PREFIX = "bundled:";
