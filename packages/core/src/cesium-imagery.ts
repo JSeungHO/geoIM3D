@@ -175,6 +175,33 @@ export type CesiumBasemapImagery =
     };
 
 /**
+ * Resolves a `basemapStyleUrl` sentinel this module's own catalogs (planetary,
+ * regional, vector-style analogues) don't recognize.
+ *
+ * For a sentinel scheme that needs state this engine-free module cannot reach
+ * — geoIM3D's VWorld basemaps, for one, need a live user-entered API key that
+ * lives in `@geolibre/plugins` — the owning plugin registers a resolver here
+ * instead of `@geolibre/core` reaching upward for it. Mirrors
+ * `CesiumLayerSyncDeps` in `@geolibre/map`: a callback the lower layer
+ * exposes, filled in by the layer that actually knows the answer.
+ *
+ * @param styleUrl - The project's `basemapStyleUrl`, never a sentinel this
+ *   module's own catalogs already matched.
+ * @returns The imagery to draw, or undefined to let the caller fall through
+ *   to its own default.
+ */
+export type CesiumBasemapSentinelResolver = (styleUrl: string) => CesiumBasemapImagery | undefined;
+
+let sentinelResolver: CesiumBasemapSentinelResolver | null = null;
+
+/** Installs (or clears) the resolver for a sentinel scheme this module doesn't own. */
+export function setCesiumBasemapSentinelResolver(
+  resolver: CesiumBasemapSentinelResolver | null,
+): void {
+  sentinelResolver = resolver;
+}
+
+/**
  * A keyless raster basemap standing in for a vector style of the same tone.
  *
  * "Keyless" is the binding constraint, and it rules out most of the obvious
@@ -395,6 +422,12 @@ export function basemapToCesiumImagery(
       ...(regional.overlayTileUrl ? { overlayTemplate: regional.overlayTileUrl } : {}),
     };
   }
+
+  // A sentinel from a plugin this engine-free module cannot read a catalog for
+  // (geoIM3D's VWorld basemaps need a live, user-entered API key that lives in
+  // @geolibre/plugins — see setCesiumBasemapSentinelResolver below).
+  const custom = sentinelResolver?.(url);
+  if (custom) return custom;
 
   // Every remaining sentinel kind — an offline PMTiles archive, a planetary or
   // regional id that has since been renamed — has no raster form to show, so

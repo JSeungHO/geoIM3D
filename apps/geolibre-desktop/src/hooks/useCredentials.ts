@@ -1,4 +1,5 @@
 import {
+  registerVWorldCesiumBasemap,
   registerVWorldProtocol,
   setDataGoKrServiceKey,
   setKmaApiKey,
@@ -172,6 +173,11 @@ export function useCredentials(): boolean {
     // be installed first: the protocol handler uses it for every tile request.
     installKoreanApiTransports();
     registerVWorldProtocol();
+    // Same reason: a VWorld basemap can be the project's current basemap
+    // (restored from a saved project, or applied from the menu) whether or
+    // not the VWorld plugin panel is open, and the Cesium globe needs this to
+    // draw it at all — see registerVWorldCesiumBasemap's own doc.
+    registerVWorldCesiumBasemap();
   }, [load]);
 
   useEffect(() => {

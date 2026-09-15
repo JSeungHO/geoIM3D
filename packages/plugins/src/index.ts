@@ -783,6 +783,8 @@ export {
   setVWorldLabels,
   registerVWorldBasemapStyle,
   vworldBasemapIdFor,
+  vworldCesiumBasemapImagery,
+  registerVWorldCesiumBasemap,
   VWORLD_BASEMAP_STYLE_PREFIX,
   setVWorldBuildingLayerAdder,
   type VWorldBuildingLayerAdder,

@@ -19,7 +19,11 @@
  *   VWorld's redistribution terms, so nothing here persists tiles.
  */
 
-import { useAppStore } from "@geolibre/core";
+import {
+  useAppStore,
+  setCesiumBasemapSentinelResolver,
+  type CesiumBasemapImagery,
+} from "@geolibre/core";
 import type { GeoLibreAppAPI, GeoLibrePlugin } from "../types";
 import {
   VWORLD_ATTRIBUTION,
@@ -32,6 +36,7 @@ import {
   hasVWorldApiKey,
   isSecondaryAttribute,
   onVWorldApiKeyChange,
+  resolveVWorldProtocolUrl,
   vworldGeocode,
   vworldReverseGeocode,
   VWORLD_HEIGHT_PROPERTY,
@@ -474,6 +479,61 @@ export function vworldBasemapIdFor(styleUrl: string | undefined): string | null 
 
 /** Style-id prefix for a VWorld basemap, so the picker can tell which is active. */
 export const VWORLD_BASEMAP_STYLE_PREFIX = "vworld-";
+
+/**
+ * Draws a VWorld basemap sentinel on the Cesium globe, geoIM3D's
+ * {@link CesiumBasemapSentinelResolver} for `@geolibre/core`.
+ *
+ * `basemapToCesiumImagery` has no raster catalog entry for a VWorld sentinel
+ * (it is minted per-session by {@link registerVWorldBasemapStyle}, not a fixed
+ * id), so without this the globe fell back to Ion/OpenStreetMap regardless of
+ * which VWorld map the menu applied — the picker looked like it did nothing.
+ *
+ * Unlike the 2D map's key-free `vworld://` template (rewritten by the
+ * protocol handler at request time so the key never reaches a saved style),
+ * the key is resolved into the template here. `CesiumBasemapImagery` is a
+ * derived, per-render descriptor — never written to the project file — so
+ * this carries the same exposure the 2D path already accepts one function
+ * call later, inside the protocol handler's own request.
+ *
+ * @param styleUrl - The project's `basemapStyleUrl`.
+ * @returns The imagery to draw, or undefined when the sentinel is not a
+ *   VWorld basemap this session applied, or no API key is configured (in
+ *   which case the caller's own fallback — Ion/OpenStreetMap — applies,
+ *   matching the 2D map's WMS/WFS calls when no key is set).
+ */
+export function vworldCesiumBasemapImagery(styleUrl: string): CesiumBasemapImagery | undefined {
+  const id = vworldBasemapIdFor(styleUrl);
+  const map = id ? VWORLD_BASE_MAPS.find((entry) => entry.id === id) : undefined;
+  if (!map) return undefined;
+  const overlay = VWORLD_BASE_MAPS.find((entry) => entry.overlayFor === map.id);
+  try {
+    return {
+      kind: "xyz",
+      template: resolveVWorldProtocolUrl(vworldTileTemplate(map)),
+      attribution: VWORLD_ATTRIBUTION,
+      maximumLevel: map.maxzoom,
+      ...(overlay
+        ? { overlayTemplate: resolveVWorldProtocolUrl(vworldTileTemplate(overlay)) }
+        : {}),
+    };
+  } catch {
+    // No VWorld key configured — same case the 2D map's own WMS calls refuse.
+    return undefined;
+  }
+}
+
+/**
+ * Wires {@link vworldCesiumBasemapImagery} into `@geolibre/core` so a VWorld
+ * basemap renders on the Cesium globe. Independent of this plugin's own
+ * activation state — a saved project's basemap sentinel does not survive a
+ * restart anyway (see {@link appliedSentinels}), but the resolver itself has
+ * to be live whenever the credential/protocol wiring is, which today is
+ * always (`useCredentials.ts`).
+ */
+export function registerVWorldCesiumBasemap(): void {
+  setCesiumBasemapSentinelResolver(vworldCesiumBasemapImagery);
+}
 
 async function addBaseMapLayer(app: GeoLibreAppAPI, id: string): Promise<void> {
   const sentinel = await registerVWorldBasemapStyle(id);
