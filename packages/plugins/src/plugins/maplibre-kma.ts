@@ -389,9 +389,13 @@ function setPickActive(app: GeoLibreAppAPI, active: boolean): void {
   state.pickActive = active;
   unsubscribePick?.();
   unsubscribePick = null;
-  // Only the MapLibre canvas is styled: Cesium draws its own cursor.
+  // Each engine styles its own canvas — `getMap()` and `getCesiumScene()` are
+  // never both live at once (issue #2217), but reaching for whichever one is
+  // is cheaper than asking the renderer first.
   const map = app.getMap?.();
   if (map) map.getCanvas().style.cursor = active ? "crosshair" : "";
+  const cesiumCanvas = app.getCesiumScene?.()?.canvas;
+  if (cesiumCanvas) cesiumCanvas.style.cursor = active ? "crosshair" : "";
   if (active) {
     unsubscribePick = app.onMapClick?.(({ lng, lat }) => void loadPoint(lng, lat)) ?? null;
   }
