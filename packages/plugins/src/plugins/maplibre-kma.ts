@@ -837,6 +837,10 @@ export const maplibreKmaPlugin: GeoLibrePlugin = {
   id: KMA_PLUGIN_ID,
   name: "Weather (KMA)",
   version: "0.1.0",
+  // Adds only GeoJSON station markers, which the globe draws the same way as
+  // the 2D map (cesium-layer-sync.ts's "geojson" path) — no engine-specific
+  // code in this file needs it.
+  engines: ["maplibre", "cesium"],
 
   activate(app: GeoLibreAppAPI) {
     state.app = app;

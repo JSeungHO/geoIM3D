@@ -2056,6 +2056,11 @@ export const geoim3dObjectsPlugin: GeoLibrePlugin = {
   id: GEOIM3D_OBJECTS_PLUGIN_ID,
   name: "3D objects",
   version: "0.1.0",
+  // Tilesets render on both engines (Cesium via cesium-layer-sync.ts's
+  // "3dtiles" path, MapLibre via deck.gl); only a splat is MapLibre-only
+  // (maplibre-gl-splat has no Cesium counterpart), which PrimaryViewBridge
+  // above already accounts for rather than gating the whole plugin on it.
+  engines: ["maplibre", "cesium"],
 
   activate(app: GeoLibreAppAPI) {
     state.app = app;

@@ -568,19 +568,16 @@ export function setVWorldBuildingLayerAdder(adder: VWorldBuildingLayerAdder | nu
  * @param app - The host API.
  */
 async function addBuildingsInView(app: GeoLibreAppAPI): Promise<void> {
-  const map = app.getMap?.();
-  if (!map || !buildingLayerAdder) return;
-  const bounds = map.getBounds();
+  // Not `app.getMap()?.getBounds()`: that map is MapLibre-only and null while
+  // the globe is primary (issue #2217), which would silently disable this on
+  // Cesium. `getViewBounds()` reads whichever engine is live.
+  const bounds = app.getViewBounds?.();
+  if (!bounds || !buildingLayerAdder) return;
 
   state.busy = true;
   setStatus("");
   try {
-    const result = await vworldBuildings([
-      bounds.getWest(),
-      bounds.getSouth(),
-      bounds.getEast(),
-      bounds.getNorth(),
-    ]);
+    const result = await vworldBuildings(bounds);
     buildingLayerAdder({
       name: labels.buildings3d,
       geojson: result.geojson,
@@ -1082,6 +1079,11 @@ export const maplibreVWorldPlugin: GeoLibrePlugin = {
   id: VWORLD_PLUGIN_ID,
   name: "VWorld",
   version: "0.1.0",
+  // The `vworld://` raster tiles it adds render on the globe too, through the
+  // same registered MapLibre protocol handler that Cesium's
+  // ProtocolImageryProvider calls directly (cesium-protocol-imagery.ts) — no
+  // engine-specific code in this file needs it.
+  engines: ["maplibre", "cesium"],
   // Deliberately *not* activeByDefault: the user asked for it off, so the
   // plugin (and its toolbar menu) appear only once switched on from the Plugins
   // menu, like every other optional plugin. Note this diverges from
