@@ -3,6 +3,7 @@ import { localFileName, useAppStore, type GeoLibreLayer } from "@geolibre/core";
 import type { FeatureCollection } from "geojson";
 import type { MapDiagnosticEvent, MapEngine } from "@geolibre/map";
 import {
+  CesiumEngine,
   getLayerBounds,
   getTilesetLoadProgress,
   MapCanvas,
@@ -109,6 +110,7 @@ import {
   type DroppedRaster,
 } from "../../lib/tauri-io";
 import { buildKmlModelLayer } from "../../lib/kml-model-layer";
+import { setPrimaryCesiumViewer } from "../../lib/map-click-bridge";
 import {
   fetchObjectAsBlobUrl,
   pickLocalObjects,
@@ -1475,6 +1477,20 @@ export function DesktopShell({
     setObjectDetectionOpen(false);
     setSegmentEverythingOpen(false);
   }, [cesiumPrimary, setObjectDetectionOpen, setSegmentEverythingOpen]);
+
+  // Publishes the live Cesium viewer to the shared map-click bridge
+  // (onMapClick), the same way MapCanvas's own click handler is always
+  // reachable — without this a plugin's "click the map" feature (VWorld
+  // reverse geocoding, the KMA point forecast) delivers the cursor change but
+  // never the click on the globe. Re-runs on controller (re)init, in both
+  // directions: switching away from Cesium finds `mapControllerRef.current`
+  // is no longer a CesiumEngine and clears it, the same way switching to it
+  // publishes the new one.
+  useEffect(() => {
+    const engine = mapControllerRef.current;
+    const scene = engine instanceof CesiumEngine ? engine.getCesiumScene() : null;
+    setPrimaryCesiumViewer(scene?.viewer ?? null, scene?.Cesium ?? null);
+  }, [mapReadyGeneration]);
 
   // Keep the on-map compass (reset pitch/bearing) control's tooltip translated.
   // Re-runs when the controller (re)initialises (mapReadyGeneration) and on
