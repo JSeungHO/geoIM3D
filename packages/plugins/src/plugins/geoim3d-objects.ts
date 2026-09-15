@@ -561,12 +561,13 @@ const GEOIM3D_TILESET_SOURCE_KIND = "geoim3d-object-tileset";
 /**
  * Whether opening a preset also puts its 3D Tiles version on the map.
  *
- * Off while the Cesium tab is hidden: a Gaussian splat tileset draws on the
- * globe and nowhere else, so with no way to reach the globe the layer is a row
- * in the list that can never show anything. The manifest keeps its `tileset`
- * and `tilesetTransform`; this is the only thing to flip when the tab is back.
+ * Was off while the globe had no reachable tab of its own: a Gaussian splat
+ * tileset draws on the globe and nowhere else, so with no way to select it
+ * the layer was a row in the list that could never show anything. Upstream's
+ * `primaryRenderer` (issue #2217) gives the globe a real, reachable primary
+ * view now, so this is back on.
  */
-const TILESET_COMPANION_ENABLED = false;
+const TILESET_COMPANION_ENABLED = true;
 
 /**
  * The layer record for a preset's 3D Tiles companion.
