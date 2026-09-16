@@ -1,22 +1,8 @@
 /**
- * VWorld (국토교통부 공간정보 오픈플랫폼) plugin.
- *
- * Covers the first-phase scope of the VWorld integration directive: the 2D base
- * maps, integrated search, address→coordinate and coordinate→address
- * conversion, and the cadastral / building / zoning WMS layers.
- *
- * The API client, DTOs, and error classification live in `vworld-api.ts`; this
- * file is the map adapter and the panel UI. Two things worth knowing before
- * editing:
- *
- * - **The API key never reaches a layer record.** VWorld puts the key in the
- *   request URL, and layer URLs are saved into the project file, so every layer
- *   this plugin adds carries a key-free `vworld://` URL that a MapLibre custom
- *   protocol rewrites at request time. A project shared with a colleague
- *   therefore contains the layers but not the credential, and renders as soon as
- *   they enter their own key.
- * - **No offline tile cache.** The directive holds that back pending a review of
- *   VWorld's redistribution terms, so nothing here persists tiles.
+ * VWorld plugin: 2D basemaps, search, geocoding, cadastral/building/zoning
+ * WMS layers. API client lives in `vworld-api.ts`; this is the map adapter
+ * and panel UI. Layers carry a key-free `vworld://` URL — the protocol
+ * handler injects the key per request, so it never reaches the project file.
  */
 
 import {
@@ -55,17 +41,8 @@ import {
 export const VWORLD_PLUGIN_ID = "maplibre-gl-vworld";
 const PANEL_ID = "geolibre-vworld-panel";
 /**
- * Id of the detached (floating) variant of this plugin's panel.
- *
- * The host keeps **one** plugin right panel active at a time — opening a second
- * displaces the first — so activating both this plugin and its sibling left one
- * of them switched on with nowhere to show. Floating cards have no such limit:
- * several stay open at once. Registering the same `render` under both lets the
- * user park one plugin in a card and keep the other docked.
- *
- * The two are mutually exclusive **for this plugin**: `state.container` holds a
- * single element, so opening one closes the other rather than leaving a stale
- * container that would never redraw.
+ * Id of the floating variant of this panel — mutually exclusive with the
+ * docked one (`state.container` holds a single element).
  */
 const FLOATING_PANEL_ID = `${PANEL_ID}-floating`;
 const MENU_ID = "geolibre-vworld-menu";
@@ -217,12 +194,7 @@ export const DEFAULT_VWORLD_LABELS: VWorldLabels = {
 
 let labels: VWorldLabels = { ...DEFAULT_VWORLD_LABELS };
 
-/**
- * Replaces the user-facing strings. The host calls this on every language
- * change; an open panel is rebuilt so it re-localizes live.
- *
- * @param next - Partial overrides merged over the current strings.
- */
+/** Replaces the user-facing strings and rebuilds an open panel/menu to re-localize live. */
 export function setVWorldLabels(next: Partial<VWorldLabels>): void {
   labels = {
     ...labels,
@@ -230,20 +202,11 @@ export function setVWorldLabels(next: Partial<VWorldLabels>): void {
     attributes: { ...labels.attributes, ...(next.attributes ?? {}) },
   };
   rerenderPanel();
-  // The menu copies its labels when it is built, so a language change left it
-  // in the old one — the panel kept up because its title is a getter, and the
-  // menu beside it did not. (The host's menu label is a plain string, so the
-  // menu is rebuilt rather than made lazy; that would be an upstream change.)
+  // The menu's label is a plain string copied at build time, unlike the panel's getter.
   if (state.app) buildToolbarMenu(state.app);
 }
 
-/**
- * Maps an error to its user-facing message. Nothing here interpolates the
- * request URL or the key — the kind alone selects a fixed string.
- *
- * @param error - The thrown value.
- * @returns The message to show.
- */
+/** Maps an error to its user-facing message; the kind alone selects a fixed string. */
 function errorMessage(error: unknown): string {
   const kind: VWorldErrorKind = error instanceof VWorldError ? error.kind : "unknown";
   const messages: Record<VWorldErrorKind, string> = {
@@ -332,8 +295,6 @@ async function runGeocode(app: GeoLibreAppAPI, address: string): Promise<void> {
   setStatus("");
   try {
     const result = await vworldGeocode(address, state.addressType);
-    // The DTO states EPSG:4326, which is what the map expects, so the point
-    // goes straight to the view with no conversion step.
     flyTo(app, result.lng, result.lat);
     setStatus(result.matchedAddress);
   } catch (error) {
@@ -385,49 +346,22 @@ function setReverseActive(app: GeoLibreAppAPI, active: boolean): void {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Adds a VWorld base map as a WMTS layer.
- *
- * The URL is the key-free `vworld://` template: layer URLs are saved into the
- * project file, and the real request URL carries the API key as a path segment.
- * The protocol handler swaps the key in per request.
- *
- * @param app - The host API.
- * @param id - The base map id from `VWORLD_BASE_MAPS`.
- */
-/**
- * Registers a VWorld base map as a map style and returns its sentinel.
- *
- * Set as the map's basemap, not stacked as a layer. A base map added on top of
- * everything is a base map in name only: it covered 3D objects and any layer
- * added before it, and fighting that with layer ordering is fighting the wrong
- * thing — the background belongs at the bottom by construction.
- *
- * An overlay that names this base map (Hybrid over Satellite) is drawn into the
- * same style, above the imagery. Satellite alone is unlabelled and hard to read,
- * and offering the annotation separately only let a user pick the half that is
- * useless on its own — so the pair is one basemap.
- *
- * Exported so the Change Basemap dialog offers the same maps as this plugin's
- * own menu, off one definition rather than two that can drift.
- *
- * @param id - The base map id from {@link VWORLD_BASE_MAPS}.
- * @returns The style sentinel, or null for an unknown id.
+ * Registers a VWorld base map as a map style (set as the basemap, not
+ * stacked as a layer) and returns its sentinel. Exported so Change Basemap
+ * offers the same maps as this plugin's own menu, off one definition.
  */
 export async function registerVWorldBasemapStyle(id: string): Promise<string | null> {
   const map = VWORLD_BASE_MAPS.find((entry) => entry.id === id);
-  // An overlay is not a basemap: as one it would replace the imagery it was
-  // drawn to annotate, leaving writing on an empty map.
+  // An overlay is not a basemap on its own (Hybrid needs Satellite behind it).
   if (!map || map.overlayFor) return null;
   const overlays = VWORLD_BASE_MAPS.filter((entry) => entry.overlayFor === map.id);
 
-  // Imported here, not at the top: `@geolibre/map` pulls MapLibre's stylesheet
-  // into the module graph, and this file is reached from `plugin-menu-groups`,
-  // which the Node test runner loads — where a `.css` import is a hard error.
+  // Imported here, not at the top: `@geolibre/map` pulls in MapLibre's CSS,
+  // a hard error under the Node test runner that loads this file.
   const { registerOfflineBasemapStyle } = await import("@geolibre/map");
   const sentinel = registerOfflineBasemapStyle(`${VWORLD_BASEMAP_STYLE_PREFIX}${map.id}`, {
     version: 8,
-    // No glyphs or sprite: this style draws raster tiles and nothing else, so
-    // declaring them would only add two fetches that can fail.
+    // No glyphs/sprite: this style is raster tiles only.
     sources: Object.fromEntries(
       [map, ...overlays].map((entry) => [
         `vworld-${entry.id}`,
@@ -456,23 +390,10 @@ export async function registerVWorldBasemapStyle(id: string): Promise<string | n
   return sentinel;
 }
 
-/**
- * The sentinels this session has registered, and which base map each is.
- *
- * A sentinel only resolves for the session that made it: reopening the app with
- * one saved in the project leaves the store holding a style URL that no longer
- * exists, and the map quietly falls back to the default. Matching a base map by
- * parsing that dead string made the picker highlight a satellite basemap that
- * was not on screen. Only what this session actually applied counts.
- */
+/** The sentinels this session has registered — a sentinel from a past session never resolves. */
 const appliedSentinels = new Map<string, string>();
 
-/**
- * The base map a style URL refers to, if this session applied it.
- *
- * @param styleUrl - The map's current basemap style URL.
- * @returns The base map id, or null when it is not a live VWorld basemap.
- */
+/** The base map a style URL refers to, if this session applied it. */
 export function vworldBasemapIdFor(styleUrl: string | undefined): string | null {
   return (styleUrl && appliedSentinels.get(styleUrl)) || null;
 }
@@ -511,12 +432,12 @@ export function registerVWorldCesiumBasemap(): void {
   setCesiumBasemapSentinelResolver(vworldCesiumBasemapImagery);
 }
 
+/** Applies a VWorld base map as the map's basemap, moving the view into its coverage. */
 async function addBaseMapLayer(app: GeoLibreAppAPI, id: string): Promise<void> {
   const sentinel = await registerVWorldBasemapStyle(id);
   if (!sentinel) return;
 
-  // Same reason as the basemap picker: VWorld has tiles for Korea from zoom 6
-  // down, so applying one from a world view leaves an empty map.
+  // VWorld only covers Korea from zoom 6 down; jump there if needed.
   const map = app.getMap?.();
   const centre = map?.getCenter();
   if (map && centre) {
@@ -530,53 +451,31 @@ async function addBaseMapLayer(app: GeoLibreAppAPI, id: string): Promise<void> {
   app.setBasemap(sentinel);
 }
 
-/**
- * Adds a VWorld thematic layer (cadastral, building, zoning) as WMS.
- *
- * @param app - The host API.
- * @param id - The thematic layer id from `VWORLD_THEMATIC_LAYERS`.
- */
+/** Adds a VWorld thematic layer (cadastral, building, zoning) as WMS. */
 function addThematicLayer(app: GeoLibreAppAPI, id: string): void {
   const layer = VWORLD_THEMATIC_LAYERS.find((entry) => entry.id === id);
   if (!layer) return;
   const layerId = app.addWmsLayer?.(labelFor(layer.labelKey), {
-    // The host appends the GetMap query to this endpoint; the protocol handler
-    // then rewrites the whole URL and appends the key.
     url: "vworld://wms",
     layers: layer.typename,
     transparent: true,
     format: "image/png",
-    // VWorld's WMS documents 1.3.0 as its default.
     version: "1.3.0",
     attribution: VWORLD_ATTRIBUTION,
     bounds: VWORLD_BOUNDS,
     minzoom: layer.minzoom,
   });
-  // Remembered so a map click knows which typenames to query: the WMS tiles
-  // themselves carry no features, so the click has to ask WFS instead. The
-  // host's layer id is kept, not just a flag, so removal can be noticed.
+  // WMS tiles carry no features, so a click needs the layer id to query WFS instead.
   if (layerId) state.thematicLayers.set(layer.id, layerId);
   rerenderPanel();
 }
 
-/**
- * Resolves a label from the pushed translations by its key name.
- *
- * @param key - The {@link VWorldLabels} field name.
- * @returns The translated label, or the key itself when untranslated.
- */
+/** Resolves a label from the pushed translations, or the key itself when untranslated. */
 function labelFor(key: string): string {
   return (labels as unknown as Record<string, string>)[key] ?? key;
 }
 
-/**
- * Adds a fetched building set as an extruded layer.
- *
- * Injected by the host because the plugin API has no way to set a layer's
- * style, and extrusion is the whole point of this layer — added flat it is
- * indistinguishable from the WMS overlay it replaces. Mirrors the existing
- * host-injection points (`setTimelapseVideoSaver`, `setLocalRasterPicker`).
- */
+/** Adds a fetched building set as an extruded layer; injected since the plugin API can't style layers. */
 export type VWorldBuildingLayerAdder = (input: {
   name: string;
   geojson: unknown;
@@ -595,14 +494,7 @@ export function setVWorldBuildingLayerAdder(adder: VWorldBuildingLayerAdder | nu
   buildingLayerAdder = adder;
 }
 
-/**
- * Loads the buildings in the current view and adds them as a 3D layer.
- *
- * Scoped to the visible extent because WFS caps a response at 1000 features:
- * a nationwide request would return an arbitrary thousand rather than an error.
- *
- * @param app - The host API.
- */
+/** Loads the buildings in the current view (WFS caps at 1000) and adds them as a 3D layer. */
 async function addBuildingsInView(app: GeoLibreAppAPI): Promise<void> {
   // Not `app.getMap()?.getBounds()`: that map is MapLibre-only and null while
   // the globe is primary (issue #2217), which would silently disable this on
@@ -619,8 +511,6 @@ async function addBuildingsInView(app: GeoLibreAppAPI): Promise<void> {
       geojson: result.geojson,
       heightProperty: VWORLD_HEIGHT_PROPERTY,
     });
-    // Saying so matters: a truncated view looks like a complete one, and the
-    // user would read the missing blocks as gaps in the source data.
     if (result.truncated) setStatus(labels.buildingsTruncated);
   } catch (error) {
     setStatus(errorMessage(error));
@@ -633,54 +523,29 @@ async function addBuildingsInView(app: GeoLibreAppAPI): Promise<void> {
 
 let unregisterMenu: (() => void) | null = null;
 
-/**
- * Mounts the panel body into whichever shell asked for it — docked or floating.
- *
- * @param container - The host-provided element.
- * @returns The cleanup the host runs when that shell closes.
- */
+/** Mounts the panel body into whichever shell asked for it — docked or floating. */
 function mountPanel(container: HTMLElement): () => void {
   state.container = container;
   renderPanel(container);
   return () => {
-    // Only clear when this is still the mounted one: closing the docked panel
-    // after detaching would otherwise blank the card that is now showing.
+    // Only clear if still mounted: closing after detaching would blank the new one.
     if (state.container === container) state.container = null;
   };
 }
 
-/**
- * Shows the panel docked in the right sidebar, closing the detached card.
- *
- * @param app - The host API.
- */
+/** Shows the panel docked in the right sidebar, closing the detached card. */
 function showDockedPanel(app: GeoLibreAppAPI): void {
   app.closeFloatingPanel?.(FLOATING_PANEL_ID);
   app.openRightPanel?.(PANEL_ID);
 }
 
-/**
- * Shows the panel as a floating card, closing the docked one.
- *
- * Several cards stay open at once, so this is how two plugins are used side by
- * side: the host allows only one *docked* plugin panel.
- *
- * @param app - The host API.
- */
+/** Shows the panel as a floating card, closing the docked one. */
 function showFloatingPanel(app: GeoLibreAppAPI): void {
   app.closeRightPanel?.(PANEL_ID);
   app.openFloatingPanel?.(FLOATING_PANEL_ID);
 }
 
-/**
- * Registers (or rebuilds) the VWorld toolbar menu.
- *
- * Rebuilt rather than mutated: `registerToolbarMenu` replaces a menu with the
- * same id, and the entries' disabled state depends on whether a key is
- * configured, which changes at runtime.
- *
- * @param app - The host API.
- */
+/** Registers (or rebuilds) the VWorld toolbar menu; rebuilt since disabled state follows the key. */
 function buildToolbarMenu(app: GeoLibreAppAPI): void {
   const ready = hasVWorldApiKey();
   unregisterMenu?.();
@@ -738,17 +603,7 @@ function buildToolbarMenu(app: GeoLibreAppAPI): void {
 /* Thematic feature inspection                                                  */
 /* -------------------------------------------------------------------------- */
 
-/**
- * The thematic layers still on the map, as WFS typenames.
- *
- * Checked against the store rather than trusting this plugin's own record of
- * what it added: the user can delete a layer from the layer panel, and a click
- * was still querying layers that were no longer there — the panel answered with
- * 건물정보 for a map showing none. Stale ids are dropped as they are found, so
- * removing and re-adding a layer does not accumulate entries.
- *
- * @returns One entry per live thematic layer.
- */
+/** The thematic layers still on the map (checked against the store, not this plugin's own record). */
 function activeThematicTypenames(): Array<{ id: string; typename: string }> {
   const live = new Set(useAppStore.getState().layers.map((layer) => layer.id));
   for (const [thematicId, layerId] of state.thematicLayers) {
@@ -759,16 +614,7 @@ function activeThematicTypenames(): Array<{ id: string; typename: string }> {
   );
 }
 
-/**
- * Looks up the thematic features under a clicked point.
- *
- * The thematic layers render as WMS images, which carry no features, so a click
- * cannot hit anything on the map itself. The same data is served as WFS, so the
- * click becomes a small bbox query against whichever thematic layers are on.
- *
- * @param lon - Longitude in EPSG:4326.
- * @param lat - Latitude in EPSG:4326.
- */
+/** Looks up thematic features at a point: WMS serves images, so this queries the WFS twin instead. */
 async function runFeatureInfo(lon: number, lat: number): Promise<void> {
   const typenames = activeThematicTypenames();
   if (typenames.length === 0) {
@@ -794,16 +640,7 @@ async function runFeatureInfo(lon: number, lat: number): Promise<void> {
 
 let unsubscribeInspect: (() => void) | null = null;
 
-/**
- * Turns click-to-inspect on or off.
- *
- * Subscribes through `onMapClick` rather than `getMap().on("click")`: the 2D map
- * is hidden and takes no pointer events while the globe is showing, so a
- * handler attached to it would silently stop working on the Cesium tab.
- *
- * @param app - The host API.
- * @param active - Whether clicks should query the thematic layers.
- */
+/** Turns click-to-inspect on or off, via `onMapClick` so it works on either engine. */
 function setInspectActive(app: GeoLibreAppAPI, active: boolean): void {
   state.inspectActive = active;
   unsubscribeInspect?.();
@@ -819,36 +656,20 @@ function setInspectActive(app: GeoLibreAppAPI, active: boolean): void {
   rerenderPanel();
 }
 
-/**
- * Shows the picking cursor on the 2D map.
- *
- * Only the MapLibre canvas is styled: Cesium draws its own cursor, and the
- * globe's canvas is not the host's to restyle.
- *
- * @param app - The host API.
- * @param picking - Whether a click tool is armed.
- */
+/** Shows the picking cursor on whichever engine's canvas is live. */
 function setMapCursor(app: GeoLibreAppAPI, picking: boolean): void {
   const map = app.getMap?.();
   if (map) map.getCanvas().style.cursor = picking ? "crosshair" : "";
+  const cesiumCanvas = app.getCesiumScene?.()?.canvas;
+  if (cesiumCanvas) cesiumCanvas.style.cursor = picking ? "crosshair" : "";
 }
 
-/**
- * Adds one inspected feature to the map as its own vector layer.
- *
- * The WMS overlay cannot be styled, measured, or exported; the WFS geometry
- * behind it can, which is what makes a single clicked parcel or building useful
- * beyond reading its numbers.
- *
- * @param app - The host API.
- * @param info - The feature to add.
- */
+/** Adds one inspected feature as its own vector layer, styleable/measurable unlike the WMS overlay. */
 function addFeatureAsLayer(app: GeoLibreAppAPI, info: VWorldFeatureInfo): void {
   if (!info.geometry) return;
   const layer = VWORLD_THEMATIC_LAYERS.find((entry) => entry.id === info.layerId);
   const name = layer ? labelFor(layer.labelKey) : info.layerId;
-  // Prefer the building's own name over the service's feature id, which is an
-  // internal key that means nothing in the layer list.
+  // Prefer the building's own name over the service's opaque feature id.
   const subject = formatAttribute(info.properties.bld_nm) || formatAttribute(info.properties.pnu);
   app.addGeoJsonLayer(
     subject ? `${name} · ${subject}` : name,
@@ -866,20 +687,7 @@ function addFeatureAsLayer(app: GeoLibreAppAPI, info: VWorldFeatureInfo): void {
   );
 }
 
-/**
- * Renders one inspected feature: the readable attributes first, the schema's
- * internal identifiers folded away behind a disclosure.
- *
- * The building schema has 26 columns and most are opaque keys (`ufid`,
- * `geoidn`, `sgg_oid`). Listing them all buries the handful a person reads —
- * floors, areas, height, approval date — so they are separated rather than
- * dropped: a hidden value is still worse than an untranslated one, just not on
- * the first screen.
- *
- * @param app - The host API.
- * @param info - The inspected feature.
- * @returns The rendered block.
- */
+/** Renders one inspected feature: readable attributes first, opaque schema ids behind a disclosure. */
 function featureInfoBlock(app: GeoLibreAppAPI, info: VWorldFeatureInfo): HTMLElement {
   const wrapper = element("div", "vworld-feature");
   const layer = VWORLD_THEMATIC_LAYERS.find((entry) => entry.id === info.layerId);
@@ -1118,11 +926,8 @@ export const maplibreVWorldPlugin: GeoLibrePlugin = {
   // Its vworld:// tiles already render on the globe via the shared
   // MapLibre protocol handler (cesium-protocol-imagery.ts).
   engines: ["maplibre", "cesium"],
-  // Deliberately *not* activeByDefault: the user asked for it off, so the
-  // plugin (and its toolbar menu) appear only once switched on from the Plugins
-  // menu, like every other optional plugin. Note this diverges from
-  // docs-internal/directives/04_FEATURE_PROFILE.md, which specifies the VWorld
-  // plugin as default-on with a guidance state when no key is set.
+  // Deliberately not activeByDefault, diverging from
+  // docs-internal/directives/04_FEATURE_PROFILE.md (default-on).
 
   activate(app: GeoLibreAppAPI) {
     state.app = app;
