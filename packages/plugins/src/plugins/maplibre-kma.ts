@@ -1,13 +1,6 @@
 /**
- * KMA (기상청) weather plugin.
- *
- * The interactive half of the KMA integration: click the map for current
- * conditions and the short-term forecast at that point, list the active weather
- * warnings, and plot typhoon positions. The observation-station *layers* are
- * added from Add Data → KMA instead, since they are data layers like any other.
- *
- * The API client, grid conversion, DTOs, and error classification live in
- * `kma-api.ts`; this file is the panel and the map interaction.
+ * KMA (기상청) weather plugin: click-to-query conditions/forecast, warnings,
+ * typhoon positions. API client and DTOs live in `kma-api.ts`.
  */
 
 import type { GeoLibreAppAPI, GeoLibrePlugin } from "../types";
@@ -39,17 +32,8 @@ import {
 export const KMA_PLUGIN_ID = "maplibre-gl-kma";
 const PANEL_ID = "geolibre-kma-panel";
 /**
- * Id of the detached (floating) variant of this plugin's panel.
- *
- * The host keeps **one** plugin right panel active at a time — opening a second
- * displaces the first — so activating both this plugin and its sibling left one
- * of them switched on with nowhere to show. Floating cards have no such limit:
- * several stay open at once. Registering the same `render` under both lets the
- * user park one plugin in a card and keep the other docked.
- *
- * The two are mutually exclusive **for this plugin**: `state.container` holds a
- * single element, so opening one closes the other rather than leaving a stale
- * container that would never redraw.
+ * Id of the floating variant of this panel — mutually exclusive with the
+ * docked one (`state.container` holds a single element).
  */
 const FLOATING_PANEL_ID = `${PANEL_ID}-floating`;
 const MENU_ID = "geolibre-kma-menu";
@@ -164,10 +148,7 @@ export const DEFAULT_KMA_LABELS: KmaLabels = {
     snowFlurry: "Snow flurries",
   },
   errorNoKey: "No KMA service key is configured.",
-  // The portal omits CORS headers on its error responses, so a browser cannot
-  // read them: a rejected service key arrives here as an unreadable network
-  // failure. The message therefore has to name the likely causes rather than
-  // claim the network is down.
+  // No CORS on error responses, so a rejected key looks like a network failure.
   errorNetwork:
     "Could not reach the weather service. The same error appears when the service key is not registered, has not activated yet (this can take up to an hour after signing up), or this particular API has not been requested for it.",
   errorTimeout: "The weather service did not respond in time.",
@@ -183,12 +164,7 @@ export const DEFAULT_KMA_LABELS: KmaLabels = {
 
 let labels: KmaLabels = { ...DEFAULT_KMA_LABELS };
 
-/**
- * Replaces the user-facing strings. Rebuilds an open panel so it re-localizes
- * live on a language change.
- *
- * @param next - Partial overrides merged over the current strings.
- */
+/** Replaces the user-facing strings and rebuilds an open panel to re-localize live. */
 export function setKmaLabels(next: Partial<KmaLabels>): void {
   labels = {
     ...labels,
@@ -203,19 +179,9 @@ export function setKmaLabels(next: Partial<KmaLabels>): void {
   if (state.app) buildToolbarMenu(state.app);
 }
 
-/**
- * Maps an error to its user-facing message — the kind alone selects a fixed
- * string, so no key or request URL can reach the UI.
- *
- * @param error - The thrown value.
- * @returns The message to show.
- */
+/** Maps an error to its user-facing message; the kind alone selects a fixed string. */
 function errorMessage(error: unknown): string {
-  // Both classes, because this panel shows two agencies: the weather services
-  // throw KmaError and AirKorea throws DataGoKrError. They share one kind
-  // vocabulary, but only the first was accepted, so every air-quality failure —
-  // including "this API is not approved for your key" — was flattened into the
-  // generic message and the user had nothing to act on.
+  // Both KmaError (weather) and DataGoKrError (AirKorea) share one kind vocabulary.
   const kind: KmaErrorKind =
     error instanceof KmaError || error instanceof DataGoKrError
       ? (error.kind as KmaErrorKind)
@@ -294,10 +260,7 @@ async function loadPoint(lon: number, lat: number): Promise<void> {
   if (conditions.status === "rejected" && forecast.status === "rejected") {
     state.status = errorMessage(conditions.reason);
   } else if (forecast.status === "rejected") {
-    // Reported next to the forecast heading rather than dropped. A forecast
-    // that fails while the nowcast succeeds used to leave the section simply
-    // absent, which reads as "this feature does not work" and hides the one
-    // thing that would explain it.
+    // Reported next to the forecast heading rather than left silently absent.
     state.forecastStatus = errorMessage(forecast.reason);
   }
   state.busy = false;
@@ -375,16 +338,7 @@ function toggleTyphoonLayer(app: GeoLibreAppAPI): void {
 
 let unsubscribePick: (() => void) | null = null;
 
-/**
- * Turns click-to-query on or off.
- *
- * Subscribes through `onMapClick` rather than `getMap().on("click")`: the 2D map
- * is hidden and takes no pointer events while the globe is showing, so a
- * handler attached to it would silently stop working on the Cesium tab.
- *
- * @param app - The host API.
- * @param active - Whether clicks should fetch the point forecast.
- */
+/** Turns click-to-query on or off, via `onMapClick` so it works on either engine. */
 function setPickActive(app: GeoLibreAppAPI, active: boolean): void {
   state.pickActive = active;
   unsubscribePick?.();
@@ -404,16 +358,7 @@ function setPickActive(app: GeoLibreAppAPI, active: boolean): void {
 /* Station layers and the toolbar menu                                          */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Fetches a station network and adds it as a point layer.
- *
- * Stored as GeoJSON rather than as a live service URL: a station roster is a
- * small, slowly-changing list, so the layer keeps working offline, and no
- * request URL — which would carry the service key — reaches the project file.
- *
- * @param app - The host API.
- * @param networkId - The network id from `KMA_STATION_NETWORKS`.
- */
+/** Fetches a station network and adds it as a GeoJSON layer (keeps the key out of the project). */
 async function addStationLayer(app: GeoLibreAppAPI, networkId: string): Promise<void> {
   const network = KMA_STATION_NETWORKS.find((entry) => entry.id === networkId);
   if (!network) return;
@@ -425,8 +370,6 @@ async function addStationLayer(app: GeoLibreAppAPI, networkId: string): Promise<
     const stations = await kmaStations(networkId);
     app.addGeoJsonLayer(name, kmaStationsToGeoJson(stations), `kma://stations/${networkId}`);
   } catch (error) {
-    // The panel is this plugin's own error surface; a menu click that fails
-    // would otherwise look like it did nothing at all.
     state.status = `${name}: ${errorMessage(error)}`;
     app.openRightPanel?.(PANEL_ID);
   } finally {
@@ -435,22 +378,12 @@ async function addStationLayer(app: GeoLibreAppAPI, networkId: string): Promise<
   }
 }
 
-/**
- * Fetches the air-quality network and adds it as a point layer.
- *
- * Station positions and readings come from two services and are joined by
- * station name, so the features carry concentrations the Style panel can shade
- * by — a station layer without values would only be dots.
- *
- * @param app - The host API.
- */
+/** Fetches the air-quality network, joined by station name, as one point layer. */
 async function addAirQualityLayer(app: GeoLibreAppAPI): Promise<void> {
   state.busy = true;
   state.status = "";
   rerenderPanel();
   try {
-    // Issued together: the station list does not change hour to hour, but
-    // fetching it in sequence would double the wait for no benefit.
     const [stations, readings] = await Promise.all([airKoreaStations(), airKoreaReadings()]);
     app.addGeoJsonLayer(
       labels.airQuality,
@@ -468,51 +401,29 @@ async function addAirQualityLayer(app: GeoLibreAppAPI): Promise<void> {
 
 let unregisterMenu: (() => void) | null = null;
 
-/**
- * Mounts the panel body into whichever shell asked for it — docked or floating.
- *
- * @param container - The host-provided element.
- * @returns The cleanup the host runs when that shell closes.
- */
+/** Mounts the panel body into whichever shell asked for it — docked or floating. */
 function mountPanel(container: HTMLElement): () => void {
   state.container = container;
   renderPanel(container);
   return () => {
-    // Only clear when this is still the mounted one: closing the docked panel
-    // after detaching would otherwise blank the card that is now showing.
+    // Only clear if still mounted: closing after detaching would blank the new one.
     if (state.container === container) state.container = null;
   };
 }
 
-/**
- * Shows the panel docked in the right sidebar, closing the detached card.
- *
- * @param app - The host API.
- */
+/** Shows the panel docked in the right sidebar, closing the detached card. */
 function showDockedPanel(app: GeoLibreAppAPI): void {
   app.closeFloatingPanel?.(FLOATING_PANEL_ID);
   app.openRightPanel?.(PANEL_ID);
 }
 
-/**
- * Shows the panel as a floating card, closing the docked one.
- *
- * Several cards stay open at once, so this is how two plugins are used side by
- * side: the host allows only one *docked* plugin panel.
- *
- * @param app - The host API.
- */
+/** Shows the panel as a floating card, closing the docked one. */
 function showFloatingPanel(app: GeoLibreAppAPI): void {
   app.closeRightPanel?.(PANEL_ID);
   app.openFloatingPanel?.(FLOATING_PANEL_ID);
 }
 
-/**
- * Registers (or rebuilds) the KMA toolbar menu. Rebuilt rather than mutated,
- * since the entries' disabled state follows the configured key.
- *
- * @param app - The host API.
- */
+/** Registers (or rebuilds) the KMA toolbar menu; rebuilt since disabled state follows the key. */
 function buildToolbarMenu(app: GeoLibreAppAPI): void {
   const ready = hasKmaApiKey();
   unregisterMenu?.();
@@ -572,20 +483,9 @@ function sectionTitle(text: string): HTMLElement {
   return element("h3", "geolibre-plugin-panel__section-title", text);
 }
 
-/**
- * Renders a raw KMA value for display, decoding the coded categories.
- *
- * SKY and PTY are integer codes, not measurements — showing "1" instead of
- * "Clear" is the difference between a reading and a puzzle.
- *
- * @param category - The KMA category code.
- * @param value - The raw value.
- * @returns The display string.
- */
+/** Renders a raw KMA value, decoding SKY/PTY's integer codes into words. */
 function displayValue(category: string, value: string): string {
-  // ±900 and beyond is the agency's "no data" sentinel, not a reading — an
-  // ocean cell with no instrument, or an outage. Showing it raw puts "-999" in
-  // the panel as if it were a temperature.
+  // ±900+ is the agency's "no data" sentinel, not a reading.
   if (isMissingValue(value)) return labels.missingValue;
   if (category === "SKY") {
     const name = KMA_SKY_LABELS[value.trim()];
@@ -617,12 +517,7 @@ function windSummary(values: Record<string, string>): string {
   return point ? `${point} ${speed}` : speed;
 }
 
-/**
- * The observation block: a headline reading plus the supporting values.
- *
- * The temperature and sky/precipitation state answer "what is it like there",
- * so they lead; everything else is detail below.
- */
+/** The observation block: temperature/sky headline, then supporting values. */
 function conditionsBlock(conditions: KmaPointConditions): HTMLElement {
   const wrapper = element("div", "kma-conditions");
   const values: Record<string, string> = {};
@@ -634,8 +529,6 @@ function conditionsBlock(conditions: KmaPointConditions): HTMLElement {
   }
   const sky = values.SKY ? displayValue("SKY", values.SKY) : "";
   const precipitation = values.PTY ? displayValue("PTY", values.PTY) : "";
-  // "없음" as a headline reads as a failure; the sky state is the useful word
-  // when there is no precipitation.
   const headline = [sky, precipitation !== labels.conditions.none ? precipitation : ""]
     .filter(Boolean)
     .join(" · ");
@@ -660,13 +553,7 @@ function conditionsBlock(conditions: KmaPointConditions): HTMLElement {
   return wrapper;
 }
 
-/**
- * The forecast block: one row per forecast hour, grouped under a day header.
- *
- * The service answers with a flat list of every category repeated for every
- * hour. Rendered in that order it is unreadable — the same labels over and over
- * with no time attached — so it is pivoted into time slots first.
- */
+/** The forecast block: pivots the service's flat category list into hourly rows under a day header. */
 function forecastBlock(forecast: KmaPointConditions, hours: number): HTMLElement {
   const wrapper = element("div", "kma-forecast");
   const slots = groupForecastSlots(forecast.values).slice(0, hours);

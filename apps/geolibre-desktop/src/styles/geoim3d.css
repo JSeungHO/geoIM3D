@@ -1,18 +1,10 @@
 /**
- * geoIM3D styles.
- *
- * Kept out of `index.css` — an upstream file that changes with every release —
- * so updating the fork never means reconciling our rules with theirs. Imported
- * from `main.tsx` right after the upstream sheet, so these still win on equal
- * specificity.
+ * geoIM3D styles, kept out of upstream's `index.css`. Imported from
+ * `main.tsx` right after it, so these still win on equal specificity.
  */
-/* ---------------------------------------------------------------------------
-* Plugin right-panel body (maplibre-vworld, maplibre-kma). The plugins package is
- * framework-agnostic and renders plain DOM into the right-panel body, so it
- * cannot use Tailwind classes or the shadcn primitives. Style it here against
- * the same CSS variables the rest of the app uses, so it follows the theme.
- * Logical properties throughout, since the UI mirrors for RTL locales.
- * ------------------------------------------------------------------------- */
+/* Plugin right-panel body (maplibre-vworld, maplibre-kma): plain DOM the
+ * plugins package renders, styled against the app's own CSS variables.
+ * Logical properties throughout for RTL. */
 .geolibre-plugin-panel {
   display: flex;
   flex-direction: column;
@@ -161,11 +153,7 @@
   margin: 0;
 }
 
-/* ---------------------------------------------------------------------------
- * KMA weather panel. The observation block leads with the temperature and sky
- * state; the forecast is a time series, so it renders one row per hour under a
- * day header rather than as the flat category list the service returns.
- * ------------------------------------------------------------------------- */
+/* KMA weather panel: forecast renders one row per hour under a day header. */
 .kma-conditions {
   display: flex;
   flex-direction: column;
@@ -243,11 +231,7 @@
   text-align: end;
 }
 
-/* ---------------------------------------------------------------------------
- * VWorld feature inspection. The readable attributes lead; the schema's
- * internal identifiers sit behind a disclosure so they stay reachable without
- * burying the six values a person actually reads.
- * ------------------------------------------------------------------------- */
+/* VWorld feature inspection: raw identifiers sit behind a disclosure. */
 .vworld-feature {
   display: flex;
   flex-direction: column;
@@ -278,11 +262,7 @@
   overflow-wrap: anywhere;
 }
 
-/* 3D objects -----------------------------------------------------------------
- *
- * One loaded object: its name, the transform fields, and the actions. Each
- * block is separated so a panel holding several stays readable.
- * ------------------------------------------------------------------------- */
+/* 3D objects: one loaded object's name, transform fields, and actions. */
 .geoim3d-object {
   border-top: 1px solid hsl(var(--border));
   display: flex;
@@ -347,11 +327,7 @@
   flex: 1;
 }
 
-/* 3D object loading ----------------------------------------------------------
- *
- * Indeterminate: the splat renderer fetches the file itself and reports no
- * byte count. The bar says "working", the label says on what.
- * ------------------------------------------------------------------------- */
+/* 3D object loading: indeterminate bar, no byte count available. */
 .geoim3d-progress {
   display: flex;
   flex-direction: column;

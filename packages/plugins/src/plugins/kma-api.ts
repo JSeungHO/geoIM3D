@@ -1,19 +1,7 @@
 /**
- * KMA (기상청, Korea Meteorological Administration) OpenAPI client.
- *
- * Talks to the public-data portal services under `apis.data.go.kr/1360000`,
- * which — unlike the KMA's own API Hub — send `Access-Control-Allow-Origin: *`
- * and so work in the browser build as well as the desktop shell.
- *
- * Mirrors the conventions of `vworld-api.ts`:
- *
- * - The service key is module-private, injected through {@link setKmaApiKey},
- *   with no getter. It is never placed on `window` or written into a layer.
- * - Errors are reduced to a {@link KmaErrorKind}; no message carries the key or
- *   the request URL.
- * - Coordinates are explicit about their CRS. The forecast services are indexed
- *   by the KMA's own 5 km Lambert grid, so the conversion lives here (see
- *   {@link latLonToGrid}) and callers pass plain WGS84.
+ * KMA OpenAPI client (`apis.data.go.kr/1360000`, CORS-friendly unlike the
+ * KMA's own Hub). Mirrors `vworld-api.ts`'s conventions: private key, errors
+ * reduced to {@link KmaErrorKind}, coordinates cross the boundary as WGS84.
  */
 
 const KMA_ORIGIN = "https://apis.data.go.kr";
@@ -34,46 +22,26 @@ export interface KmaResponse {
 export type KmaTransport = (url: string, init?: { signal?: AbortSignal }) => Promise<KmaResponse>;
 
 /**
- * How requests leave the app. Defaults to the browser's `fetch`.
- *
- * The public-data portal does not merely omit CORS headers — it answers **403
- * to any request carrying an `Origin` header**. The identical request without
- * one returns 200 and data. A browser always sends `Origin` cross-origin, so
- * these services are unreachable from a web page no matter how valid the key
- * is; the host swaps in a transport that is not a browser request (a native
- * HTTP call on the desktop, a same-origin dev proxy in the browser).
+ * How requests leave the app. Defaults to `fetch`, but the portal 403s any
+ * request carrying an `Origin` header, so the host swaps in a non-browser
+ * transport (native HTTP on desktop, a same-origin dev proxy in the browser).
  */
 let transport: KmaTransport = (url, init) => fetch(url, init);
 
-/**
- * Replaces the request transport.
- *
- * @param next - The transport to use, or null to restore the browser default.
- */
+/** Replaces the request transport, or restores the browser default with null. */
 export function setKmaTransport(next: KmaTransport | null): void {
   transport = next ?? ((url, init) => fetch(url, init));
 }
 
 const keyListeners = new Set<() => void>();
 
-/**
- * Subscribes to key changes, so the plugin menu can rebuild its disabled state
- * when a key is saved or deleted. See `onVWorldApiKeyChange` for the rationale.
- *
- * @param listener - Called after the key changes. Receives no value.
- * @returns An unsubscribe function.
- */
+/** Subscribes to key changes, so the plugin menu can rebuild its disabled state. */
 export function onKmaApiKeyChange(listener: () => void): () => void {
   keyListeners.add(listener);
   return () => keyListeners.delete(listener);
 }
 
-/**
- * Injects the data.go.kr service key. Write-only: the host reads it from the
- * credential store and pushes it here.
- *
- * @param key - The service key, or an empty string to clear it.
- */
+/** Injects the data.go.kr service key; write-only, pushed in by the host. */
 export function setKmaApiKey(key: string): void {
   const next = normalizeServiceKey(typeof key === "string" ? key : "");
   if (next === apiKey) return;
@@ -82,19 +50,8 @@ export function setKmaApiKey(key: string): void {
 }
 
 /**
- * Normalizes a data.go.kr service key to its decoded form.
- *
- * The portal issues two spellings of the same key: a decoded one (base64, so
- * `+`, `/`, and `=` appear literally) and an "Encoding" one where those are
- * already percent-escaped. Users copy either. The request builder percent-encodes
- * whatever it is given, so an already-encoded key becomes double-encoded
- * (`%2F` → `%252F`) and the gateway never sees the real key.
- *
- * Decoding is safe to do unconditionally: a base64 key never contains `%`, so a
- * `%` is proof the value is the encoded spelling.
- *
- * @param key - The key as the user pasted it.
- * @returns The decoded key, trimmed.
+ * Decodes a data.go.kr service key to its base64 form (the portal issues both
+ * a decoded and a percent-escaped "Encoding" spelling; a `%` proves the latter).
  */
 export function normalizeServiceKey(key: string): string {
   let value = key.trim();
@@ -133,13 +90,7 @@ export type KmaErrorKind =
   | "network"
   | "timeout"
   | "invalid-key"
-  /**
-   * The key is recognized but not authorized for the requested service. The
-   * portal licenses each OpenAPI separately, so a key approved for the forecast
-   * service is still refused by the station-info service until that one is
-   * requested too. Kept apart from `invalid-key` because the fix is different:
-   * apply for the specific service rather than replace the key.
-   */
+  /** Key recognized but not licensed for this specific service (fix: request it, not the key). */
   | "access-denied"
   | "rate-limit"
   | "invalid-request"
@@ -158,19 +109,7 @@ export class KmaError extends Error {
   }
 }
 
-/**
- * Maps a data.go.kr `resultCode` to a {@link KmaErrorKind}.
- *
- * The portal shares one result-code table across every agency's services. The
- * distinctions that matter to a user: a key that was never registered or has
- * expired (`30`/`31`) needs a new key; `20` means the key is fine but this
- * service was never requested for it; an unregistered caller IP (`32`) needs a
- * portal settings change; the daily quota (`22`) just needs waiting; and
- * `03` (NODATA) is an empty result, not a fault.
- *
- * @param code - The `resultCode` from the response header.
- * @returns The matching error kind.
- */
+/** Maps a data.go.kr `resultCode` (shared across every agency's services) to a {@link KmaErrorKind}. */
 export function kmaErrorKind(code: string): KmaErrorKind {
   switch (code.trim()) {
     case "00":
@@ -204,21 +143,8 @@ export function kmaErrorKind(code: string): KmaErrorKind {
 }
 
 /**
- * Maps a gateway fault to a {@link KmaErrorKind}.
- *
- * The portal's gateway answers before the service does, with an envelope of its
- * own (`OpenAPI_ServiceResponse.cmmMsgHeader`) rather than the usual
- * `response.header`. It carries the actual reason, and reading it is the only
- * way to tell "this key does not exist" from "this key exists but this API was
- * never approved for it" — both of which arrive as a bare 403.
- *
- * `30` is reported for either, so it maps to `access-denied`: the app checks
- * the key itself when it is entered, so by the time a specific service refuses
- * it, an unapproved or not-yet-propagated 활용신청 is the likelier of the two.
- * The message names both.
- *
- * @param text - The raw response body.
- * @returns The matching kind, or null when this is not a gateway fault.
+ * Maps a gateway fault (the portal's own envelope, ahead of the service's
+ * `response.header`) to a {@link KmaErrorKind}, or null if not one.
  */
 export function gatewayErrorKind(text: string): KmaErrorKind | null {
   const code = /<?returnReasonCode>?"?\s*[:>]\s*"?(\d+)/.exec(text)?.[1];
@@ -240,21 +166,8 @@ export function gatewayErrorKind(text: string): KmaErrorKind | null {
   }
 }
 
-/**
- * Maps a transport-level HTTP status to a {@link KmaErrorKind}.
- *
- * @param status - The HTTP status code.
- * @returns The matching error kind.
- */
+/** Maps a transport-level HTTP status to a {@link KmaErrorKind}. */
 export function httpErrorKind(status: number): KmaErrorKind {
-  // Observed against the live gateway: an unregistered or unrecognized key is
-  // answered with 403 and a body of `SERVICE_KEY_IS_NOT_REGISTERED_ERROR`
-  // (returnReasonCode 30) — not 401, which is what the status alone suggests.
-  //
-  // A browser rarely reaches this function for those statuses: the portal omits
-  // CORS headers on its error responses, so `fetch` rejects before a status is
-  // available and the failure surfaces as `network`. See the note on
-  // `errorNetwork` in the plugin's labels.
   if (status === 401 || status === 403) return "invalid-key";
   if (status === 429) return "rate-limit";
   return status >= 500 ? "server" : "network";
@@ -289,19 +202,7 @@ export interface KmaGridPoint {
   ny: number;
 }
 
-/**
- * Converts WGS84 coordinates to the KMA forecast grid cell that contains them.
- *
- * The forecast services are addressed by grid cell, not by coordinate, so every
- * forecast call goes through here. Seoul City Hall (126.9780, 37.5665) must land
- * on nx 60 / ny 127 — the agency's own worked example, and what
- * `tests/kma-api.test.ts` pins.
- *
- * @param lon - Longitude in {@link KMA_CRS}.
- * @param lat - Latitude in {@link KMA_CRS}.
- * @returns The grid cell.
- * @throws {KmaError} When the coordinates are not finite.
- */
+/** Converts WGS84 to the KMA forecast grid cell (Seoul City Hall → nx 60/ny 127, per the agency's example). */
 export function latLonToGrid(lon: number, lat: number): KmaGridPoint {
   if (!Number.isFinite(lon) || !Number.isFinite(lat)) throw new KmaError("invalid-request");
 
@@ -333,13 +234,7 @@ export function latLonToGrid(lon: number, lat: number): KmaGridPoint {
   };
 }
 
-/**
- * Whether a grid cell is inside the forecast domain. Outside it the services
- * return an empty result, so callers can refuse before spending a request.
- *
- * @param point - The grid cell.
- * @returns True when the cell is within the published 149 × 253 domain.
- */
+/** Whether a grid cell is inside the forecast domain, so a caller can refuse before requesting. */
 export function isWithinKmaGrid(point: KmaGridPoint): boolean {
   return point.nx >= 1 && point.nx <= GRID.width && point.ny >= 1 && point.ny <= GRID.height;
 }
@@ -348,14 +243,7 @@ export function isWithinKmaGrid(point: KmaGridPoint): boolean {
 /* Request plumbing                                                             */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Runs a data.go.kr JSON request and classifies every failure mode.
- *
- * @param path - Path under the portal origin, e.g. `/1360000/…/getVilageFcst`.
- * @param params - Query parameters, excluding the service key.
- * @returns The response `body` object.
- * @throws {KmaError} On any failure, including an empty result (`no-data`).
- */
+/** Runs a data.go.kr JSON request and classifies every failure mode. */
 async function requestJson(
   path: string,
   params: Record<string, string>,
@@ -374,15 +262,9 @@ async function requestJson(
     const response = await transport(url.href, {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-    // The portal's gateway answers before the service does, and its two auth
-    // statuses mean different things: 401 is a key it does not recognize, 403 is
-    // a key that is recognized but not licensed for this particular API. Folding
-    // either into a generic transport failure hides the only actionable part.
     text = await response.text();
-    // Read before classifying: the gateway states the reason in the body, and
-    // throwing on the status alone discarded it — every rejection became
-    // "check the key and its caller IP" even when the real answer was that
-    // this one API had not been approved for an otherwise working key.
+    // The gateway states the actual reason in the body; the status alone conflates
+    // "unrecognized key" (401) with "recognized but unlicensed for this API" (403).
     if (!response.ok) {
       throw new KmaError(gatewayErrorKind(text) ?? httpErrorKind(response.status));
     }
@@ -420,15 +302,7 @@ async function requestJson(
   return body as Record<string, unknown>;
 }
 
-/**
- * Reads the `items.item` array out of a portal response body.
- *
- * The portal collapses a single-element list into a bare object, so a caller
- * that assumed an array would silently drop the only result.
- *
- * @param body - The response body.
- * @returns The items, always as an array.
- */
+/** Reads `items.item`, always as an array (the portal collapses a single result to a bare object). */
 function itemsOf(body: Record<string, unknown>): Array<Record<string, unknown>> {
   const items = (body.items as { item?: unknown } | undefined)?.item;
   if (Array.isArray(items)) return items as Array<Record<string, unknown>>;
@@ -441,13 +315,7 @@ function numeric(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-/**
- * Formats a Date as the `YYYYMMDD` / `HHmm` pair the forecast services take,
- * in KST — the services' own time zone, which is not necessarily the user's.
- *
- * @param date - The moment to format.
- * @returns The base date and time strings.
- */
+/** Formats a Date as the `YYYYMMDD`/`HHmm` pair the forecast services take, in KST. */
 export function kmaBaseDateTime(date: Date): {
   baseDate: string;
   baseTime: string;
@@ -508,16 +376,7 @@ export interface KmaPointConditions {
   values: KmaObservationValue[];
 }
 
-/**
- * Chooses the most recent nowcast base time.
- *
- * Per the agency's guide (§2 예보 발표시각): the observation is generated on the
- * hour and served from **10 minutes past** it. Requesting the current hour any
- * earlier returns no data, so those requests fall back an hour.
- *
- * @param now - The current moment.
- * @returns The base date and time to request.
- */
+/** Chooses the most recent nowcast base time — served from 10 minutes past the hour. */
 export function ultraShortNowcastBase(now: Date): {
   baseDate: string;
   baseTime: string;
@@ -537,15 +396,7 @@ export function ultraShortNowcastBase(now: Date): {
   };
 }
 
-/**
- * Fetches the current conditions (초단기실황) at a point.
- *
- * @param lon - Longitude in {@link KMA_CRS}.
- * @param lat - Latitude in {@link KMA_CRS}.
- * @param now - The current moment (injectable for testing).
- * @returns The observed values for the containing grid cell.
- * @throws {KmaError} On any failure, including a point outside the grid.
- */
+/** Fetches the current conditions (초단기실황) at a point. */
 export async function kmaCurrentConditions(
   lon: number,
   lat: number,
@@ -574,19 +425,7 @@ export async function kmaCurrentConditions(
   return { lon, lat, crs: KMA_CRS, grid, baseDate, baseTime, values };
 }
 
-/**
- * Fetches the short-term village forecast (단기예보) at a point.
- *
- * The service publishes at 02/05/08/11/14/17/20/23 KST; requesting a base time
- * it did not publish returns no data, so the most recent published slot at or
- * before `now` is used.
- *
- * @param lon - Longitude in {@link KMA_CRS}.
- * @param lat - Latitude in {@link KMA_CRS}.
- * @param now - The current moment (injectable for testing).
- * @returns The forecast values for the containing grid cell.
- * @throws {KmaError} On any failure.
- */
+/** Fetches the short-term village forecast (단기예보), from the most recent published run. */
 export async function kmaVillageForecast(
   lon: number,
   lat: number,
@@ -611,8 +450,7 @@ export async function kmaVillageForecast(
       });
     } catch (error) {
       lastError = error;
-      // Only an empty result is worth another run. A rejected key or an
-      // unreachable server will answer the same way for every base time.
+      // Only an empty result is worth retrying another run.
       if (!(error instanceof KmaError) || error.kind !== "no-data") throw error;
       continue;
     }
@@ -633,40 +471,20 @@ export async function kmaVillageForecast(
 /** The hours (KST) at which the village forecast is published (guide §2, 1일 8회). */
 const VILLAGE_FORECAST_HOURS = [2, 5, 8, 11, 14, 17, 20, 23];
 
-/**
- * Minutes past the hour at which a run becomes fetchable. The guide gives the
- * same offset for both products: the nowcast is served from HH:10, and each
- * village-forecast run from HH:10 of its publication hour.
- */
+/** Minutes past the hour a run becomes fetchable (both products, per the guide). */
 const NOWCAST_PUBLISH_MINUTE = 10;
 const VILLAGE_PUBLISH_MINUTE = 10;
 
-/**
- * Sentinel bound for missing values. The guide states that readings at or beyond
- * ±900 mark "no data" — an ocean cell with no instrument, or an outage — rather
- * than a real measurement. Rendering one would show a temperature of -999 °C.
- */
+/** Readings at or beyond this magnitude mean "no data", not a real measurement. */
 const MISSING_VALUE_BOUND = 900;
 
-/**
- * Whether a raw category value is the agency's missing-data sentinel.
- *
- * @param value - The raw `obsrValue`/`fcstValue`.
- * @returns True when the value means "no data".
- */
+/** Whether a raw category value is the agency's missing-data sentinel. */
 export function isMissingValue(value: string): boolean {
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) && Math.abs(parsed) >= MISSING_VALUE_BOUND;
 }
 
-/**
- * Categories worth showing, in display order.
- *
- * The services return more than a reader can use: `UUU`/`VVV` are the wind's
- * east-west and north-south components, which `VEC`/`WSD` already express as a
- * direction and a speed. Listing every code turns a forecast into a wall of
- * numbers, so the panel renders this subset and drops the rest.
- */
+/** Categories worth showing, in display order (`UUU`/`VVV` etc. are dropped — `VEC`/`WSD` cover wind). */
 export const KMA_DISPLAY_CATEGORIES: readonly string[] = [
   "T1H", // 기온 (실황)
   "TMP", // 기온 (예보)
@@ -686,12 +504,7 @@ export const KMA_DISPLAY_CATEGORIES: readonly string[] = [
 
 const DISPLAY_ORDER = new Map(KMA_DISPLAY_CATEGORIES.map((code, index) => [code, index]));
 
-/**
- * Filters and orders values for display.
- *
- * @param values - Raw values from a nowcast or forecast.
- * @returns Only the categories worth showing, in {@link KMA_DISPLAY_CATEGORIES} order.
- */
+/** Filters and orders values for display, per {@link KMA_DISPLAY_CATEGORIES}. */
 export function displayableValues(values: readonly KmaObservationValue[]): KmaObservationValue[] {
   return values
     .filter((entry) => DISPLAY_ORDER.has(entry.category))
@@ -707,17 +520,7 @@ export interface KmaForecastSlot {
   values: Record<string, string>;
 }
 
-/**
- * Pivots a flat forecast into one entry per forecast time.
- *
- * The service returns a long flat list — every category repeated for every hour
- * — so rendering it in order produces the same labels again and again with no
- * indication of which hour each belongs to. A forecast is a time series and has
- * to be grouped by its valid time before it can be read at all.
- *
- * @param values - Raw forecast values.
- * @returns Slots in chronological order.
- */
+/** Pivots the service's flat forecast list into one slot per forecast time, chronological. */
 export function groupForecastSlots(values: readonly KmaObservationValue[]): KmaForecastSlot[] {
   const slots = new Map<string, KmaForecastSlot>();
   for (const entry of values) {
@@ -735,26 +538,14 @@ export function groupForecastSlots(values: readonly KmaObservationValue[]): KmaF
   );
 }
 
-/**
- * Renders a wind bearing as an 8-point compass index.
- *
- * @param degrees - Bearing in degrees (`VEC`).
- * @returns Index 0-7 starting at north, or null when unusable.
- */
+/** Renders a wind bearing (`VEC`, degrees) as an 8-point compass index 0-7, or null. */
 export function compassIndex(degrees: string): number | null {
   const value = Number.parseFloat(degrees);
   if (!Number.isFinite(value) || isMissingValue(degrees)) return null;
   return Math.round((((value % 360) + 360) % 360) / 45) % 8;
 }
 
-/**
- * Chooses the most recent published village-forecast base time. Each run
- * becomes available about 10 minutes past its hour, so a request inside that
- * window uses the previous run.
- *
- * @param now - The current moment.
- * @returns The base date and time to request.
- */
+/** Chooses the most recent published village-forecast run (available ~10min past its hour). */
 export function villageForecastBase(
   now: Date,
   stepsBack = 0,
@@ -780,15 +571,8 @@ export function villageForecastBase(
   return { baseDate: date, baseTime: `${String(slot).padStart(2, "0")}00` };
 }
 
-/**
- * How many published runs back to look before giving up.
- *
- * The guide says a run is fetchable from HH:10, but the agency generates the
- * grid progressively and the newest run can answer "no data" for a while after
- * that. Asking only for the newest one therefore fails outright inside that
- * window instead of showing the forecast that is sitting right behind it. Two
- * steps covers roughly six hours, well past any normal publication lag.
- */
+// The newest run can answer "no data" for a while after HH:10; 2 steps back
+// covers ~6 hours of publication lag before giving up.
 const VILLAGE_FORECAST_FALLBACK_RUNS = 2;
 
 /** Outcome of a key check. */
@@ -797,25 +581,11 @@ export type KmaKeyCheck =
   | {
       ok: false;
       kind: KmaErrorKind;
-      /**
-       * Whether the agency's answer could actually be read. The portal omits
-       * CORS headers on error responses, so in a browser a rejected key is
-       * indistinguishable from an unreachable server — the UI has to say so
-       * rather than assert a cause it does not have.
-       */
+      /** Whether the reason could actually be read (no CORS means it often can't be). */
       readable: boolean;
     };
 
-/**
- * Checks the configured service key with one small live request.
- *
- * Uses the nowcast at Seoul (nx 60 / ny 127) with a single row: the cheapest
- * call that still exercises authentication end to end. A successful read is
- * proof the key works; a readable error carries the agency's own reason.
- *
- * @param now - The current moment (injectable for testing).
- * @returns Whether the key was accepted, and why not when it was not.
- */
+/** Checks the configured key with one cheap live request (Seoul nowcast, one row). */
 export async function verifyKmaApiKey(now: Date = new Date()): Promise<KmaKeyCheck> {
   if (!hasKmaApiKey()) return { ok: false, kind: "no-key", readable: true };
   const { baseDate, baseTime } = ultraShortNowcastBase(now);
@@ -831,8 +601,7 @@ export async function verifyKmaApiKey(now: Date = new Date()): Promise<KmaKeyChe
     return { ok: true };
   } catch (error) {
     const kind = error instanceof KmaError ? error.kind : "unknown";
-    // `no-data` means the request authenticated and the service answered; the
-    // key is fine, this cell/time just has nothing. Treat it as a pass.
+    // `no-data` means it authenticated fine; this cell/time just has nothing.
     if (kind === "no-data") return { ok: true };
     return {
       ok: false,
@@ -857,13 +626,7 @@ export interface KmaWarning {
   stationId: string;
 }
 
-/**
- * Lists the currently published weather warnings (기상특보).
- *
- * @param options - Optional issue-time window as `YYYYMMDD` strings.
- * @returns The warnings, newest first as the service returns them.
- * @throws {KmaError} On any failure, including an empty list (`no-data`).
- */
+/** Lists the currently published weather warnings (기상특보), newest first. */
 export async function kmaWarnings(
   options: { fromDate?: string; toDate?: string } = {},
 ): Promise<KmaWarning[]> {
@@ -899,13 +662,7 @@ export interface KmaTyphoonPosition {
   windSpeed: number | null;
 }
 
-/**
- * Lists current typhoon positions (태풍정보).
- *
- * @param options - Optional time window as `YYYYMMDD` strings.
- * @returns The reported positions.
- * @throws {KmaError} On any failure, including no active typhoon (`no-data`).
- */
+/** Lists current typhoon positions (태풍정보). */
 export async function kmaTyphoons(
   options: { fromDate?: string; toDate?: string } = {},
 ): Promise<KmaTyphoonPosition[]> {
@@ -962,10 +719,8 @@ export const KMA_STATION_NETWORKS: readonly KmaStationNetwork[] = [
   },
   { id: "pm10", labelKey: "stationsPm10", operation: "getPm10ObsStn" },
 ];
-// `getRadarObsStn` is a real operation but is deliberately not offered: a radar
-// site is a tower location, and without the composite imagery (API Hub only,
-// desktop-only) the layer is a handful of dots with nothing to read. Restore it
-// alongside that imagery rather than on its own.
+// `getRadarObsStn` is real but not offered: without the composite imagery
+// (API Hub only) the layer is just dots. Restore alongside that imagery.
 
 export interface KmaStation {
   id: string;
@@ -975,13 +730,7 @@ export interface KmaStation {
   crs: typeof KMA_CRS;
 }
 
-/**
- * Fetches every station in a network as points.
- *
- * @param networkId - The network id from {@link KMA_STATION_NETWORKS}.
- * @returns The stations that carry usable coordinates.
- * @throws {KmaError} On any failure, including an unknown network id.
- */
+/** Fetches every station in a network as points, dropping any with no usable coordinates. */
 export async function kmaStations(networkId: string): Promise<KmaStation[]> {
   const network = KMA_STATION_NETWORKS.find((entry) => entry.id === networkId);
   if (!network) throw new KmaError("invalid-request");
@@ -1011,12 +760,7 @@ export async function kmaStations(networkId: string): Promise<KmaStation[]> {
   return stations;
 }
 
-/**
- * Converts stations to a GeoJSON FeatureCollection for the map store.
- *
- * @param stations - The stations to convert.
- * @returns A point FeatureCollection in {@link KMA_CRS}.
- */
+/** Converts stations to a GeoJSON FeatureCollection ({@link KMA_CRS}) for the map store. */
 export function kmaStationsToGeoJson(stations: readonly KmaStation[]): {
   type: "FeatureCollection";
   features: Array<{
