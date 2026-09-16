@@ -1166,7 +1166,7 @@ export default defineConfig({
     __GEOLIBRE_BUILD_ENV__: JSON.stringify(BUILD_ENV),
   },
   server: {
-    port: 5173,
+    port: 5179,
     strictPort: true,
     // Bind the IPv4 loopback explicitly. Vite's default (`localhost`) resolves
     // through the OS, which on a dual-stack Linux box binds `[::1]` only — so a
