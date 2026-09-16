@@ -2,36 +2,15 @@ import i18n from "../i18n";
 import { setGeoim3dObjectLabels, setKmaLabels, setVWorldLabels } from "@geolibre/plugins";
 
 /**
- * Pushes this fork's plugin strings into the plugins that own them.
- *
- * The plugins package is framework-agnostic and cannot call react-i18next, so
- * every string it shows has to be handed to it. Upstream does that from
- * `TopToolbar`, inside a `[t]` effect, and the fork followed suit — which put
- * ~140 lines of our strings in the middle of a large upstream component and
- * grew it with every plugin we added. Every one of those lines was a place an
- * upstream change to that file could collide with.
- *
- * Subscribing to i18next directly does the same job from a file upstream does
- * not have, so the toolbar keeps none of it. `languageChanged` is the event the
- * `[t]` effect was reacting to anyway, one step removed.
- *
- * Call {@link startGeoim3dLabelSync} once at startup.
+ * Pushes this fork's plugin strings into the plugins that own them
+ * (framework-agnostic, can't call react-i18next). Call
+ * {@link startGeoim3dLabelSync} once at startup.
  */
 
-/**
- * A translator bound to the active language.
- *
- * Generic in its result because a few of these keys are whole sub-trees fetched
- * with `returnObjects` (the KMA code tables, the VWorld attribute names) rather
- * than single strings.
- */
+/** A translator bound to the active language; generic for `returnObjects` keys. */
 type Translate = <T = string>(key: string, options?: Record<string, unknown>) => T;
 
-/**
- * Pushes every label for the current language.
- *
- * @param t - A translator bound to the active language.
- */
+/** Pushes every label for the current language. */
 function pushLabels(t: Translate): void {
   setVWorldLabels({
     title: t("vworld.title"),
@@ -58,8 +37,7 @@ function pushLabels(t: Translate): void {
     featureInfoNoLayers: t("vworld.featureInfoNoLayers"),
     addFeatureLayer: t("vworld.addFeatureLayer"),
     rawAttributes: t("vworld.rawAttributes"),
-    // Returned whole: the WFS schema decides the field names, so a new
-    // column is an i18n addition rather than another line here.
+    // Returned whole: WFS schema decides the field names.
     attributes: t<Record<string, string>>("vworld.attribute", { returnObjects: true }),
     reverseGeocode: t("vworld.reverseGeocode"),
     reverseGeocodeHint: t("vworld.reverseGeocodeHint"),
@@ -141,8 +119,7 @@ function pushLabels(t: Translate): void {
     openPanelFloating: t("kma.openPanelFloating"),
     stations: t("kma.stations"),
     airQuality: t("kma.airQuality"),
-    // Returned whole: the network list lives in the plugin, so a new network
-    // is an i18n addition rather than another line here.
+    // Returned whole: the network list lives in the plugin.
     networks: {
       stationsAws: t("kma.stationsAws"),
       stationsBuoy: t("kma.stationsBuoy"),
@@ -164,9 +141,7 @@ function pushLabels(t: Translate): void {
     missingValue: t("kma.missingValue"),
     wind: t("kma.wind"),
     compass: t<string[]>("kma.compass", { returnObjects: true }),
-    // The category and condition maps are returned whole rather than listed
-    // key by key: they mirror the KMA's own code tables, so a new code is an
-    // i18n addition, not a code change here.
+    // Returned whole: these mirror the KMA's own code tables.
     categories: t<Record<string, string>>("kma.category", { returnObjects: true }),
     conditions: t<Record<string, string>>("kma.condition", { returnObjects: true }),
     errorNoKey: t("kma.error.no-key"),
@@ -182,20 +157,12 @@ function pushLabels(t: Translate): void {
   });
 }
 
-/**
- * Starts pushing labels, and keeps them in step with the language.
- *
- * Safe to call more than once; the second call replaces the first subscription
- * rather than adding another.
- *
- * @returns An unsubscribe function.
- */
+/** Starts pushing labels, and keeps them in step with the language. Safe to call twice. */
 let stopLabelSync: (() => void) | null = null;
 
 export function startGeoim3dLabelSync(): () => void {
   stopLabelSync?.();
-  // Cast at this one seam: i18next types `t` against the whole key union,
-  // which is too large for the compiler to relate to a plain string (TS2590).
+  // Cast: i18next's key union is too large for TS to relate to a plain string.
   const push = () =>
     pushLabels(
       <T>(key: string, options?: Record<string, unknown>) =>
@@ -203,9 +170,7 @@ export function startGeoim3dLabelSync(): () => void {
     );
   push();
   i18n.on("languageChanged", push);
-  // Catalogs load lazily, so the first push can run before this fork's strings
-  // are in i18next. Without this the plugins would keep their English defaults
-  // until the user happened to switch languages.
+  // Catalogs load lazily, so the first push can predate this fork's strings.
   i18n.on("loaded", push);
   stopLabelSync = () => {
     i18n.off("languageChanged", push);

@@ -14,16 +14,7 @@ import { CollapsibleSection } from "../CollapsibleSection";
 
 /**
  * The VWorld basemaps, offered in Change Basemap beside the other regions.
- *
- * Built as its own component, laid out like `RegionalBasemapSection`, so the
- * picker gains one tag rather than a block of fork code — and so this does not
- * have to go into `@geolibre/core`'s regional table, which has no notion of a
- * basemap that needs a key.
- *
- * The key is exactly why it is separate. VWorld tiles 403 without one, so a
- * button offered to a user who has not entered a key leads to a blank map; the
- * section is simply absent until Settings has one, and appears the moment it
- * does.
+ * Hidden until a key is configured, since VWorld tiles 403 without one.
  */
 
 interface VWorldBasemapSectionProps {
@@ -33,23 +24,14 @@ interface VWorldBasemapSectionProps {
   onSelect: (styleUrl: string) => void;
 }
 
-/**
- * Whether a VWorld key is configured, kept current as Settings changes it.
- *
- * @returns True when a key is set.
- */
+/** Whether a VWorld key is configured, kept current as Settings changes it. */
 function useHasVWorldKey(): boolean {
   const [configured, setConfigured] = useState(() => hasVWorldApiKey());
   useEffect(() => onVWorldApiKeyChange(() => setConfigured(hasVWorldApiKey())), []);
   return configured;
 }
 
-/**
- * Renders the VWorld basemap choices.
- *
- * @param props - Current style and the apply callback.
- * @returns The section, or null when no key is configured.
- */
+/** Renders the VWorld basemap choices, or null when no key is configured. */
 export function VWorldBasemapSection({ activeStyleUrl, onSelect }: VWorldBasemapSectionProps) {
   const { t } = useTranslation();
   const configured = useHasVWorldKey();
@@ -57,14 +39,10 @@ export function VWorldBasemapSection({ activeStyleUrl, onSelect }: VWorldBasemap
   const setMapView = useAppStore((s) => s.setMapView);
   if (!configured) return null;
 
-  // Hybrid is transparent annotation, not imagery, and is drawn into the
-  // Satellite basemap's own style. Listing it here would offer the half that is
-  // unreadable on its own.
+  // Hybrid is annotation-only, drawn into Satellite's own style.
   const basemaps = VWORLD_BASE_MAPS.filter((basemap) => !basemap.overlayFor);
 
-  // Asked of the plugin rather than parsed out of the URL: a sentinel only
-  // resolves for the session that registered it, so a dead one left in the
-  // store would highlight a basemap that is not on the map.
+  // Asked of the plugin: a sentinel only resolves for the session that made it.
   const activeId = vworldBasemapIdFor(activeStyleUrl);
 
   return (
@@ -85,10 +63,7 @@ export function VWorldBasemapSection({ activeStyleUrl, onSelect }: VWorldBasemap
             onClick={() => {
               void registerVWorldBasemapStyle(basemap.id).then((styleUrl) => {
                 if (!styleUrl) return;
-                // VWorld covers Korea from zoom 6 down. Chosen from a world
-                // view it draws nothing at all, and a blank globe reads as a
-                // basemap that failed rather than one you are standing too far
-                // from. A view already inside the coverage is left alone.
+                // VWorld only covers Korea from zoom 6 down; jump there if needed.
                 const view = vworldCoverageView({
                   longitude: mapView.center[0],
                   latitude: mapView.center[1],

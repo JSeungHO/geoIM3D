@@ -1,13 +1,6 @@
 /**
  * Adds VWorld building footprints as an extruded layer.
- *
- * Lives in the app because the plugin API exposes no way to set a layer's
- * style, and extrusion is the point: added flat, these polygons are just the
- * WMS overlay again. The plugin fetches and shapes the data; this applies it.
- *
- * Extruding the authoritative footprints is what gives the 3D view real
- * buildings without a Cesium Ion asset — the heights come from the building
- * register's storey counts rather than a hosted global tileset.
+ * Lives in the app because the plugin API has no way to set layer style.
  */
 
 import { useAppStore } from "@geolibre/core";

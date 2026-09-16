@@ -1,15 +1,6 @@
 /**
- * Saved 3D object placements.
- *
- * Getting an object onto the right spot takes a longitude, a latitude, an
- * altitude, a scale and three rotations, found by trial. Losing that on every
- * reload is the difference between a map you can show someone and one you
- * rebuild first, so the numbers are kept beside the file they belong to.
- *
- * Only the **source** is stored, never the readable URL: a `blob:` is dead the
- * moment the page reloads, and an `asset:` URL is meaningless without the path
- * behind it. A desktop path survives because Tauri's persisted-scope plugin
- * keeps a file the user picked authorized across restarts.
+ * Saved 3D object placements. Only the **source** is stored, never a
+ * readable URL — `blob:`/`asset:` die with the page or need reauthorizing.
  */
 
 import type { ObjectKind, ObjectTransform } from "./geoim3d-objects";
@@ -26,46 +17,18 @@ export interface ObjectPreset {
   source: string;
   kind: ObjectKind;
   transform: ObjectTransform;
-  /**
-   * A 3D Tiles `tileset.json` showing the same site, if one was built.
-   *
-   * The splat renderer draws into the 2D map only, so the Cesium globe shows
-   * nothing for a splat preset. A tileset is the one 3D form that globe can
-   * render, and this is where a preset says it has one.
-   */
+  /** A 3D Tiles `tileset.json` for the same site — the one form the Cesium globe can show. */
   tileset?: string;
-  /**
-   * Where the tileset sits, when it needs different numbers from the splat.
-   *
-   * It does: a splat's origin is wherever the scan started and its scale is in
-   * arbitrary units, while a tileset is centred on its own bounding box and
-   * built in metres. One set of numbers cannot place both.
-   */
+  /** The tileset's own placement; its origin/scale differ from the splat's. */
   tilesetTransform?: ObjectTransform;
 }
 
-/**
- * Whether a source can be reloaded in a later session.
- *
- * A `blob:` URL cannot: it belongs to the page that made it. That is every
- * browser file pick, so those objects can be placed but not saved.
- *
- * @param source - The source recorded for an object.
- * @returns True when saving it is worth anything.
- */
+/** Whether a source can be reloaded later — false for any `blob:`/`asset:` pick. */
 export function isDurableSource(source: string): boolean {
   return !/^(blob|asset):/i.test(source) && source.trim().length > 0;
 }
 
-/**
- * Reads presets out of stored JSON, dropping anything malformed.
- *
- * Tolerant on purpose: this is user-local storage that an older or newer build
- * may have written, and losing one bad entry beats throwing away the list.
- *
- * @param raw - The stored string, or null when nothing is stored.
- * @returns The presets that parsed.
- */
+/** Reads presets out of stored JSON, dropping anything malformed rather than the whole list. */
 export function parsePresets(raw: string | null): ObjectPreset[] {
   if (!raw) return [];
   let parsed: unknown;
@@ -78,12 +41,7 @@ export function parsePresets(raw: string | null): ObjectPreset[] {
   return parsed.filter(isPreset);
 }
 
-/**
- * Reads an optional transform out of manifest JSON.
- *
- * @param value - The raw entry.
- * @returns The transform, or undefined when it is absent or incomplete.
- */
+/** Reads an optional transform out of manifest JSON; undefined if absent or incomplete. */
 function readTransform(value: unknown): ObjectTransform | undefined {
   const raw = value as Partial<ObjectTransform> | null;
   if (!raw) return undefined;
@@ -121,16 +79,7 @@ function isPreset(value: unknown): value is ObjectPreset {
   );
 }
 
-/**
- * Adds a preset, replacing one with the same source.
- *
- * Keyed by source rather than appended: saving the same file twice means "these
- * are the numbers now", not "keep both".
- *
- * @param presets - The current list.
- * @param preset - The preset to store.
- * @returns The new list.
- */
+/** Adds a preset, replacing one with the same source (saving twice means "these are the numbers now"). */
 export function upsertPreset(
   presets: readonly ObjectPreset[],
   preset: ObjectPreset,
@@ -143,11 +92,7 @@ export function upsertPreset(
 /* Storage                                                                      */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Loads the saved presets.
- *
- * @returns The presets, or an empty list where there is no storage.
- */
+/** Loads the saved presets, or an empty list where there is no storage. */
 export function loadPresets(): ObjectPreset[] {
   if (typeof localStorage === "undefined") return [];
   try {
@@ -157,11 +102,7 @@ export function loadPresets(): ObjectPreset[] {
   }
 }
 
-/**
- * Writes the presets back.
- *
- * @param presets - The list to store.
- */
+/** Writes the presets back. */
 export function savePresets(presets: readonly ObjectPreset[]): void {
   if (typeof localStorage === "undefined") return;
   try {
@@ -183,31 +124,11 @@ export const BUNDLED_OBJECTS_MANIFEST =
 /** Marks a preset that ships with the app, so the UI does not offer to delete it. */
 export const BUNDLED_PRESET_ID_PREFIX = "bundled:";
 
-/**
- * Whether a preset came from the shipped manifest rather than the user.
- *
- * @param preset - The preset to test.
- * @returns True when it ships with the app.
- */
+/** Whether a preset came from the shipped manifest rather than the user. */
 export function isBundledPreset(preset: ObjectPreset): boolean {
   return preset.id.startsWith(BUNDLED_PRESET_ID_PREFIX);
 }
 
-/**
- * Turns the shipped manifest into presets.
- *
- * The manifest names a file and where it sits; the URL is built from the app's
- * own base, so the object is same-origin — no picker, no native fetch, and
- * nothing for the CSP to refuse, on the desktop and in a browser alike.
- *
- * Each entry is validated the same way a stored preset is: a placement missing
- * a number would put the object at NaN, which renders nothing and reads as a
- * broken file rather than a broken manifest.
- *
- * @param raw - The manifest's contents.
- * @param baseUrl - The app's base URL, for resolving each file.
- * @returns The presets the manifest describes.
- */
 /** A URL that already names its own host is left alone. */
 function isAbsoluteUrl(value: string): boolean {
   return /^[a-z][a-z0-9+.-]*:\/\//i.test(value);
@@ -217,21 +138,12 @@ function withTrailingSlash(value: string): string {
   return value.endsWith("/") ? value : `${value}/`;
 }
 
-/**
- * Where one of a manifest entry's files actually is.
- *
- * An entry may name a bare file (resolved against the manifest's base, which is
- * either the app's `objects/` folder or a file server) or a full URL of its
- * own, for the odd object that lives somewhere else.
- *
- * @param value - The `file` or `tileset` the entry names.
- * @param root - The manifest's base, already ending in a slash.
- * @returns The absolute URL to load.
- */
+/** Resolves a manifest entry's `file`/`tileset` against the manifest's base, unless it's already a full URL. */
 function resolveAsset(value: string, root: string): string {
   return isAbsoluteUrl(value) ? value : new URL(value, root).href;
 }
 
+/** Turns the shipped manifest into presets, validated the same way a stored preset is. */
 export function parseBundledManifest(raw: string, baseUrl: string): ObjectPreset[] {
   let parsed: unknown;
   try {
@@ -243,11 +155,7 @@ export function parseBundledManifest(raw: string, baseUrl: string): ObjectPreset
   const entries = document?.objects;
   if (!Array.isArray(entries)) return [];
 
-  // Where the binaries live. They are tens of megabytes each and gitignored, so
-  // an installer carried to another machine either bloats by that much or
-  // arrives without them; `baseUrl` points the whole manifest at a file server
-  // instead, and the app ships only this file. Relative to the app when absent,
-  // which is the bundled layout.
+  // `baseUrl` points at a file server; relative to the app when absent.
   const root =
     typeof document?.baseUrl === "string" && document.baseUrl.trim()
       ? withTrailingSlash(document.baseUrl.trim())
@@ -290,21 +198,8 @@ export function parseBundledManifest(raw: string, baseUrl: string): ObjectPreset
 /* -------------------------------------------------------------------------- */
 
 /**
- * The style's own 3D buildings, which are not any layer of ours.
- *
- * A basemap style draws buildings with `fill-extrusion`, and at street level
- * they stand in front of an uploaded scan and hide it. Turning them off has to
- * spare the user's own extrusions — the VWorld 3D building layer is a
- * `fill-extrusion` too, and hiding that along with the basemap's would be a
- * different bug wearing the same clothes.
- *
- * The test is ownership, not naming: every layer GeoLibre puts on the map
- * records its native ids, so anything extruded that is not among them belongs
- * to the style.
- *
- * @param styleLayerIds - Ids and types from `map.getStyle().layers`.
- * @param ownedNativeIds - Native layer ids claimed by the app's own layers.
- * @returns The style's extrusion layer ids.
+ * The style's own `fill-extrusion` buildings (not the user's, e.g. VWorld's
+ * 3D layer) — ownership by native id, not by name.
  */
 export function basemapExtrusionLayerIds(
   styleLayerIds: ReadonlyArray<{ id: string; type: string }>,
@@ -319,30 +214,11 @@ export function basemapExtrusionLayerIds(
 /* Placement bounds                                                             */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Half-width of the box an object claims on the map, in metres.
- *
- * ponytail: a guess, because the real extent is not knowable from here — the
- * scale is a multiplier on the source file's own size, and nothing public on a
- * loaded splat reports its bounding box. 150 m suits the site scans this is
- * built for (a park, a building and its grounds) and puts the zoom button
- * somewhere near where the object was loaded. Compute it from the mesh if the
- * library ever exposes one.
- */
+// ponytail: a guess (no library API reports a loaded splat's real bounding box);
+// compute from the mesh if one is ever exposed.
 const PLACEMENT_RADIUS_M = 150;
 
-/**
- * A small box around an object's placement.
- *
- * The layer panel's zoom button needs bounds; without them it looks up the
- * layer, finds nothing, and returns — the button did nothing at all for a 3D
- * object.
- *
- * @param longitude - Placement longitude.
- * @param latitude - Placement latitude.
- * @param radiusMetres - Half-width of the box. Defaults to {@link PLACEMENT_RADIUS_M}.
- * @returns `[west, south, east, north]`.
- */
+/** A small box around an object's placement, so the layer panel's zoom button has bounds. */
 export function placementBounds(
   longitude: number,
   latitude: number,

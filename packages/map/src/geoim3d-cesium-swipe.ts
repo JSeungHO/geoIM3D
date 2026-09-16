@@ -1,15 +1,7 @@
 /**
- * Layer Swipe on the globe.
- *
- * The swipe control is a MapLibre control: it compares by clipping style layers
- * and mirroring deck.gl rasters onto a second map, none of which the globe has.
- * Cesium compares natively instead — one split position on the scene and a
- * direction per imagery layer or tileset — so the globe does not need any of
- * that machinery, only the answer to "which side is this layer on".
- *
- * The swipe plugin publishes that answer here and the Cesium sync reads it. The
- * two never import each other: the plugin owns a MapLibre control and the sync
- * owns a Cesium viewer, and neither belongs in the other's module graph.
+ * Layer Swipe on the globe: Cesium compares natively (one split position, a
+ * side per layer), so the swipe plugin publishes the answer here and the
+ * Cesium sync reads it — neither imports the other.
  */
 
 import type { GeoLibreLayer } from "@geolibre/core";
@@ -28,11 +20,7 @@ export interface CesiumSwipeState {
 let current: CesiumSwipeState | null = null;
 const listeners = new Set<() => void>();
 
-/**
- * Publishes the swipe, or clears it when the control goes away.
- *
- * @param state - The swipe to mirror onto the globe, or null for none.
- */
+/** Publishes the swipe, or clears it when the control goes away. */
 export function setCesiumSwipeState(state: CesiumSwipeState | null): void {
   current = state;
   for (const listener of [...listeners]) listener();
@@ -43,26 +31,13 @@ export function getCesiumSwipeState(): CesiumSwipeState | null {
   return current;
 }
 
-/**
- * Runs `listener` whenever the swipe changes.
- *
- * @param listener - Called after every publish.
- * @returns Unsubscribes.
- */
+/** Runs `listener` whenever the swipe changes; returns an unsubscribe. */
 export function subscribeCesiumSwipe(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
 
-/**
- * The side a layer is on, as Cesium's `SplitDirection` values.
- *
- * `both` and an unlisted layer are -1/0/1's "none": Cesium's NONE means "not
- * split", which is what draws a layer on both sides.
- *
- * @param layerId - The store layer's id.
- * @returns -1 for left, 1 for right, 0 for both sides.
- */
+/** The side a layer is on, as Cesium's `SplitDirection` values (-1/0/1). */
 export function cesiumSplitDirectionFor(layerId: string): -1 | 0 | 1 {
   const side = current?.sides.get(layerId);
   if (side === "left") return -1;
@@ -71,17 +46,8 @@ export function cesiumSplitDirectionFor(layerId: string): -1 | 0 | 1 {
 }
 
 /**
- * Whether a swipe-panel row names this store layer.
- *
- * The panel lists two kinds of id: a store layer id, for the deck.gl rasters the
- * provider contributes, and a MapLibre style layer id for everything the control
- * reads out of the style itself. One store layer usually draws as several of the
- * latter (`<id>-fill`, `<id>-line`), so a prefix match catches them without the
- * plugin having to know each renderer's naming.
- *
- * @param layer - The store layer.
- * @param swipeId - An id from the swipe control's side lists.
- * @returns True when the row belongs to this layer.
+ * Whether a swipe-panel row names this store layer — a store id, a mirrored
+ * native layer id, or a `<id>-fill`/`<id>-line`-style prefix match.
  */
 function swipeRowMatchesLayer(layer: GeoLibreLayer, swipeId: string): boolean {
   if (swipeId === layer.id) return true;
@@ -90,18 +56,7 @@ function swipeRowMatchesLayer(layer: GeoLibreLayer, swipeId: string): boolean {
   return swipeId.startsWith(`${layer.id}-`);
 }
 
-/**
- * Which side of the swipe each store layer is on.
- *
- * Exported for its own test: the mapping from the control's rows to store
- * layers is the whole of what the globe needs, and it cannot be checked through
- * a MapLibre control and a Cesium viewer.
- *
- * @param layers - The store's layers.
- * @param leftLayers - Swipe rows assigned left.
- * @param rightLayers - Swipe rows assigned right.
- * @returns Side per store layer id; a layer on neither list is left out.
- */
+/** Which side of the swipe each store layer is on; a layer on neither list is left out. */
 export function cesiumSwipeSides(
   layers: readonly GeoLibreLayer[],
   leftLayers: readonly string[],
@@ -116,8 +71,7 @@ export function cesiumSwipeSides(
     }
   };
   assign(leftLayers, "left");
-  // Right wins a layer listed on both, matching the control, which draws the
-  // later assignment.
+  // Right wins a layer listed on both, matching the control.
   assign(rightLayers, "right");
   return sides;
 }
