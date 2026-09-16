@@ -1,22 +1,7 @@
 /**
- * VWorld OpenAPI client: endpoints, request DTOs, response normalization, and
- * error classification.
- *
- * Endpoints and parameters follow the official reference
- * (https://www.vworld.kr/dev/v4apiRefer.do), version 2.0 where the service
- * offers one. Three rules the rest of the plugin depends on:
- *
- * - **The API key is module-private.** It arrives through
- *   {@link setVWorldApiKey}, a write-only setter the desktop shell calls from
- *   its credential store. There is no getter, the key is never placed on
- *   `window`, and it is never written into a layer record or the project file
- *   (see `vworld-protocol.ts`, which injects it per request instead).
- * - **Errors carry no key and no request URL.** A VWorld failure is reduced to
- *   a {@link VWorldErrorKind} so a message can be shown, logged, or exported in
- *   diagnostics without leaking the credential or the full query.
- * - **Coordinates are explicit about their CRS.** Every request asks for
- *   EPSG:4326 and every DTO states the CRS it carries, so nothing reaches the
- *   map store having silently assumed a projection.
+ * VWorld OpenAPI client (endpoints follow https://www.vworld.kr/dev/v4apiRefer.do
+ * v2.0). Key is module-private ({@link setVWorldApiKey}, no getter, never
+ * persisted), errors reduce to {@link VWorldErrorKind}, coordinates are always EPSG:4326.
  */
 
 import { addProtocol } from "maplibre-gl";
@@ -49,76 +34,40 @@ export type VWorldTransport = (
 ) => Promise<VWorldResponse>;
 
 /**
- * How requests leave the app. Defaults to the browser's `fetch`.
- *
- * VWorld does not send CORS headers on its JSON or WMS endpoints — only WMTS
- * tiles carry `Access-Control-Allow-Origin`. A browser therefore cannot read a
- * search, geocode, or thematic-layer response even with a valid key: the request
- * succeeds and is billed, but the answer is blocked. The host swaps in a
- * transport that is not subject to that (a native HTTP call on the desktop, a
- * dev-server proxy in the browser).
+ * How requests leave the app. Defaults to `fetch`, but VWorld sends no CORS
+ * headers on JSON/WMS (only WMTS tiles do), so the host swaps in a transport
+ * that isn't subject to that (native HTTP on desktop, a dev-server proxy).
  */
 let transport: VWorldTransport = (url, init) => fetch(url, init);
 
-/**
- * Replaces the request transport.
- *
- * @param next - The transport to use, or null to restore the browser default.
- */
+/** Replaces the request transport, or restores the browser default with null. */
 export function setVWorldTransport(next: VWorldTransport | null): void {
   transport = next ?? ((url, init) => fetch(url, init));
 }
 
 const keyListeners = new Set<() => void>();
 
-/**
- * Subscribes to key changes.
- *
- * The plugin's menu disables its entries when no key is configured, so it has to
- * rebuild when one is saved or deleted. Notifying from here keeps that a
- * plugin-internal concern: the host only ever calls {@link setVWorldApiKey} and
- * does not need to know who cares.
- *
- * @param listener - Called after the key changes. Receives no value.
- * @returns An unsubscribe function.
- */
+/** Subscribes to key changes, so the plugin menu can rebuild its disabled state. */
 export function onVWorldApiKeyChange(listener: () => void): () => void {
   keyListeners.add(listener);
   return () => keyListeners.delete(listener);
 }
 
-/**
- * Injects the VWorld API key. Write-only by design: the host reads the value
- * from its credential store and pushes it here, and nothing can read it back
- * out — consumers ask {@link hasVWorldApiKey} instead.
- *
- * @param key - The API key, or an empty string to clear it.
- */
+/** Injects the VWorld API key; write-only, consumers ask {@link hasVWorldApiKey} instead. */
 export function setVWorldApiKey(key: string): void {
   const next = typeof key === "string" ? key.trim() : "";
-  // Only notify on a real change: the host re-pushes on every credential-store
-  // update, and rebuilding a menu on each one would close an open submenu.
+  // Only notify on a real change, since the host re-pushes on every credential update.
   if (next === apiKey) return;
   apiKey = next;
   for (const listener of keyListeners) listener();
 }
 
-/**
- * Whether a key is currently configured.
- *
- * @returns True when requests can be attempted.
- */
+/** Whether a key is currently configured. */
 export function hasVWorldApiKey(): boolean {
   return apiKey.length > 0;
 }
 
-/**
- * The key, for the request-time injection points only (the tile/WMS protocol
- * handler and the request builders in this module). Not exported from the
- * package index.
- *
- * @returns The configured key, or an empty string.
- */
+/** The key, for this module's own request-time injection points only. */
 export function internalVWorldApiKey(): string {
   return apiKey;
 }
@@ -149,18 +98,7 @@ export class VWorldError extends Error {
   }
 }
 
-/**
- * Maps a documented VWorld status/error code to a {@link VWorldErrorKind}.
- *
- * Codes per the official reference: `INVALID_KEY`/`INCORRECT_KEY`/
- * `UNAVAILABLE_KEY` (level 2) mean the key is unusable — unregistered, issued
- * for a different domain, or suspended; `OVER_REQUEST_LIMIT` is the daily quota;
- * `PARAM_REQUIRED`/`INVALID_TYPE`/`INVALID_RANGE` (level 1) are our own request
- * bugs; `SYSTEM_ERROR`/`UNKNOWN_ERROR` (level 3) are server-side.
- *
- * @param code - The `status`/error code text from the response.
- * @returns The matching error kind.
- */
+/** Maps a documented VWorld status/error code (official reference) to a {@link VWorldErrorKind}. */
 export function vworldErrorKind(code: string): VWorldErrorKind {
   switch (code.trim().toUpperCase()) {
     case "NOT_FOUND":
@@ -183,16 +121,7 @@ export function vworldErrorKind(code: string): VWorldErrorKind {
   }
 }
 
-/**
- * Builds a VWorld request URL with the key appended.
- *
- * Exported for the protocol handler and the request functions below; callers
- * must not log or surface the result, since it carries the key.
- *
- * @param path - Path under the VWorld API origin, e.g. `/req/search`.
- * @param params - Query parameters, excluding `key`.
- * @returns The absolute request URL.
- */
+/** Builds a VWorld request URL with the key appended. Never log or surface the result. */
 export function buildVWorldUrl(path: string, params: Record<string, string>): string {
   const url = new URL(path, VWORLD_ORIGIN);
   for (const [name, value] of Object.entries(params)) {
@@ -203,26 +132,9 @@ export function buildVWorldUrl(path: string, params: Record<string, string>): st
 }
 
 /**
- * Runs a VWorld JSON request and classifies every failure mode.
- *
- * @param path - Path under the VWorld API origin.
- * @param params - Query parameters, excluding `key`.
- * @returns The parsed `response` object.
- * @throws {VWorldError} When no key is set, the network fails or times out, or
- *   VWorld reports a non-OK status.
- */
-/**
- * Fetches and parses a VWorld response without unwrapping it.
- *
- * The OGC endpoints (WFS) answer with plain GeoJSON, not the `{ response: … }`
- * envelope the JSON APIs use, and report failure as an XML
- * `ServiceExceptionReport` rather than a status field — so a parse failure
- * here is a service exception, most often the missing `domain` parameter.
- *
- * @param path - Path under the VWorld origin.
- * @param params - Query parameters, excluding `key`.
- * @returns The parsed body.
- * @throws {VWorldError} On transport failure or a service exception.
+ * Fetches and parses a VWorld response without unwrapping it — the OGC (WFS)
+ * endpoints answer with plain GeoJSON and report failure as an XML
+ * `ServiceExceptionReport`, not the usual `{ response: … }`/status envelope.
  */
 async function requestRawJson(
   path: string,
@@ -255,6 +167,7 @@ async function requestRawJson(
   }
 }
 
+/** Runs a VWorld JSON request and classifies every failure mode. */
 async function requestJson(
   path: string,
   params: Record<string, string>,
@@ -298,15 +211,7 @@ async function requestJson(
 /** Outcome of a key check; mirrors the KMA one so the UI handles both alike. */
 export type VWorldKeyCheck = { ok: true } | { ok: false; kind: VWorldErrorKind; readable: boolean };
 
-/**
- * Checks the configured API key with one small live request.
- *
- * Searches for a well-known place, which is the cheapest call that exercises
- * authentication. Unlike the tile endpoints it returns JSON, so VWorld's own
- * status code is available to report.
- *
- * @returns Whether the key was accepted, and why not when it was not.
- */
+/** Checks the configured key with one cheap live request (a well-known place search). */
 export async function verifyVWorldApiKey(): Promise<VWorldKeyCheck> {
   if (!hasVWorldApiKey()) return { ok: false, kind: "no-key", readable: true };
   try {
@@ -338,14 +243,7 @@ export interface VWorldBaseMap {
   extension: "png" | "jpeg";
   minzoom: number;
   maxzoom: number;
-  /**
-   * The base map this entry annotates, when it is an overlay rather than a
-   * base map of its own.
-   *
-   * Hybrid is transparent labels, roads and boundaries with no imagery behind
-   * them, so it is never selectable on its own: it is drawn into the style of
-   * the base map named here, and the two are one basemap to the user.
-   */
+  /** The base map this entry (e.g. Hybrid's transparent labels) annotates, if it's an overlay. */
   overlayFor?: VWorldBaseMap["id"];
 }
 
@@ -379,27 +277,10 @@ export const VWORLD_BASE_MAPS: readonly VWorldBaseMap[] = [
 /** Approximate bounds of VWorld's Korean coverage, `[west, south, east, north]`. */
 export const VWORLD_BOUNDS: [number, number, number, number] = [124.5, 33.0, 132.0, 38.7];
 
-/**
- * The lowest zoom at which any VWorld base map has tiles.
- *
- * Mirrors the `minzoom` on every entry of {@link VWORLD_BASE_MAPS}; the
- * shallowest of them decides where the coverage begins.
- */
+/** The lowest zoom at which any VWorld base map has tiles. */
 export const VWORLD_MIN_ZOOM = 6;
 
-/**
- * Where to move the camera so a VWorld basemap has something to draw, or null
- * when the current view already works.
- *
- * VWorld covers Korea from zoom 6 down. Applied while looking at the Atlantic
- * at zoom 1.6 it is not broken, it is simply empty — and an empty white globe
- * is indistinguishable from a basemap that failed to load. So switching to one
- * takes the view to its coverage, and leaves a view already inside it alone
- * rather than yanking the camera off whatever the user was looking at.
- *
- * @param view - The current centre and zoom.
- * @returns The view to apply, or null to keep the current one.
- */
+/** Where to move the camera into VWorld's coverage, or null when the view already works. */
 export function vworldCoverageView(view: {
   longitude: number;
   latitude: number;
@@ -424,31 +305,12 @@ export function vworldCoverageView(view: {
 export const VWORLD_ATTRIBUTION =
   '<a href="https://www.vworld.kr/" target="_blank" rel="noreferrer">국토교통부 공간정보 오픈플랫폼(V-World)</a>';
 
-/**
- * Builds the key-free tile template for a base map.
- *
- * The `vworld://` scheme is deliberate: the real request URL carries the API
- * key, so it must not be what gets stored on the layer and saved into the
- * project file. The protocol handler swaps in the key per request.
- *
- * Path order follows the WMTS template `{tileMatrix}/{tileRow}/{tileCol}` —
- * z/y/x, not the z/x/y most XYZ services use.
- *
- * @param map - The base map definition.
- * @returns The tile URL template.
- */
+/** Builds the key-free `vworld://` tile template; z/y/x order, per the WMTS spec. */
 export function vworldTileTemplate(map: VWorldBaseMap): string {
   return `vworld://wmts/${map.id}/{z}/{y}/{x}.${map.extension}`;
 }
 
-/**
- * Resolves a `vworld://` URL to the real VWorld request URL, injecting the key.
- * Used only by the protocol handler at request time.
- *
- * @param url - A `vworld://wmts/...` or `vworld://wms?...` URL.
- * @returns The absolute VWorld URL.
- * @throws {VWorldError} When no key is configured or the URL is not recognized.
- */
+/** Resolves a `vworld://` URL to the real, key-bearing request URL. Protocol-handler use only. */
 export function resolveVWorldProtocolUrl(url: string): string {
   if (!hasVWorldApiKey()) throw new VWorldError("no-key");
 
@@ -470,15 +332,7 @@ export function resolveVWorldProtocolUrl(url: string): string {
 
 let protocolRegistered = false;
 
-/**
- * Registers the `vworld://` MapLibre protocol that injects the API key into
- * every tile request.
- *
- * Registered once at app startup rather than on plugin activation: VWorld
- * layers are added from the Add Data menu and restored from saved projects, so
- * their tiles must resolve whether or not the VWorld panel is open. Idempotent,
- * since MapLibre's protocol registry is global.
- */
+/** Registers the `vworld://` protocol at app startup, independent of plugin activation. Idempotent. */
 export function registerVWorldProtocol(): void {
   if (protocolRegistered) return;
   addProtocol("vworld", async (params, abortController) => {
@@ -495,11 +349,7 @@ export function registerVWorldProtocol(): void {
 /* WMS thematic layers                                                          */
 /* -------------------------------------------------------------------------- */
 
-/**
- * A VWorld WMS layer offered in the plugin panel. The `typename` values are the
- * documented layer identifiers; a typo here yields an empty tile rather than an
- * error, so they are kept in one place and covered by a test.
- */
+/** A VWorld WMS layer; `typename` is the documented identifier, kept here and tested. */
 export interface VWorldThematicLayer {
   id: string;
   labelKey: string;
@@ -531,35 +381,15 @@ export const VWORLD_THEMATIC_LAYERS: readonly VWorldThematicLayer[] = [
 /* Thematic feature lookup (WFS)                                                */
 /* -------------------------------------------------------------------------- */
 
-/**
- * The domain the key is registered against, sent as VWorld's `domain`
- * parameter.
- *
- * WFS — unlike the tile and search endpoints — refuses a request that carries
- * no registered domain with `INCORRECT_KEY` ("인증키 정보가 올바르지 않습니다"),
- * which reads as a bad key rather than a missing parameter. A browser can pass
- * its own `Referer`, but this app's requests go through a native HTTP call or a
- * proxy, so neither carries one and the parameter has to be explicit.
- */
+/** The domain the key is registered against; WFS otherwise rejects with `INCORRECT_KEY`. */
 let registeredDomain = "";
 
-/**
- * Sets the domain the VWorld key was registered with.
- *
- * @param domain - The registered origin, e.g. `http://localhost:5173`.
- */
+/** Sets the domain the VWorld key was registered with, e.g. `http://localhost:5173`. */
 export function setVWorldDomain(domain: string): void {
   registeredDomain = typeof domain === "string" ? domain.trim() : "";
 }
 
-/**
- * Half-width of the bounding box used to turn a click into a WFS query, in
- * degrees — roughly 11 m at Korean latitudes.
- *
- * Small enough that a click inside one building rarely catches its neighbour,
- * large enough to tolerate the pointer being a few pixels off the polygon at
- * typical inspection zooms.
- */
+// Half-width of a click's WFS query box, in degrees (~11m at Korean latitudes).
 const CLICK_TOLERANCE_DEG = 0.0001;
 
 /** A thematic feature returned by a click lookup. */
@@ -574,19 +404,7 @@ export interface VWorldFeatureInfo {
   geometry: unknown;
 }
 
-/**
- * Looks up the thematic features at a point.
- *
- * The thematic layers are added as WMS, which serves images and so answers no
- * click. The same data is available as WFS, so a click becomes a small bbox
- * query against the layers that are actually on the map.
- *
- * @param typenames - WFS typenames to query, from {@link VWORLD_THEMATIC_LAYERS}.
- * @param lon - Longitude in {@link VWORLD_CRS}.
- * @param lat - Latitude in {@link VWORLD_CRS}.
- * @returns One entry per matched feature, in the order the typenames were given.
- * @throws {VWorldError} When no key is set or every query failed.
- */
+/** Looks up thematic features at a point: WMS serves images, so this queries the WFS twin instead. */
 export async function vworldFeatureInfo(
   typenames: ReadonlyArray<{ id: string; typename: string }>,
   lon: number,
@@ -650,13 +468,7 @@ export async function vworldFeatureInfo(
   return narrowToClicked(found, lon, lat);
 }
 
-/**
- * The most features one WFS request will return.
- *
- * VWorld caps a GetFeature response at 1000; asking for more silently returns
- * that many, so the limit is stated here and the caller is told when a view was
- * truncated rather than being shown a partial city as if it were complete.
- */
+/** VWorld caps a GetFeature response at this many; callers are told when a view was truncated. */
 export const VWORLD_WFS_MAX_FEATURES = 1000;
 
 /** A building footprint with the height fields needed to extrude it. */
@@ -673,31 +485,16 @@ export interface VWorldBuildings {
   truncated: boolean;
 }
 
-/**
- * Height in metres assumed per storey when a building reports floors but no
- * measured height. A rough national average for mixed residential/commercial
- * stock — enough to make a skyline read correctly, not a survey figure.
- */
+/** Assumed metres per storey when a building reports floors but no measured height. */
 export const ASSUMED_STOREY_HEIGHT_M = 3;
 
 /** The property extruded layers read, written by {@link vworldBuildings}. */
 export const VWORLD_HEIGHT_PROPERTY = "extrude_height_m";
 
 /**
- * Fetches building footprints in a bounding box, ready to extrude.
- *
- * The thematic building layer is WMS — a flat image — so it can never be
- * extruded. The same data as WFS gives real polygons plus `grnd_flr` (storeys),
- * which is what turns them into a 3D city without any Cesium Ion asset.
- *
- * Each feature gains {@link VWORLD_HEIGHT_PROPERTY}: the measured `height` when
- * the record has one, otherwise storeys times {@link ASSUMED_STOREY_HEIGHT_M}.
- * Doing it here rather than in a style expression keeps the fallback in one
- * place and leaves the value visible in the attribute table.
- *
- * @param bbox - `[west, south, east, north]` in {@link VWORLD_CRS}.
- * @returns The footprints and whether the response was truncated.
- * @throws {VWorldError} On any failure.
+ * Fetches building footprints (via WFS, since the WMS thematic layer is a
+ * flat image) ready to extrude, filling in {@link VWORLD_HEIGHT_PROPERTY}
+ * from measured height or storeys × {@link ASSUMED_STOREY_HEIGHT_M}.
  */
 export async function vworldBuildings(
   bbox: [number, number, number, number],
@@ -746,31 +543,16 @@ export async function vworldBuildings(
   };
 }
 
-/**
- * Resolves a building's extrusion height in metres.
- *
- * @param properties - The WFS attributes.
- * @returns The measured height, the storey estimate, or one storey as a floor.
- */
+/** Resolves a building's extrusion height: measured, storey estimate, or one storey as a floor. */
 export function buildingHeight(properties: Record<string, unknown>): number {
   const measured = Number.parseFloat(String(properties.height ?? ""));
   if (Number.isFinite(measured) && measured > 0) return measured;
   const storeys = Number.parseFloat(String(properties.grnd_flr ?? ""));
   if (Number.isFinite(storeys) && storeys > 0) return storeys * ASSUMED_STOREY_HEIGHT_M;
-  // Records with neither still need to be visible, or a whole block silently
-  // flattens into the ground plane.
   return ASSUMED_STOREY_HEIGHT_M;
 }
 
-/**
- * How one WFS attribute should be presented.
- *
- * The building schema carries 26 columns, most of them internal identifiers
- * (`ufid`, `geoidn`, `sgg_oid`, `col_adm_se`). Listing them all buries the six
- * a person actually reads — floors, areas, height, approval date — in a wall of
- * opaque numbers, so the panel shows the useful ones first and folds the rest
- * away.
- */
+/** How one WFS attribute should be presented (the schema has 26 columns, most internal ids). */
 export type AttributeFormat = "text" | "number" | "area" | "ratio" | "date";
 
 export interface AttributeSpec {
@@ -778,10 +560,7 @@ export interface AttributeSpec {
   format: AttributeFormat;
 }
 
-/**
- * The attributes worth showing, in reading order. Anything not listed is still
- * available, just collapsed behind the raw-attribute disclosure.
- */
+/** The attributes worth showing, in reading order; the rest sit behind the raw disclosure. */
 export const VWORLD_PRIMARY_ATTRIBUTES: readonly AttributeSpec[] = [
   { field: "bld_nm", format: "text" }, // 건물명
   { field: "dong_nm", format: "text" }, // 동명
@@ -807,27 +586,12 @@ export const VWORLD_PRIMARY_ATTRIBUTES: readonly AttributeSpec[] = [
 
 const PRIMARY_FIELDS = new Set(VWORLD_PRIMARY_ATTRIBUTES.map((spec) => spec.field));
 
-/**
- * Whether a field belongs in the collapsed raw section.
- *
- * @param field - The WFS column name.
- * @returns True when the field is not one of the primary attributes.
- */
+/** Whether a field belongs in the collapsed raw section (not one of the primary attributes). */
 export function isSecondaryAttribute(field: string): boolean {
   return !PRIMARY_FIELDS.has(field);
 }
 
-/**
- * Formats one attribute for display.
- *
- * Returns an empty string for values that mean "not recorded" — including a
- * bare `0` in an area or ratio column, which VWorld uses for an unmeasured
- * figure. Showing "0 ㎡" states a fact the record does not contain.
- *
- * @param value - The raw attribute value.
- * @param format - How to present it.
- * @returns The display string, or "" when there is nothing to show.
- */
+/** Formats one attribute; "" for anything meaning "not recorded" (VWorld uses bare `0` for that). */
 export function formatAttribute(value: unknown, format: AttributeFormat = "text"): string {
   if (value === null || value === undefined) return "";
   const text = String(value).trim();
@@ -852,14 +616,7 @@ export function formatAttribute(value: unknown, format: AttributeFormat = "text"
   return text;
 }
 
-/**
- * Whether a point lies inside a ring, by ray casting.
- *
- * @param lon - Longitude of the test point.
- * @param lat - Latitude of the test point.
- * @param ring - A linear ring as `[lon, lat]` pairs.
- * @returns True when the point is inside.
- */
+/** Whether a point lies inside a ring, by ray casting. */
 function pointInRing(lon: number, lat: number, ring: number[][]): boolean {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
@@ -875,16 +632,7 @@ function pointInRing(lon: number, lat: number, ring: number[][]): boolean {
   return inside;
 }
 
-/**
- * Whether a point lies inside a GeoJSON Polygon or MultiPolygon.
- *
- * Holes are honoured: a point in a courtyard is outside the building.
- *
- * @param lon - Longitude of the test point.
- * @param lat - Latitude of the test point.
- * @param geometry - The feature geometry.
- * @returns True when the point is inside the shape.
- */
+/** Whether a point lies inside a GeoJSON Polygon/MultiPolygon; holes are honoured. */
 export function pointInGeometry(lon: number, lat: number, geometry: unknown): boolean {
   const shape = geometry as { type?: string; coordinates?: unknown } | null;
   if (!shape?.coordinates) return false;
@@ -905,22 +653,8 @@ export function pointInGeometry(lon: number, lat: number, geometry: unknown): bo
 }
 
 /**
- * Narrows bbox hits to the feature the user actually clicked.
- *
- * The WFS query uses a small box around the pointer because a click is not a
- * coordinate the service can match exactly. In dense blocks that box spans
- * several buildings, so every one of them came back and the panel listed four
- * "건물정보" cards for one click. The box is only a coarse filter; containment
- * decides.
- *
- * When nothing contains the point — a click that landed a couple of metres off
- * the footprint, or in a gap between buildings — the single nearest hit is kept
- * rather than reporting nothing, since the user plainly meant something.
- *
- * @param found - Features returned for the query box.
- * @param lon - Longitude clicked.
- * @param lat - Latitude clicked.
- * @returns The features to show.
+ * Narrows bbox hits (a coarse filter, per layer) to the feature actually
+ * clicked by containment, or the single nearest hit when none contains it.
  */
 export function narrowToClicked(
   found: readonly VWorldFeatureInfo[],
@@ -955,17 +689,7 @@ export function narrowToClicked(
   return narrowed;
 }
 
-/**
- * Squared distance from a point to a geometry's nearest vertex.
- *
- * Squared and in degrees: only used to rank candidates against each other, so
- * the square root and a proper projection would change nothing.
- *
- * @param lon - Longitude of the test point.
- * @param lat - Latitude of the test point.
- * @param geometry - The feature geometry.
- * @returns The squared distance, or Infinity when there are no coordinates.
- */
+/** Squared distance (degrees) to a geometry's nearest vertex — only used to rank candidates. */
 function geometryDistance(lon: number, lat: number, geometry: unknown): number {
   let best = Number.POSITIVE_INFINITY;
   const visit = (node: unknown): void => {
@@ -988,17 +712,7 @@ function geometryDistance(lon: number, lat: number, geometry: unknown): number {
 
 export type VWorldSearchType = "PLACE" | "ADDRESS" | "DISTRICT" | "ROAD";
 
-/**
- * The `category` each search type needs, or an empty string when it takes none.
- *
- * - `ADDRESS` → `PARCEL` (지번). Road addresses are served by the geocoder's own
- *   ROAD mode, which the panel exposes separately.
- * - `DISTRICT` → `L4` (읍면동), the most specific administrative level, so a
- *   query matches the smallest named area rather than only provinces.
- *
- * @param type - The search type.
- * @returns The category value, or an empty string to omit the parameter.
- */
+/** The `category` a search type needs: PARCEL for address, L4 for district, else none. */
 export function defaultSearchCategory(type: VWorldSearchType): string {
   if (type === "ADDRESS") return "PARCEL";
   if (type === "DISTRICT") return "L4";
@@ -1028,15 +742,7 @@ function numeric(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-/**
- * Runs an integrated search (통합 검색).
- *
- * @param query - The search keyword.
- * @param type - What to search: place, address, district, or road name.
- * @param options - Paging and an optional bbox in {@link VWORLD_CRS}.
- * @returns The page of results, in {@link VWORLD_CRS}.
- * @throws {VWorldError} On any failure, including an empty result (`not-found`).
- */
+/** Runs an integrated search (통합 검색): place, address, district, or road name. */
 export async function vworldSearch(
   query: string,
   type: VWorldSearchType = "PLACE",
@@ -1060,10 +766,7 @@ export async function vworldSearch(
     crs: VWORLD_CRS,
     query: trimmed,
     type,
-    // `category` is required for some types and rejected as unnecessary for
-    // none, so it is derived per type rather than sent blindly. Verified against
-    // the live service: ADDRESS and DISTRICT fail with PARAM_REQUIRED without
-    // it, while PLACE and ROAD do not need it.
+    // ADDRESS/DISTRICT require it (PARAM_REQUIRED without); PLACE/ROAD don't.
     category: options.category ?? defaultSearchCategory(type),
     size: String(Math.min(Math.max(options.size ?? 20, 1), 1000)),
     page: String(Math.max(options.page ?? 1, 1)),
@@ -1114,14 +817,7 @@ export interface VWorldGeocodeResult {
   matchedAddress: string;
 }
 
-/**
- * Converts an address to coordinates (주소 → 좌표).
- *
- * @param address - A parcel (지번) or road (도로명) address.
- * @param type - Which address form `address` is.
- * @returns The matched point in {@link VWORLD_CRS}.
- * @throws {VWorldError} On any failure, including no match (`not-found`).
- */
+/** Converts an address (parcel or road) to coordinates (주소 → 좌표). */
 export async function vworldGeocode(
   address: string,
   type: VWorldAddressType = "ROAD",
@@ -1163,14 +859,7 @@ export interface VWorldReverseGeocodeResult {
   zipcode: string;
 }
 
-/**
- * Converts coordinates to an address (좌표 → 주소).
- *
- * @param lng - Longitude in {@link VWORLD_CRS}.
- * @param lat - Latitude in {@link VWORLD_CRS}.
- * @returns Road and parcel addresses for the point (either may be empty).
- * @throws {VWorldError} On any failure, including no address at the point.
- */
+/** Converts coordinates to an address (좌표 → 주소); either road or parcel may come back empty. */
 export async function vworldReverseGeocode(
   lng: number,
   lat: number,
