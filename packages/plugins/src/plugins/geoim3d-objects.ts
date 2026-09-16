@@ -1,30 +1,9 @@
 /**
- * geoIM3D 3D object upload.
- *
- * Puts local files and plain-`http://` URLs on the map, which Add Data could
- * not do: the desktop CSP allows `connect-src` to `https:` and localhost only,
- * so a webview request to any other plain-HTTP host is blocked before it is
- * sent, and there was no entry point for a file on disk at all.
- *
- * Nothing here renders anything. `maplibre-gl-splat` already loads `.splat`,
- * `.ply`, `.spz`, `.ksplat`, `.sog` and glTF/GLB, and already places them by
- * longitude/latitude/altitude with a scale and an XYZ rotation — this file is
- * the way in, plus the two shells that a webview cannot reach on its own:
- *
- * - **http URLs** go through {@link setObjectFetcher}, which the desktop app
- *   backs with a native request and hands back a `blob:` URL. That leaves the
- *   CSP untouched, so `tauri.conf.json` — an upstream file — needs no edit and
- *   cannot conflict on a merge.
- * - **local files** go through {@link setLocalObjectPicker}: a native dialog on
- *   the desktop (streamed from disk through the asset protocol) and a file
- *   input in the browser.
- *
- * `https:` skips both and is handed to the loader as-is; there is no reason to
- * pull a few hundred megabytes through memory when the webview can stream it.
- *
- * 3D Tiles are deliberately *not* handled here — a tileset carries its own
- * georeferencing, so position/scale/rotation do not apply to it. The menu
- * points at the existing 3D Tiles panel instead.
+ * geoIM3D 3D object upload: puts local files and plain-`http://` URLs on the
+ * map via `maplibre-gl-splat` (which already renders/places them), plus the
+ * two shells a webview can't reach itself — {@link setObjectFetcher} for
+ * http, {@link setLocalObjectPicker} for local files. 3D Tiles aren't handled
+ * here (own georeferencing) — the menu points at the 3D Tiles panel instead.
  */
 
 import { DEFAULT_LAYER_STYLE, useAppStore, type GeoLibreLayer } from "@geolibre/core";
@@ -53,28 +32,15 @@ const PANEL_ID = "geoim3d-objects-panel";
 const FLOATING_PANEL_ID = `${PANEL_ID}-floating`;
 const MENU_ID = "geoim3d-objects-menu";
 
-/**
- * Key for the shared mercator lock.
- *
- * MapLibre's `globe` projection is adaptive: it draws as mercator zoomed in and
- * transitions to a sphere as you pull back. The splat renderer computes its
- * placement for mercator, so crossing that transition made an object that was
- * on the map moments earlier disappear — "it hides when I zoom out". Every
- * other 3D overlay here holds the same lock for the same reason; sharing it
- * means removing our objects does not yank the projection out from under one
- * of theirs.
- */
+// Shared with every other 3D overlay: MapLibre's adaptive globe projection
+// breaks the splat renderer's mercator-based placement past a zoom threshold.
 const PROJECTION_LOCK_KEY = "geoim3d-objects";
 
 /* -------------------------------------------------------------------------- */
 /* Formats                                                                      */
 /* -------------------------------------------------------------------------- */
 
-/**
- * What the loader treats a file as. It routes glTF/GLB through its model path
- * and everything else through its splat path, and the two want different
- * default rotations, so the distinction has to survive up here too.
- */
+/** What the loader treats a file as — glTF/GLB vs splat, each with a different default rotation. */
 export type ObjectKind = "splat" | "model";
 
 /** Extensions the splat loader accepts, by kind. */
@@ -84,18 +50,7 @@ const MODEL_EXTENSIONS = ["glb", "gltf"];
 /** Every extension this plugin offers, for a file dialog's filter. */
 export const OBJECT_EXTENSIONS: readonly string[] = [...SPLAT_EXTENSIONS, ...MODEL_EXTENSIONS];
 
-/**
- * Classifies a source by its file extension.
- *
- * Parsed off the **path**, not the whole string: a signed URL
- * (`scene.glb?X-Amz-Signature=…`) or a fragment would otherwise make the
- * extension unrecognizable, and the loader would refuse a file it can read.
- * Falls back to splitting on the raw string for a bare Windows path, which is
- * not a URL at all.
- *
- * @param source - A URL or a filesystem path.
- * @returns The kind, or null when the extension is not one this plugin loads.
- */
+/** Classifies a source by extension, parsed off the path so a signed URL's query survives. */
 export function objectKind(source: string): ObjectKind | null {
   const path = source.split(/[?#]/, 1)[0] ?? "";
   const extension = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
@@ -104,27 +59,12 @@ export function objectKind(source: string): ObjectKind | null {
   return null;
 }
 
-/**
- * The loader's own default orientation for a kind.
- *
- * Splats and glTF models are authored in different axis conventions, so a
- * single default lays one of them on its side. These mirror the defaults
- * `maplibre-gl-splat` documents for `defaultRotation` and
- * `defaultModelRotation`.
- *
- * @param kind - What the file is.
- * @returns Rotation in degrees, `[x, y, z]`.
- */
+/** The loader's own default orientation for a kind (splats and glTF use different axis conventions). */
 export function defaultRotation(kind: ObjectKind): [number, number, number] {
   return kind === "model" ? [90, 0, 0] : [-90, 90, 0];
 }
 
-/**
- * A readable name for a source, for the panel's list.
- *
- * @param source - A URL or a filesystem path.
- * @returns The final path segment, or the source itself when it has none.
- */
+/** A readable name for a source: the final path segment, or the source itself. */
 export function objectName(source: string): string {
   const path = source.split(/[?#]/, 1)[0] ?? source;
   const segment = path.split(/[/\\]/).pop();
@@ -149,22 +89,11 @@ export interface PickedObject {
   name: string;
   /** True when `url` is a `blob:` URL this plugin has to revoke. */
   revocable: boolean;
-  /**
-   * The absolute path behind `url`, where there is one. Recorded so a preset
-   * can reopen the file in a later session; a browser pick has none, which is
-   * why those objects cannot be saved.
-   */
+  /** The absolute path behind `url`, so a preset can reopen it later (browser picks have none). */
   path?: string;
 }
 
-/**
- * How the host reports a 3D Tiles layer's streaming progress.
- *
- * The counts come from the Cesium sync, which lives in `@geolibre/map` —
- * importing that package here would pull MapLibre's stylesheet into this
- * module's graph, which the Node test runner cannot load. Injected instead, the
- * way the fetcher and the view bridge are.
- */
+/** How the host reports a 3D Tiles layer's streaming progress (injected, like the fetcher, to avoid importing `@geolibre/map`). */
 export interface TilesetLoadingSource {
   /** Outstanding tile requests and processing for a layer, or null when idle. */
   progressOf: (layerId: string) => { pending: number; processing: number } | null;
@@ -174,11 +103,7 @@ export interface TilesetLoadingSource {
 
 let tilesetLoadingSource: TilesetLoadingSource | null = null;
 
-/**
- * Installs the progress source, or clears it.
- *
- * @param source - The host's reporter, or null.
- */
+/** Installs the progress source, or clears it. */
 export function setTilesetLoadingSource(source: TilesetLoadingSource | null): void {
   tilesetLoadingSource = source;
 }
@@ -189,14 +114,7 @@ export type LocalObjectResolver = (path: string) => Promise<PickedObject | null>
 /** Opens a file dialog and resolves what the user chose (empty when cancelled). */
 export type LocalObjectPicker = () => Promise<PickedObject[]>;
 
-/**
- * How the host reports and changes which renderer the primary map is showing.
- *
- * Objects are drawn by `maplibre-gl-splat`, a MapLibre control, so they land in
- * the 2D map. A host that can show a globe instead hides that map — and an
- * object loaded from there is loaded correctly and completely invisible, which
- * reads as "the file did not load".
- */
+/** Whether the globe (not the 2D map `maplibre-gl-splat` draws into) is the primary view. */
 export interface PrimaryViewBridge {
   /** True when the 2D map is hidden behind a globe. */
   isGlobeActive: () => boolean;
@@ -259,24 +177,7 @@ export function setLocalObjectResolver(resolver: LocalObjectResolver | null): vo
   rerenderPanel();
 }
 
-/**
- * Whether a source has to go through the native fetcher to be loadable.
- *
- * Only *cross-origin* plain HTTP does. `https:` streams straight from the
- * webview, `blob:`/`asset:`/`file:` are already local, and the app's own origin
- * is reachable by definition — the CSP's `'self'` covers it and no
- * mixed-content rule applies to a page fetching from itself.
- *
- * The same-origin case is not a nicety: an object shipped in `public/objects/`
- * is served from the app, which is plain `http://localhost` in development.
- * Treating that as unreachable sent it to a native fetcher the browser build
- * does not have, and the sample refused to load with no error on the map.
- *
- * @param source - The URL to load.
- * @param origin - The app's own origin. Defaults to the page's; pass one in a
- *   test, where there is no `location`.
- * @returns True when the webview cannot request it directly.
- */
+/** Whether a source has to go through the native fetcher: only cross-origin plain HTTP does. */
 export function needsNativeFetch(source: string, origin?: string): boolean {
   if (!/^http:\/\//i.test(source)) return false;
   const self = origin ?? (typeof location === "undefined" ? "" : location.origin);
@@ -292,12 +193,7 @@ export function needsNativeFetch(source: string, origin?: string): boolean {
 /* Labels                                                                       */
 /* -------------------------------------------------------------------------- */
 
-/**
- * User-facing strings. This package is framework-agnostic and cannot call
- * react-i18next's `t()`, so the host pushes translations through
- * {@link setGeoim3dObjectLabels}, as the VWorld and KMA plugins do. Defaults
- * are English.
- */
+/** User-facing strings, pushed in via {@link setGeoim3dObjectLabels} like the other plugins. */
 export interface Geoim3dObjectLabels {
   title: string;
   getTitle?: () => string;
@@ -389,16 +285,10 @@ let labels: Geoim3dObjectLabels = {
     "That file is too large to open in the app. Reduce the splat count or export it as .sog, which is far smaller.",
 };
 
-/**
- * Replaces some or all of the user-facing strings.
- *
- * @param next - The strings to override.
- */
+/** Replaces some or all of the user-facing strings and rebuilds the menu. */
 export function setGeoim3dObjectLabels(next: Partial<Geoim3dObjectLabels>): void {
   labels = { ...labels, ...next };
   rerenderPanel();
-  // The menu copies its labels when it is built, so a language change has to
-  // rebuild it or it sits in the old one.
   if (state.app) buildToolbarMenu(state.app);
 }
 
@@ -416,12 +306,7 @@ export interface ObjectTransform {
 }
 
 interface LoadedObject {
-  /**
-   * This object's id in the layer list. Stable for the object's whole life:
-   * the loader mints a new id on every reload, and letting that reach the store
-   * would make an Apply look like a delete and a re-add — the layer would jump
-   * to the bottom of the list each time a value changed.
-   */
+  /** This object's id in the layer list, stable across reloads (unlike the loader's own id). */
   layerId: string;
   /** The loader's own id, which changes on every reload. */
   loaderId: string;
@@ -431,11 +316,7 @@ interface LoadedObject {
   tilesetLayerId?: string;
   /** Set when there is no splat behind this entry — a tileset added on its own. */
   tilesetOnly?: boolean;
-  /**
-   * The tileset's own placement, edited by the same panel fields while the
-   * globe is up. Separate from `transform` because the two assets do not share
-   * an origin, a unit or a height datum.
-   */
+  /** The tileset's own placement — separate from `transform`, since the two assets don't share one. */
   tilesetTransform?: ObjectTransform;
   /** What the loader is actually reading: the original URL, or a blob of it. */
   readableUrl: string;
@@ -476,11 +357,7 @@ const state: PanelState = {
   status: "",
 };
 
-/**
- * The part of `maplibre-gl-splat`'s control this plugin drives. Typed
- * structurally because the module is imported dynamically — pulling its types
- * in statically would put the whole renderer in the boot graph.
- */
+/** The part of `maplibre-gl-splat`'s control this plugin drives, typed structurally (dynamic import). */
 interface SplatControlLike {
   load(
     url: string,
@@ -504,17 +381,7 @@ interface SplatAdapterLike {
   destroy(): void;
 }
 
-/**
- * Builds the layer-list record for an object.
- *
- * `gaussian-splat` already exists as a layer type and is what the Components
- * plugin records for the same renderer, so the layer panel, the legend and the
- * swatches all know it. `sourceKind` is ours so the subscription below can tell
- * this plugin's layers from that one's.
- *
- * @param object - The loaded object.
- * @returns The record to put in the store.
- */
+/** Builds the layer-list record for an object, as the `gaussian-splat` type the Components plugin uses too. */
 function createObjectStoreLayer(object: LoadedObject): GeoLibreLayer {
   return {
     id: object.layerId,
@@ -522,13 +389,11 @@ function createObjectStoreLayer(object: LoadedObject): GeoLibreLayer {
     type: "gaussian-splat",
     source: {
       assetType: object.kind,
-      // The layer panel's zoom button fits a layer to its bounds and does
-      // nothing at all without them.
+      // Needed for the layer panel's zoom-to-bounds button.
       bounds: placementBounds(object.transform.longitude, object.transform.latitude),
       sourceId: object.layerId,
       type: "gaussian-splat",
-      // The original source, not the blob: a blob URL is dead on the next run,
-      // so recording it would only mislead anyone reading the project file.
+      // The original source, not the blob (dead on the next run).
       url: object.source,
     },
     visible: true,
@@ -549,13 +414,7 @@ function createObjectStoreLayer(object: LoadedObject): GeoLibreLayer {
 /** Marks the layers this plugin owns, so the store watcher ignores everyone else's. */
 const GEOIM3D_OBJECT_SOURCE_KIND = "geoim3d-object";
 
-/**
- * Marks a preset's 3D Tiles companion.
- *
- * Deliberately not {@link GEOIM3D_OBJECT_SOURCE_KIND}: this layer has no loaded
- * object behind it, so the store watcher — which maps a layer back to a splat
- * in the renderer — must skip it.
- */
+/** Marks a preset's 3D Tiles companion; distinct from {@link GEOIM3D_OBJECT_SOURCE_KIND} since the watcher must skip it. */
 const GEOIM3D_TILESET_SOURCE_KIND = "geoim3d-object-tileset";
 
 /**
@@ -564,29 +423,7 @@ const GEOIM3D_TILESET_SOURCE_KIND = "geoim3d-object-tileset";
  */
 const TILESET_COMPANION_ENABLED = true;
 
-/**
- * The layer record for a preset's 3D Tiles companion.
- *
- * Only what the globe reads: `type` and `source.url` are what
- * `cesium-layer-sync` needs to build a tileset. It carries none of the 3D Tiles
- * *plugin's* metadata on purpose, so that plugin's own control does not adopt
- * it — the 2D map already shows this site as a splat, and two renderings of one
- * building is worse than one.
- *
- * @param preset - The preset that names a tileset.
- * @returns The layer to add.
- */
-/**
- * The placement a tileset takes from the panel's transform, field for field.
- *
- * Absolute, not relative: what the panel shows is what the globe applies. The
- * splat renderer reads the same fields in its own units, so a site that has
- * both needs its numbers chosen for one of them — see the panel's altitude and
- * scale, which mean metres and a direct multiplier here.
- *
- * @param transform - The panel's current values.
- * @returns The placement to store on the tileset layer.
- */
+/** The placement a tileset takes from the panel's transform, field for field, absolute not relative. */
 function tilesetPlacementFor(transform: ObjectTransform): Record<string, unknown> {
   return {
     longitude: transform.longitude,
@@ -597,17 +434,7 @@ function tilesetPlacementFor(transform: ObjectTransform): Record<string, unknown
   };
 }
 
-/**
- * The tileset's starting placement.
- *
- * The manifest's own value when it has one. Otherwise the splat's coordinates
- * with the numbers that mean "as built" to a tileset — scale 1 and a height at
- * the ground rather than the splat's eyeballed altitude — which is a place to
- * start editing from, not a guess at the right answer.
- *
- * @param preset - The preset being opened.
- * @returns The transform the tileset layer starts at.
- */
+/** The tileset's starting placement: the manifest's own value, or the splat's coordinates at ground/scale 1. */
 function initialTilesetTransform(preset: ObjectPreset): ObjectTransform {
   return (
     preset.tilesetTransform ?? {
@@ -620,15 +447,7 @@ function initialTilesetTransform(preset: ObjectPreset): ObjectTransform {
   );
 }
 
-/**
- * Writes a placement onto the object's tileset layer.
- *
- * The Cesium sync turns this into a `modelMatrix` on its next pass, so the
- * globe follows without reloading a tile.
- *
- * @param object - The object whose tileset is being moved.
- * @param transform - The values to apply.
- */
+/** Writes a placement onto the object's tileset layer; the Cesium sync applies it live, no reload. */
 function applyTilesetTransform(object: LoadedObject, transform: ObjectTransform): void {
   const { tilesetLayerId } = object;
   if (!tilesetLayerId) return;
@@ -645,6 +464,7 @@ function applyTilesetTransform(object: LoadedObject, transform: ObjectTransform)
   });
 }
 
+/** The layer record for a preset's tileset — only what `cesium-layer-sync` needs, none of the 3D Tiles plugin's own metadata. */
 function createTilesetStoreLayer(
   id: string,
   name: string,
@@ -678,12 +498,7 @@ function createTilesetStoreLayer(
   };
 }
 
-/**
- * Adds a preset's tileset to the layer list once.
- *
- * @param preset - The preset being opened.
- * @returns True when the preset has a tileset, whether or not this call added it.
- */
+/** Adds a preset's tileset to the layer list once; true whenever the preset has one. */
 function ensureTilesetLayer(preset: ObjectPreset): boolean {
   if (!preset.tileset) return false;
   const store = useAppStore.getState();
@@ -702,22 +517,7 @@ export function isTilesetSource(source: string): boolean {
   return /(^|\/)[^/?#]*\.json(?:[?#]|$)/i.test(source.split(/[?#]/, 1)[0] ?? source);
 }
 
-/**
- * Puts a tileset on the map from its `tileset.json`, and lists it here.
- *
- * The 3D Tiles panel can already add one, but the layer it makes belongs to
- * that plugin: it rewrites the layer's `source` from its own state on every
- * sync, so a placement written there is wiped on the next pass. A tileset added
- * here is ours, and so gets the same five fields every other object has.
- *
- * Placed at the map's centre to begin with — a tileset that carries its own
- * georeferencing ignores where it is told to sit only in the sense that the
- * user will not need to move it far.
- *
- * @param app - The host API.
- * @param url - The tileset's URL.
- * @param name - What to call it.
- */
+/** Puts a tileset on the map as our own layer (not the 3D Tiles panel's, which wipes placement on sync). */
 function loadTileset(app: GeoLibreAppAPI, url: string, name: string): void {
   const center = app.getMap?.()?.getCenter();
   const transform: ObjectTransform = {
@@ -748,17 +548,7 @@ function loadTileset(app: GeoLibreAppAPI, url: string, name: string): void {
   rerenderPanel();
 }
 
-/**
- * The one object the panel edits.
- *
- * Listing every loaded object made the panel a wall of near-identical number
- * blocks, and the fields being edited were rarely the ones on screen. The
- * layer list is already the place things are picked, so this follows its
- * selection — by either of the object's layers, since a preset owns two — and
- * falls back to the most recent load when nothing relevant is selected.
- *
- * @returns The object to render, or null when none is loaded.
- */
+/** The one object the panel edits: follows the layer-list selection, or the most recent load. */
 function panelObject(): LoadedObject | null {
   const { selectedLayerId } = useAppStore.getState();
   const selected = selectedLayerId
@@ -789,11 +579,7 @@ let nextObjectSequence = 1;
 /** Samples from {@link BUNDLED_OBJECTS_MANIFEST}. Empty until read, or for good if unreachable. */
 let bundledPresets: ObjectPreset[] = [];
 
-/**
- * Reads the shipped object manifest.
- *
- * @param app - The host API, for rebuilding the menu once the list is known.
- */
+/** Reads the shipped object manifest and rebuilds the menu once the list is known. */
 async function loadBundledPresets(app: GeoLibreAppAPI): Promise<void> {
   const base = typeof document === "undefined" ? "" : document.baseURI;
   if (!base) return;
@@ -809,41 +595,17 @@ async function loadBundledPresets(app: GeoLibreAppAPI): Promise<void> {
   rerenderPanel();
 }
 
-/**
- * Every sample offered, shipped ones first.
- *
- * The two render paths — the toolbar submenu and the panel list — must both
- * call this, never `loadUserPresets` directly, or one of them silently omits
- * the objects that ship with the app. That is exactly what happened once: the
- * panel listed them and the menu said there were none.
- *
- * @returns The bundled presets followed by the user's own.
- */
+/** Every sample offered, shipped ones first. Both the menu and the panel must call this, never `loadUserPresets`. */
 function allPresets(): ObjectPreset[] {
   return [...bundledPresets, ...loadUserPresets()];
 }
 
-/**
- * The one MapLibre layer `maplibre-gl-splat` renders every object into.
- *
- * Fixed id, one scene for all of them (`_onMapRender` adds it as
- * `map_scene_layer` when missing).
- */
+/** The one MapLibre layer `maplibre-gl-splat` renders every object into (fixed id, one shared scene). */
 const SPLAT_SCENE_LAYER_ID = "map_scene_layer";
 
-/**
- * Raises the splat scene above the rest of the map.
- *
- * The scene is a custom layer added when the first object renders, so anything
- * added afterwards — a satellite basemap, most obviously — lands on top of it
- * in the style and paints straight over the objects.
- *
- * ponytail: this keeps objects above *everything*, rather than following the
- * layer panel's order. The panel cannot reorder them anyway — the store record
- * is a listing, not a native layer — so the alternative today is not "ordered"
- * but "buried". Give the record real `nativeLayerIds` and let layer-sync place
- * it if per-layer ordering is ever wanted.
- */
+// ponytail: keeps objects above everything added after them (e.g. a basemap
+// switch), rather than following layer-panel order — the store record isn't a
+// native layer yet. Give it real nativeLayerIds if per-layer order is wanted.
 function raiseSplatScene(): void {
   const map = state.app?.getMap?.() as
     | { getLayer: (id: string) => unknown; moveLayer: (id: string) => void }
@@ -853,14 +615,7 @@ function raiseSplatScene(): void {
   map.moveLayer(SPLAT_SCENE_LAYER_ID);
 }
 
-/**
- * Shows or hides the basemap's own 3D buildings.
- *
- * Re-applied on `styledata` as well as on the toggle: switching the basemap
- * loads a fresh style, and a style knows nothing about a visibility set on the
- * one before it — the buildings would come back on the next basemap change
- * with the checkbox still ticked.
- */
+/** Shows or hides the basemap's 3D buildings; re-applied on `styledata` too, since a fresh style forgets it. */
 function applyBasemapBuildingVisibility(): void {
   const map = state.app?.getMap?.() as
     | {
@@ -890,24 +645,10 @@ function applyBasemapBuildingVisibility(): void {
 
 let detachStyleWatch: (() => void) | null = null;
 
-/**
- * Sets an object's opacity, whichever kind it is.
- *
- * The adapter shipped with the splat library only handles a mesh that has a
- * `material` — which a glTF model does and a splat does not. `SplatMesh` is not
- * a `THREE.Mesh`; it carries its own `opacity` field and no material at all, so
- * the adapter looked it up, found nothing, and returned. The layer panel's
- * slider moved and the map never changed.
- *
- * ponytail: reaches into the control's private `_splatLayers` because nothing
- * public exposes a loaded splat's mesh (`getSplatInfo` returns only its URL and
- * position). Drop this half the moment the library gains a real setter — it is
- * checked defensively so a rename degrades to the old no-op rather than a
- * crash.
- *
- * @param object - The object to fade.
- * @param opacity - 0 to 1.
- */
+// ponytail: `SplatMesh` isn't a `THREE.Mesh` (no `material`), so the shipped
+// adapter's opacity setter silently no-ops on it. Reaches into the control's
+// private `_splatLayers` instead, defensively — drop once the library adds a
+// real setter.
 function applyObjectOpacity(object: LoadedObject, opacity: number): void {
   state.adapter?.setOpacity(object.loaderId, opacity);
 
@@ -919,22 +660,12 @@ function applyObjectOpacity(object: LoadedObject, opacity: number): void {
   const mesh = splatLayers?.get(object.loaderId)?.mesh;
   if (mesh && typeof mesh.opacity === "number") {
     mesh.opacity = opacity;
-    // The scene only redraws when the map does, so a change made while the map
-    // is still would not appear until the next pan.
+    // The scene redraws with the map, so force one for a change made while still.
     state.app?.getMap?.()?.triggerRepaint();
   }
 }
 
-/**
- * Whether layers were added or removed, as opposed to merely changed.
- *
- * Zustand hands back a new array for any mutation, so identity says nothing
- * about which kind it was.
- *
- * @param before - The previous layers.
- * @param after - The current layers.
- * @returns True when the set of ids differs.
- */
+/** Whether layers were added or removed (identity alone can't tell, since Zustand always hands back a new array). */
 function layerIdsChanged(
   before: ReadonlyArray<{ id: string }>,
   after: ReadonlyArray<{ id: string }>,
@@ -943,27 +674,16 @@ function layerIdsChanged(
   return before.some((layer, index) => layer.id !== after[index].id);
 }
 
-/**
- * Follows the layer list: a layer deleted there removes the object, and the
- * eye/opacity controls drive the renderer.
- *
- * Without this the object would be listed but inert — the panel's own Remove
- * would work and the layer panel's would not, which is worse than not listing
- * it at all.
- */
 /** Repaints the panel as tiles arrive, so the bar tracks the stream. */
 function watchTilesetLoading(): void {
   if (!tilesetLoadingSource) return;
   unsubscribeTilesetLoading ??= tilesetLoadingSource.subscribe(() => rerenderPanel());
 }
 
+/** Follows the layer list: a delete there removes the object; eye/opacity drive the renderer. */
 function watchLayerList(): void {
   unsubscribeStore ??= useAppStore.subscribe((store, previous) => {
-    // Only when a layer was added or removed — not on every property change.
-    // `moveLayer` re-orders the style, which for a custom 3D layer holding tens
-    // of millions of splats is expensive, and the opacity slider fires on every
-    // tick of a drag: the map froze the moment it was touched. Nothing that
-    // merely changes a layer's opacity or visibility can bury the scene.
+    // Only on add/remove: moveLayer is too expensive to run on every opacity tick.
     if (state.objects.length > 0 && layerIdsChanged(previous.layers, store.layers)) {
       raiseSplatScene();
     }
@@ -982,8 +702,6 @@ function watchLayerList(): void {
         removeObject(object, { alreadyRemovedFromStore: true });
         continue;
       }
-      // Driven by the loader's own id, which the adapter keys on and which
-      // changes every time a transform is applied.
       if (after.visible !== before.visible) {
         state.adapter?.setVisibility(object.loaderId, after.visible);
       }
@@ -1006,26 +724,11 @@ function rerenderPanel(): void {
 /* Loading                                                                      */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Re-syncs the splat camera's projection when the pitch changes.
- *
- * `maplibre-gl-splat` rebuilds its projection matrix — which carries the far
- * plane — only on the map's `resize` event; a `move` updates the view matrix
- * alone. MapLibre's `farZ` grows with pitch, so tilting the map leaves the
- * splat camera on the far plane it had when flat, and everything past it is
- * clipped: the scene looks sliced off at the far edge.
- *
- * Re-emitting `resize` is the only public way to make the library redo that
- * work. Fired on `moveend` and only when the pitch actually moved, so a pan or
- * a zoom does not put every other `resize` listener in the app to work.
- *
- * ponytail: the projection stays stale *during* a pitch drag and corrects on
- * release. Move this to the continuous `pitch` event if that lag is visible
- * enough to matter — at the cost of firing `resize` on every frame of a drag.
- *
- * @param map - The MapLibre map the control draws into.
- * @returns A function that detaches the listener.
- */
+// Re-emits `resize` on `moveend` (only if pitch changed) since that's the only
+// public way to make maplibre-gl-splat rebuild its far plane for the new
+// pitch — otherwise the scene clips at the far edge past a certain tilt.
+// ponytail: stays stale mid-drag, corrects on release; move to the continuous
+// `pitch` event if that lag matters, at the cost of firing resize every frame.
 function syncSplatCameraOnPitch(map: {
   getPitch: () => number;
   on: (event: string, handler: () => void) => void;
@@ -1043,13 +746,7 @@ function syncSplatCameraOnPitch(map: {
   return () => map.off("moveend", onMoveEnd);
 }
 
-/**
- * Where an object goes when nothing says otherwise: the middle of the view.
- *
- * @param app - The host API.
- * @param kind - What the file is, for the loader's default orientation.
- * @returns A placement to start from.
- */
+/** Where an object goes when nothing says otherwise: the middle of the view. */
 function defaultObjectTransform(app: GeoLibreAppAPI, kind: ObjectKind): ObjectTransform {
   const center = app.getMap?.()?.getCenter();
   return {
@@ -1061,18 +758,7 @@ function defaultObjectTransform(app: GeoLibreAppAPI, kind: ObjectKind): ObjectTr
   };
 }
 
-/**
- * Waits until the map style has finished loading.
- *
- * `@dvt3d/maplibre-three-plugin` adds its scene layer straight from the map's
- * render handler with no check of its own — `getLayer(id) || addLayer(...)` —
- * and MapLibre throws `Style is not done loading` when that lands while a style
- * is still coming up. The throw leaves the scene layer unadded, so an object
- * loaded during a basemap change draws nothing at all.
- *
- * @param map - The MapLibre map, if there is one.
- * @returns A promise that settles once the style is up.
- */
+/** Waits for the map style to finish loading (else the scene layer's add throws mid-basemap-change). */
 function whenStyleReady(map: unknown): Promise<void> {
   const target = map as
     | { isStyleLoaded?: () => boolean; once?: (event: string, handler: () => void) => void }
@@ -1082,16 +768,7 @@ function whenStyleReady(map: unknown): Promise<void> {
   return new Promise((resolve) => target.once?.("idle", () => resolve()));
 }
 
-/**
- * Resolves the renderer, loading it on first use.
- *
- * Imported dynamically and added collapsed: this panel is the interface, and
- * the control is here only to draw. A failure is reported rather than thrown,
- * so a missing chunk does not take the plugin down with it.
- *
- * @param app - The host API.
- * @returns The control, or null when it could not be loaded.
- */
+/** Resolves the renderer, loading it on first use; a failure is reported, not thrown. */
 async function ensureControl(app: GeoLibreAppAPI): Promise<SplatControlLike | null> {
   if (state.control) return state.control;
   try {
@@ -1103,8 +780,7 @@ async function ensureControl(app: GeoLibreAppAPI): Promise<SplatControlLike | nu
     app.addMapControl(control as never, "top-left");
     control.collapse();
     state.control = control;
-    // The control itself has no visibility/opacity; the adapter the library
-    // ships for the layer control does, and that is what the layer list needs.
+    // The control has no visibility/opacity; the shipped layer adapter does.
     state.adapter = new module.GaussianSplatLayerAdapter(control);
     const map = app.getMap?.();
     if (map) detachPitchSync = syncSplatCameraOnPitch(map as never);
@@ -1116,23 +792,12 @@ async function ensureControl(app: GeoLibreAppAPI): Promise<SplatControlLike | nu
   }
 }
 
-/**
- * Turns a source into something the webview is allowed to read.
- *
- * @param source - The URL the user gave.
- * @returns The readable URL and whether it has to be revoked afterwards.
- * @throws When plain HTTP is used without a native fetcher to read it.
- */
+/** Turns a source into something the webview is allowed to read (native fetch, or plain http on a non-https page). */
 async function resolveReadableUrl(source: string): Promise<{ url: string; revocable: boolean }> {
   if (!needsNativeFetch(source)) return { url: source, revocable: false };
-  // The desktop app reads it natively, which also keeps the webview's CSP out
-  // of it.
+  // Native fetch also keeps the webview's CSP out of it.
   if (objectFetcher) return { url: await objectFetcher(source), revocable: true };
-  // No fetcher: a browser. It can still request plain http itself as long as
-  // the page is not https — mixed content is what blocks this, and a page
-  // served over http has no such rule. That covers an internal deployment and
-  // the dev server, where refusing outright meant a file server full of
-  // objects could not be used at all.
+  // No fetcher (browser): mixed content is the only rule a non-https page has none of.
   if (typeof location !== "undefined" && location.protocol !== "https:") {
     return { url: source, revocable: false };
   }
@@ -1152,25 +817,9 @@ async function fetchManifestText(url: string): Promise<string> {
 }
 
 /**
- * Loads an object and adds it to the panel's list.
- *
- * @param app - The host API.
- * @param source - The URL or path the user gave.
- * @param name - What to call it in the list.
- * @param prepared - An already-readable URL (a picked local file), if any.
- */
-/**
- * Waits for a just-loaded splat to finish streaming.
- *
- * `maplibre-gl-splat`'s `loadSplat` returns the moment the `SplatMesh` is
- * constructed; the mesh then downloads and unpacks for several seconds with
- * nothing on screen — the same "reads as nothing happening" the globe's tileset
- * bar solves. (`loadModel` already awaits its GLTF fetch, so models are fine.)
- * The control has no public handle to the mesh, so reach it through the same
- * private registry the 3D Tiles restore reaches into. Best-effort: a build that
- * renames `_splatLayers`, or a mesh with no `initialized` promise, just
- * resolves, and a stream that fails resolves too — the empty scene reads as the
- * failure, as it did before.
+ * Waits for a just-loaded splat to finish streaming (`loadSplat` returns as
+ * soon as the mesh exists; `loadModel` already awaits its own fetch). Reaches
+ * into the control's private registry, best-effort — any failure just resolves.
  */
 async function whenObjectRendered(control: SplatControlLike, loaderId: string): Promise<void> {
   const registry = (
@@ -1182,6 +831,7 @@ async function whenObjectRendered(control: SplatControlLike, loaderId: string): 
   if (ready) await ready.catch(() => {});
 }
 
+/** Loads an object and adds it to the panel's list. */
 async function loadObject(
   app: GeoLibreAppAPI,
   source: string,
@@ -1210,20 +860,13 @@ async function loadObject(
 
     readable = prepared ?? (await resolveReadableUrl(source));
 
-    // The renderer draws into the 2D map, which a globe view hides, and the
-    // centre read below would be that hidden map's rather than the view on
-    // screen. The menu is withdrawn while the globe is up, but the panel can
-    // still be open from before the switch, so refuse here too.
-    // A splat loaded while the globe is up is loaded correctly and completely
-    // invisible, which reads as "the file did not load" — unless a tileset of
-    // the same site is going up beside it, in which case something is on screen
-    // and the splat is simply waiting for a switch back to the 2D map.
+    // A splat loaded while the globe is up is invisible, unless a tileset for
+    // the same site is going up beside it (then it just waits for a switch back).
     if (!tilesetLayerId && primaryViewBridge?.isGlobeActive()) throw new Error("globe-active");
 
     await whenStyleReady(app.getMap?.());
 
-    // Start where the user is looking. Without this an object with no
-    // coordinates of its own lands at (0, 0), in the Atlantic.
+    // Start where the user is looking, or land at (0, 0) in the Atlantic.
     const center = app.getMap?.()?.getCenter();
     const transform: ObjectTransform = placement ?? {
       longitude: center?.lng ?? 0,
@@ -1253,23 +896,11 @@ async function loadObject(
     };
     state.objects.push(object);
     acquireMercatorProjectionLock(PROJECTION_LOCK_KEY, app, app.getMap?.());
-    // Go to what was just loaded, rather than leaving the camera on the other
-    // side of the world — indistinguishable from a load that failed. (The
-    // library's own `flyTo` option does fire here, contrary to an earlier note;
-    // it was the projection switch below that cancelled it.)
-    //
-    // A jump, not a flight: the line above switches the projection, which ends
-    // an animation in progress, so the camera never arrived. Flying three
-    // seconds across the globe while a 68 MB splat renders is not worth
-    // rescuing anyway.
-    //
-    // Not done when a transform is applied: that reloads too, and yanking the
-    // camera on every edit would fight the user positioning it.
+    // A jump, not a flight: the projection switch above ends any animation in
+    // progress anyway. Only on load, not on every transform edit.
     app.getMap?.()?.jumpTo({
       center: [transform.longitude, transform.latitude],
-      // The zoom the splat library uses for the same purpose; a site-scale
-      // scan fills the view at roughly this level.
-      zoom: 18,
+      zoom: 18, // Fills the view for a site-scale scan, per the splat library's own default.
     });
     // The scene layer is created on the first render after a load, so raise it
     // once that has happened rather than in this tick.
@@ -1283,10 +914,7 @@ async function loadObject(
     // A blob made for a load that then failed would otherwise be held until
     // the tab closes, and these are hundreds of megabytes.
     if (readable?.revocable) URL.revokeObjectURL(readable.url);
-    // A preset whose splat could not be read still has its tileset on the map —
-    // a browser refuses a plain-http splat, and the globe shows the tileset
-    // anyway. Listing it keeps the placement fields reachable instead of
-    // leaving a layer nothing can edit.
+    // A preset whose splat failed to read still has its tileset on the map; list it too.
     if (tilesetLayerId && !state.objects.some((entry) => entry.layerId === tilesetLayerId)) {
       state.objects.push({
         layerId: tilesetLayerId,
@@ -1310,12 +938,7 @@ async function loadObject(
   }
 }
 
-/**
- * Maps a load failure to a message that says what to do about it.
- *
- * @param error - The thrown value.
- * @returns The message to show.
- */
+/** Maps a load failure to a message that says what to do about it. */
 function loadErrorMessage(error: unknown): string {
   const reason = error instanceof Error ? error.message : "";
   if (reason === "http-unavailable") return labels.errorHttpUnavailable;
@@ -1324,16 +947,7 @@ function loadErrorMessage(error: unknown): string {
   return labels.errorLoadFailed;
 }
 
-/**
- * Removes an object from the map, the panel and the layer list.
- *
- * Removal can start on either side — the panel's button or the layer list's —
- * so this is the one place that clears both, and the caller says which side it
- * came from to avoid removing a store layer that is already gone.
- *
- * @param object - The object to remove.
- * @param options - Set `alreadyRemovedFromStore` when the layer list started it.
- */
+/** Removes an object from the map, the panel and the layer list, whichever side started it. */
 function removeObject(object: LoadedObject, options?: { alreadyRemovedFromStore?: boolean }): void {
   removeFromRenderer(object);
   if (object.revocable) URL.revokeObjectURL(object.readableUrl);
@@ -1342,51 +956,29 @@ function removeObject(object: LoadedObject, options?: { alreadyRemovedFromStore?
     releaseMercatorProjectionLock(PROJECTION_LOCK_KEY, state.app);
   }
   if (!options?.alreadyRemovedFromStore) useAppStore.getState().removeLayer(object.layerId);
-  // The tileset was added with the object and is listed under the same name, so
-  // it goes with it. Left behind it became unreachable: the panel entry that
-  // placed it is gone, so the layer sits in the list with nothing to edit it.
+  // The tileset was added with the object, so it goes with it (else unreachable).
   if (object.tilesetLayerId) useAppStore.getState().removeLayer(object.tilesetLayerId);
   rerenderPanel();
 }
 
 function removeFromRenderer(object: LoadedObject): void {
   const control = state.control;
-  // A tileset added on its own was never handed to the splat renderer, and its
-  // empty loader id would remove whatever happens to answer to it.
+  // A tileset-only entry was never handed to the splat renderer.
   if (!control || object.tilesetOnly) return;
-  // The library's remove detaches the group and disposes nothing, so the
-  // buffers behind a 68 MB splat outlive it. Free them first.
+  // The library disposes nothing on remove, so free buffers first.
   disposeLoadedObject(control, object.loaderId);
   if (object.kind === "model") control.removeModel(object.loaderId);
   else control.removeSplat(object.loaderId);
 }
 
 /**
- * Re-places an object with an edited transform.
- *
- * The control's public surface cannot move what it has loaded, so this used to
- * remove and load again on every Apply. That re-unpacked the whole file each
- * time and — since the library disposes nothing it drops — ended in
- * `RangeError: Array buffer allocation failed` in the SOG unpack worker after a
- * few dozen nudges, with the object silently gone. The object in the scene is
- * an ordinary three.js group, so the placement is written straight onto it.
- *
- * The reload is kept as the fallback for when the scene graph cannot be
- * reached (a rename upstream): the readable URL is reused rather than
- * re-fetched, which matters for an http object that would otherwise cross the
- * network on every nudge.
- *
- * @param object - The object being edited.
- * @param transform - The values from the form.
+ * Re-places an object with an edited transform, writing straight onto the
+ * three.js group instead of reload-per-Apply (which used to OOM the SOG
+ * worker after enough nudges). Reload is kept as the fallback for when the
+ * scene graph can't be reached, reusing the readable URL rather than re-fetching.
  */
 async function applyTransform(object: LoadedObject, transform: ObjectTransform): Promise<void> {
-  // On the globe the panel's fields are the tileset's, so an Apply moves that
-  // and leaves the splat's own numbers alone. Nothing else here runs: the splat
-  // is not on screen, and reloading it to place it would cost the file again.
-  //
-  // Checked before the renderer, not after: a tileset added on its own never
-  // loaded the splat renderer, so a `state.control` guard above this returned
-  // early and Apply did nothing at all.
+  // On the globe, an Apply moves the tileset instead, leaving the splat alone.
   if (isEditingTileset(object)) {
     object.tilesetTransform = transform;
     applyTilesetTransform(object, transform);
@@ -1402,13 +994,11 @@ async function applyTransform(object: LoadedObject, transform: ObjectTransform):
   rerenderPanel();
   try {
     if (placeLoadedObject(control, object.loaderId, object.kind, transform)) {
-      // The scene redraws with the map, and an edit made while it sits still
-      // would not appear until the next pan.
+      // Force a repaint since the scene only redraws with the map.
       state.app?.getMap?.()?.triggerRepaint();
     } else {
       removeFromRenderer(object);
-      // The loader mints a new id per load; keeping the old one would leave the
-      // next remove pointing at something that is no longer there.
+      // The loader mints a new id per load.
       object.loaderId = await control.load(object.readableUrl, {
         longitude: transform.longitude,
         latitude: transform.latitude,
@@ -1419,8 +1009,7 @@ async function applyTransform(object: LoadedObject, transform: ObjectTransform):
       await whenObjectRendered(control, object.loaderId);
     }
     object.transform = transform;
-    // The zoom button reads the layer's bounds, so a moved object needs its
-    // box moved too or the button keeps going where it used to be.
+    // Move the bounds too, or the zoom button keeps pointing at the old spot.
     const store = useAppStore.getState();
     const existing = store.layers.find((entry) => entry.id === object.layerId);
     if (existing) {
@@ -1432,9 +1021,7 @@ async function applyTransform(object: LoadedObject, transform: ObjectTransform):
       });
     }
 
-    // A reload starts visible and opaque, so a hidden or faded layer would
-    // silently come back at full strength on every Apply. Re-applied on the
-    // in-place path too: it writes the values the layer already has.
+    // A reload starts visible/opaque, so re-apply what the layer already has.
     const layer = useAppStore.getState().layers.find((entry) => entry.id === object.layerId);
     if (layer) {
       state.adapter?.setVisibility(object.loaderId, layer.visible);
@@ -1456,8 +1043,7 @@ async function pickAndLoad(app: GeoLibreAppAPI): Promise<void> {
   }
   const picked = await localObjectPicker();
   for (const file of picked) {
-    // The path, not the display name: it is what a preset needs to find the
-    // file again, and it still carries the extension the loader keys on.
+    // The path (not the display name): what a preset needs to reopen the file.
     await loadObject(app, file.path ?? file.name, file.name, {
       url: file.url,
       revocable: file.revocable,
@@ -1465,21 +1051,10 @@ async function pickAndLoad(app: GeoLibreAppAPI): Promise<void> {
   }
 }
 
-/**
- * The largest local file this will try to load.
- *
- * A browser cannot allocate an arbitrarily large buffer, and a splat well past
- * this fails partway through parsing — leaving a half-built scene that renders
- * as a broken object rather than an error. Refusing up front says why.
- */
+/** The largest local file this will try to load, past which parsing fails partway with no clear error. */
 export const MAX_LOCAL_OBJECT_BYTES = 2 * 1024 * 1024 * 1024;
 
-/**
- * Rejects a local file the loader cannot be expected to read.
- *
- * @param file - The file's name and size.
- * @throws When the format is unsupported, the file is empty, or it is too big.
- */
+/** Rejects a local file the loader cannot be expected to read: wrong format, empty, or too big. */
 export function validateLocalObjectFile(file: Pick<File, "name" | "size">): void {
   if (!objectKind(file.name)) throw new Error(labels.errorUnsupported);
   if (file.size === 0) throw new Error(labels.errorEmptyFile);
@@ -1487,23 +1062,9 @@ export function validateLocalObjectFile(file: Pick<File, "name" | "size">): void
 }
 
 /**
- * Loads a file the user dropped on the map.
- *
- * The drop path used to run its own copy of the renderer, so a dropped scan and
- * one added from this panel ended up in two different scenes, each with its own
- * MapLibre layer — and only the panel's had a transform editor, an opacity
- * slider or a way to save it as a sample. One entry point, one scene, and a
- * dropped file gets all of it.
- *
- * The plugin is activated first when it is not already: a drop is a request to
- * see the file, not a request to go and switch a plugin on.
- *
- * @param app - The host API.
- * @param file - The dropped file.
- * @param placement - Where to put it; defaults to the map centre.
- * @returns The layer id.
- * @throws When the file is not a format this plugin loads, or the renderer
- *   could not start.
+ * Loads a file the user dropped on the map, through this plugin's own entry
+ * point (not a separate copy of the renderer) so a dropped scan gets the same
+ * transform editor and opacity slider a panel-loaded one does.
  */
 export async function addDroppedObject(
   app: GeoLibreAppAPI,
@@ -1514,8 +1075,7 @@ export async function addDroppedObject(
   if (!state.app) await app.activatePlugin?.(GEOIM3D_OBJECTS_PLUGIN_ID);
   const host = state.app ?? app;
 
-  // A blob of the dropped file: it has no path, so there is nothing else to
-  // address it by. Revoked with the object, like a browser file pick.
+  // A dropped file has no path; the blob is revoked with the object, like a browser pick.
   const url = URL.createObjectURL(file);
   const before = new Set(state.objects.map((entry) => entry.layerId));
   await loadObject(
@@ -1531,13 +1091,7 @@ export async function addDroppedObject(
   return added.layerId;
 }
 
-/**
- * A full transform from a bare coordinate, or undefined to use the map centre.
- *
- * @param placement - The requested longitude/latitude, if any.
- * @param kind - What the file is, which decides the default rotation.
- * @returns The transform to load with.
- */
+/** A full transform from a bare coordinate, or undefined to use the map centre. */
 function placementTransform(
   placement: { longitude: number; latitude: number } | undefined,
   kind: ObjectKind,
@@ -1599,21 +1153,12 @@ function deletePreset(id: string): void {
   rerenderPanel();
 }
 
-/**
- * Loads a preset back onto the map at the placement it was saved with.
- *
- * @param app - The host API.
- * @param preset - The preset to load.
- */
+/** Loads a preset back onto the map at the placement it was saved with. */
 async function loadPreset(app: GeoLibreAppAPI, preset: ObjectPreset): Promise<void> {
-  // The globe cannot draw a splat, but it can draw this site's tileset — so a
-  // preset that has one is opened in either view: the tileset draws on the
-  // globe, the splat on the 2D map, and both are listed either way so switching
-  // views does not need the preset opened again.
+  // Opened in either view: the tileset draws on the globe, the splat on 2D.
   const hasTileset = TILESET_COMPANION_ENABLED && ensureTilesetLayer(preset);
 
-  // A recorded path is a file, not a URL: it has to be reauthorized and turned
-  // into something the webview can read before the loader sees it.
+  // A recorded path needs reauthorizing before the loader can read it.
   let prepared: { url: string; revocable: boolean } | undefined;
   if (!/^https?:\/\//i.test(preset.source)) {
     if (!localObjectResolver) {
@@ -1659,14 +1204,7 @@ function sectionTitle(text: string): HTMLElement {
   return element("h3", "geolibre-plugin-panel__section-title", text);
 }
 
-/**
- * A labelled number box for one transform field.
- *
- * @param labelText - The field's label.
- * @param value - Its current value.
- * @param step - The input's step, which also sets how fine the spinner is.
- * @returns The row and its input.
- */
+/** A labelled number box for one transform field. */
 function numberField(
   labelText: string,
   value: number,
@@ -1682,19 +1220,12 @@ function numberField(
   return { row, input };
 }
 
-/**
- * One loaded object: what it is, where it sits, and the controls to change it.
- *
- * @param object - The object to render.
- * @returns The block.
- */
+/** One loaded object: what it is, where it sits, and the controls to change it. */
 function objectBlock(object: LoadedObject): HTMLElement {
   const wrapper = element("div", "geoim3d-object");
   wrapper.appendChild(element("p", "geoim3d-object__name", object.name));
 
-  // The same fields drive two assets, so say which one they are pointed at:
-  // the numbers change under the user when the view does, and without this the
-  // panel looks like it forgot what was typed.
+  // The same fields drive two assets; say which one they're currently pointed at.
   const editingTileset = isEditingTileset(object);
   if (editingTileset) {
     wrapper.appendChild(element("span", "geoim3d-object__badge", labels.tilesetBadge));
@@ -1795,10 +1326,7 @@ function renderPanel(container: HTMLElement): void {
   }
 
   if (state.busy) {
-    // Indeterminate on purpose. The renderer does the fetching and reports no
-    // byte count, and reading the file here first to measure it would hold a
-    // second copy of a splat that is routinely tens of megabytes. What the
-    // user needs is "this is working and here is what on", not a percentage.
+    // Indeterminate: the renderer reports no byte count and it isn't worth measuring first.
     const progress = element("div", "geoim3d-progress");
     progress.setAttribute("role", "status");
     progress.appendChild(
@@ -1866,14 +1394,7 @@ function renderPanel(container: HTMLElement): void {
   presetSection(app, container);
 }
 
-/**
- * The switch for the basemap's own 3D buildings.
- *
- * Lives here rather than in a map menu because this is where it is needed: at
- * street level the style's buildings stand in front of a scan and hide it.
- *
- * @param container - The panel body.
- */
+/** The switch for the basemap's own 3D buildings, which stand in front of a scan at street level. */
 function buildingToggle(container: HTMLElement): void {
   const row = element("label", "geoim3d-object__field geoim3d-object__toggle");
   const input = element("input", "");
@@ -1888,15 +1409,7 @@ function buildingToggle(container: HTMLElement): void {
   container.appendChild(row);
 }
 
-/**
- * Lists the saved samples, with a way to load or forget each one.
- *
- * The toolbar menu lists them too, for loading in one click; deleting lives
- * here because a menu is a poor place to destroy something.
- *
- * @param app - The host API.
- * @param container - The panel body.
- */
+/** Lists the saved samples, with a way to load or (unlike the toolbar menu) forget each one. */
 function presetSection(app: GeoLibreAppAPI, container: HTMLElement): void {
   container.appendChild(sectionTitle(labels.presets));
   const presets = allPresets();
@@ -1911,8 +1424,7 @@ function presetSection(app: GeoLibreAppAPI, container: HTMLElement): void {
     load.disabled = state.busy;
     load.addEventListener("click", () => void loadPreset(app, preset));
     row.appendChild(load);
-    // A shipped sample lives in the build, not in this browser's storage, so
-    // there is nothing here to delete.
+    // A shipped sample has nothing in this browser's storage to delete.
     if (!isBundledPreset(preset)) {
       const drop = element("button", "geolibre-plugin-panel__button", labels.deletePreset);
       drop.type = "button";
@@ -1923,12 +1435,7 @@ function presetSection(app: GeoLibreAppAPI, container: HTMLElement): void {
   }
 }
 
-/**
- * Mounts the panel body into whichever shell asked for it — docked or floating.
- *
- * @param container - The host-provided element.
- * @returns The cleanup the host runs when that shell closes.
- */
+/** Mounts the panel body into whichever shell asked for it — docked or floating. */
 function mountPanel(container: HTMLElement): () => void {
   state.container = container;
   renderPanel(container);
@@ -1967,10 +1474,7 @@ function buildToolbarMenu(app: GeoLibreAppAPI): void {
   unregisterMenu?.();
   unregisterMenu = null;
   const onGlobe = Boolean(primaryViewBridge?.isGlobeActive());
-  // A splat is drawn by a MapLibre control, so nothing loaded as one can be seen
-  // while the globe is up. A preset that also ships a tileset can: that is the
-  // one form the globe renders. So the menu stays, carrying only what works
-  // there, rather than being withdrawn and taking the tilesets with it.
+  // On the globe, only presets with a tileset render, so those are all the menu offers.
   const presets = allPresets().filter((preset) => !onGlobe || preset.tileset);
   if (onGlobe && presets.length === 0) return;
   const uploadItems: GeoLibreToolbarMenuItem[] = onGlobe
@@ -2008,10 +1512,7 @@ function buildToolbarMenu(app: GeoLibreAppAPI): void {
                   id: `${MENU_ID}-preset-${preset.id}`,
                   label: preset.name,
                   onSelect: () => {
-                    // Opened first so a failure has somewhere to be read, and
-                    // so the progress line is visible while a large file
-                    // loads. A menu click that shows nothing at all is the
-                    // same shape as a broken one.
+                    // Opened first so the progress bar/any error is visible.
                     showDockedPanel(app);
                     void loadPreset(app, preset);
                   },
