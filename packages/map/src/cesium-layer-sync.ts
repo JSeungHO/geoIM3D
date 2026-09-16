@@ -896,23 +896,12 @@ export interface CesiumLayerSyncDeps {
    * control-managed vector layers; omitted, the discovery is skipped.
    */
   onTilesetFields?: (layerId: string, fields: string[]) => void;
-  /**
-   * Reports a tileset's outstanding tile count as it streams in, and clears it
-   * (`null`) when the layer is removed; omitted, no progress is reported
-   * (geoIM3D — the panel that opened the layer shows it).
-   */
+  /** Reports a tileset's outstanding tile count as it streams; `null` when removed. */
   onTilesetProgress?: (
     layerId: string,
     progress: { pending: number; processing: number } | null,
   ) => void;
-  /**
-   * Layer Swipe, mirrored onto the globe (geoIM3D). The host owns the actual
-   * swipe UI and its side/position state; this only asks for the current
-   * reading and a way to hear about changes to it — Cesium splits the whole
-   * scene at one position and asks each object which side it is on, so a
-   * swipe here is two property writes rather than the clipped second map the
-   * 2D control builds.
-   */
+  /** Layer Swipe mirrored onto the globe: the host's current split position. */
   splitPosition?: () => number | undefined;
   /**
    * Which side a layer draws on, given the current swipe: Cesium's own
@@ -1162,15 +1151,7 @@ export class CesiumLayerSync {
     this.unsubscribeSwipe = this.deps.onSplitChange?.(() => this.applySwipe()) ?? (() => {});
   }
 
-  /**
-   * Mirror the Layer Swipe onto the globe (geoIM3D).
-   *
-   * Cesium splits the whole scene at one position and asks each object which
-   * side it is on, so a swipe here is two property writes rather than the
-   * clipped second map the 2D control builds. Re-applied on every publish
-   * because a slider drag changes only the position, which no layer change
-   * would otherwise carry into `applyAppearance`.
-   */
+  /** Mirror the Layer Swipe onto the globe: two property writes per entry. */
   private applySwipe(): void {
     // Reached from a subscription as well as the constructor, so nothing here
     // assumes a live viewer with every method a real one has.
@@ -2571,10 +2552,7 @@ export class CesiumLayerSync {
         viewer.scene.primitives.add(tileset);
         this.applyTilesetAltitude(tileset, Number(layer.source.altitudeOffset));
         entry.handle = tileset;
-        // A tileset streams: the layer is listed at once and the model arrives
-        // over the next seconds, which reads as nothing happening. Report the
-        // outstanding work so the panel that opened it can show progress
-        // (geoIM3D).
+        // Streams in over seconds; report progress so the panel can show it.
         tileset.loadProgress.addEventListener((pending: number, processing: number) => {
           this.deps.onTilesetProgress?.(layer.id, { pending, processing });
         });
@@ -2632,7 +2610,7 @@ export class CesiumLayerSync {
         tileset.pointCloudShading.eyeDomeLighting = true;
       }
       entry.handle = tileset;
-      // See the matching listener above: same streaming-progress report (geoIM3D).
+      // Same progress report as above.
       tileset.loadProgress.addEventListener((pending: number, processing: number) => {
         this.deps.onTilesetProgress?.(layer.id, { pending, processing });
       });
@@ -2656,21 +2634,8 @@ export class CesiumLayerSync {
   }
 
   /**
-   * Move, turn and resize a tileset whose layer overrides its placement
-   * (geoIM3D).
-   *
-   * A tileset built from a scan that was never georeferenced comes out at the
-   * tiler's default origin, and re-tiling to move it is minutes of work for a
-   * number still being found by eye. `modelMatrix` is a live property, so this
-   * runs on every appearance pass rather than through a rebuild. Each
-   * tileset's own `root.transform` is divided out, so the placement is
-   * absolute rather than relative to wherever the tiler put it.
-   *
-   * Applied instead of {@link applyTilesetAltitude}, not on top of it: both
-   * write `modelMatrix`.
-   *
-   * @returns True when a placement was found and applied to at least one
-   *   tileset behind the entry (an I3S provider can drive several).
+   * Moves/turns/resizes a tileset whose layer overrides its placement.
+   * Instead of {@link applyTilesetAltitude}, not on top of it — both write `modelMatrix`.
    */
   private applyTilesetPlacement(entry: LayerEntry): boolean {
     const placement = readTilesetPlacement(entry.layer.source as Record<string, unknown>);
@@ -2708,8 +2673,7 @@ export class CesiumLayerSync {
       imagery.contrast = colour.contrast;
       imagery.saturation = colour.saturation;
       imagery.hue = colour.hue;
-      // Layer Swipe: the globe splits natively, so a side assignment is one
-      // property rather than a clipped copy of the map (geoIM3D).
+      // Layer Swipe: the globe splits natively.
       imagery.splitDirection = this.deps.splitDirectionFor?.(
         layer.id,
       ) as ImageryLayer["splitDirection"];
@@ -2738,9 +2702,7 @@ export class CesiumLayerSync {
       this.applyGeoJsonFilter(entry);
     } else {
       (handle as Cesium3DTileset | I3SDataProvider).show = layer.visible;
-      // Live: dragging a placement field re-writes modelMatrix, no reload
-      // (geoIM3D). Applied instead of the one-shot altitudeOffset set at
-      // creation, not on top of it — both write modelMatrix.
+      // Live: dragging a placement field re-writes modelMatrix, no reload.
       this.applyTilesetPlacement(entry);
       const splitDirection = this.deps.splitDirectionFor?.(
         layer.id,
@@ -3282,9 +3244,7 @@ export class CesiumLayerSync {
       // A tileset, an I3S provider, a point batch, or a point-cloud collection: all
       // scene primitives.
       if (entry.kind === "3dtiles") {
-        // Its progress goes with it; a tileset removed mid-stream would
-        // otherwise leave the panel waiting on tiles nothing is fetching
-        // (geoIM3D).
+        // Its progress goes with it.
         this.deps.onTilesetProgress?.(entry.layer.id, null);
       }
       this.viewer.scene.primitives.remove(

@@ -1478,14 +1478,8 @@ export function DesktopShell({
     setSegmentEverythingOpen(false);
   }, [cesiumPrimary, setObjectDetectionOpen, setSegmentEverythingOpen]);
 
-  // Publishes the live Cesium viewer to the shared map-click bridge
-  // (onMapClick), the same way MapCanvas's own click handler is always
-  // reachable — without this a plugin's "click the map" feature (VWorld
-  // reverse geocoding, the KMA point forecast) delivers the cursor change but
-  // never the click on the globe. Re-runs on controller (re)init, in both
-  // directions: switching away from Cesium finds `mapControllerRef.current`
-  // is no longer a CesiumEngine and clears it, the same way switching to it
-  // publishes the new one.
+  // Publishes the live Cesium viewer to the shared onMapClick bridge, or
+  // clears it when the controller is no longer a CesiumEngine.
   useEffect(() => {
     const engine = mapControllerRef.current;
     const scene = engine instanceof CesiumEngine ? engine.getCesiumScene() : null;

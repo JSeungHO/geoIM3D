@@ -560,12 +560,7 @@ const GEOIM3D_TILESET_SOURCE_KIND = "geoim3d-object-tileset";
 
 /**
  * Whether opening a preset also puts its 3D Tiles version on the map.
- *
- * Was off while the globe had no reachable tab of its own: a Gaussian splat
- * tileset draws on the globe and nowhere else, so with no way to select it
- * the layer was a row in the list that could never show anything. Upstream's
- * `primaryRenderer` (issue #2217) gives the globe a real, reachable primary
- * view now, so this is back on.
+ * Was off while the globe had no reachable tab; back on with `primaryRenderer`.
  */
 const TILESET_COMPANION_ENABLED = true;
 
@@ -791,13 +786,7 @@ let detachPitchSync: (() => void) | null = null;
 /** Counter behind the stable layer ids. Uniqueness within a session is enough. */
 let nextObjectSequence = 1;
 
-/**
- * The samples themselves are tens of megabytes each and no longer shipped in
- * `public/objects/` — {@link BUNDLED_OBJECTS_MANIFEST} now names a file server
- * instead, so the app carries none of that weight. Empty until the manifest
- * is read — and empty for good if it cannot be reached, which is the normal
- * case for a build that ships no objects.
- */
+/** Samples from {@link BUNDLED_OBJECTS_MANIFEST}. Empty until read, or for good if unreachable. */
 let bundledPresets: ObjectPreset[] = [];
 
 /**
@@ -1150,17 +1139,7 @@ async function resolveReadableUrl(source: string): Promise<{ url: string; revoca
   throw new Error("http-unavailable");
 }
 
-/**
- * Fetches the bundled-objects manifest as text, wherever it lives.
- *
- * The manifest itself is small — it is the samples it points at
- * ({@link BUNDLED_OBJECTS_MANIFEST}'s file server) that are heavy — but once
- * that URL names a different host than the app's own, it needs the same
- * cross-origin workarounds an individual object does: {@link resolveReadableUrl}.
- *
- * @param url - The manifest's URL.
- * @returns Its raw text.
- */
+/** Fetches the manifest as text, via {@link resolveReadableUrl} for cross-origin hosts. */
 async function fetchManifestText(url: string): Promise<string> {
   const readable = await resolveReadableUrl(url);
   try {
@@ -2077,10 +2056,8 @@ export const geoim3dObjectsPlugin: GeoLibrePlugin = {
   id: GEOIM3D_OBJECTS_PLUGIN_ID,
   name: "3D objects",
   version: "0.1.0",
-  // Tilesets render on both engines (Cesium via cesium-layer-sync.ts's
-  // "3dtiles" path, MapLibre via deck.gl); only a splat is MapLibre-only
-  // (maplibre-gl-splat has no Cesium counterpart), which PrimaryViewBridge
-  // above already accounts for rather than gating the whole plugin on it.
+  // Tilesets render on both engines; only splats are MapLibre-only,
+  // which PrimaryViewBridge above already accounts for.
   engines: ["maplibre", "cesium"],
 
   activate(app: GeoLibreAppAPI) {

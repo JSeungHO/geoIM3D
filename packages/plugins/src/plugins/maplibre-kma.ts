@@ -389,9 +389,7 @@ function setPickActive(app: GeoLibreAppAPI, active: boolean): void {
   state.pickActive = active;
   unsubscribePick?.();
   unsubscribePick = null;
-  // Each engine styles its own canvas — `getMap()` and `getCesiumScene()` are
-  // never both live at once (issue #2217), but reaching for whichever one is
-  // is cheaper than asking the renderer first.
+  // Style whichever engine's canvas is live.
   const map = app.getMap?.();
   if (map) map.getCanvas().style.cursor = active ? "crosshair" : "";
   const cesiumCanvas = app.getCesiumScene?.()?.canvas;
@@ -841,9 +839,7 @@ export const maplibreKmaPlugin: GeoLibrePlugin = {
   id: KMA_PLUGIN_ID,
   name: "Weather (KMA)",
   version: "0.1.0",
-  // Adds only GeoJSON station markers, which the globe draws the same way as
-  // the 2D map (cesium-layer-sync.ts's "geojson" path) — no engine-specific
-  // code in this file needs it.
+  // Only GeoJSON markers, which the globe already draws the same as 2D.
   engines: ["maplibre", "cesium"],
 
   activate(app: GeoLibreAppAPI) {

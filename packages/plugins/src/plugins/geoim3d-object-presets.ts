@@ -176,15 +176,7 @@ export function savePresets(presets: readonly ObjectPreset[]): void {
 /* Bundled objects                                                              */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Where the sample objects and their placements are listed.
- *
- * Points at geoIM3D's own file server rather than `public/objects/` in the
- * app bundle — the samples are tens of megabytes each, and hosting them
- * remotely keeps the installer from carrying that weight. The manifest
- * itself still names a `baseUrl` for its entries' files/tilesets (see
- * `parseBundledManifest`); this constant only says where the manifest is.
- */
+/** Where the sample objects are listed — a remote file server, not the app bundle. */
 export const BUNDLED_OBJECTS_MANIFEST =
   "http://remote.ejbt.co.kr:45673/files/objects/manifest.json";
 

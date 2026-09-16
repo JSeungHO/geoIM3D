@@ -175,20 +175,9 @@ export type CesiumBasemapImagery =
     };
 
 /**
- * Resolves a `basemapStyleUrl` sentinel this module's own catalogs (planetary,
- * regional, vector-style analogues) don't recognize.
- *
- * For a sentinel scheme that needs state this engine-free module cannot reach
- * — geoIM3D's VWorld basemaps, for one, need a live user-entered API key that
- * lives in `@geolibre/plugins` — the owning plugin registers a resolver here
- * instead of `@geolibre/core` reaching upward for it. Mirrors
- * `CesiumLayerSyncDeps` in `@geolibre/map`: a callback the lower layer
- * exposes, filled in by the layer that actually knows the answer.
- *
- * @param styleUrl - The project's `basemapStyleUrl`, never a sentinel this
- *   module's own catalogs already matched.
- * @returns The imagery to draw, or undefined to let the caller fall through
- *   to its own default.
+ * Resolves a sentinel this module's own catalogs don't recognize (e.g. a
+ * plugin basemap needing live state, like VWorld's API key, that
+ * @geolibre/core can't reach). Registered by the plugin that owns it.
  */
 export type CesiumBasemapSentinelResolver = (styleUrl: string) => CesiumBasemapImagery | undefined;
 
@@ -423,9 +412,7 @@ export function basemapToCesiumImagery(
     };
   }
 
-  // A sentinel from a plugin this engine-free module cannot read a catalog for
-  // (geoIM3D's VWorld basemaps need a live, user-entered API key that lives in
-  // @geolibre/plugins — see setCesiumBasemapSentinelResolver below).
+  // A plugin-owned sentinel (see setCesiumBasemapSentinelResolver).
   const custom = sentinelResolver?.(url);
   if (custom) return custom;
 

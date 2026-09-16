@@ -481,26 +481,9 @@ export function vworldBasemapIdFor(styleUrl: string | undefined): string | null 
 export const VWORLD_BASEMAP_STYLE_PREFIX = "vworld-";
 
 /**
- * Draws a VWorld basemap sentinel on the Cesium globe, geoIM3D's
- * {@link CesiumBasemapSentinelResolver} for `@geolibre/core`.
- *
- * `basemapToCesiumImagery` has no raster catalog entry for a VWorld sentinel
- * (it is minted per-session by {@link registerVWorldBasemapStyle}, not a fixed
- * id), so without this the globe fell back to Ion/OpenStreetMap regardless of
- * which VWorld map the menu applied — the picker looked like it did nothing.
- *
- * Unlike the 2D map's key-free `vworld://` template (rewritten by the
- * protocol handler at request time so the key never reaches a saved style),
- * the key is resolved into the template here. `CesiumBasemapImagery` is a
- * derived, per-render descriptor — never written to the project file — so
- * this carries the same exposure the 2D path already accepts one function
- * call later, inside the protocol handler's own request.
- *
- * @param styleUrl - The project's `basemapStyleUrl`.
- * @returns The imagery to draw, or undefined when the sentinel is not a
- *   VWorld basemap this session applied, or no API key is configured (in
- *   which case the caller's own fallback — Ion/OpenStreetMap — applies,
- *   matching the 2D map's WMS/WFS calls when no key is set).
+ * geoIM3D's {@link CesiumBasemapSentinelResolver}: draws a VWorld basemap
+ * sentinel on the Cesium globe (the core catalog doesn't know it). Resolves
+ * the key into the template directly since this descriptor is never saved.
  */
 export function vworldCesiumBasemapImagery(styleUrl: string): CesiumBasemapImagery | undefined {
   const id = vworldBasemapIdFor(styleUrl);
@@ -523,14 +506,7 @@ export function vworldCesiumBasemapImagery(styleUrl: string): CesiumBasemapImage
   }
 }
 
-/**
- * Wires {@link vworldCesiumBasemapImagery} into `@geolibre/core` so a VWorld
- * basemap renders on the Cesium globe. Independent of this plugin's own
- * activation state — a saved project's basemap sentinel does not survive a
- * restart anyway (see {@link appliedSentinels}), but the resolver itself has
- * to be live whenever the credential/protocol wiring is, which today is
- * always (`useCredentials.ts`).
- */
+/** Registers {@link vworldCesiumBasemapImagery}, independent of plugin activation. */
 export function registerVWorldCesiumBasemap(): void {
   setCesiumBasemapSentinelResolver(vworldCesiumBasemapImagery);
 }
@@ -1139,10 +1115,8 @@ export const maplibreVWorldPlugin: GeoLibrePlugin = {
   id: VWORLD_PLUGIN_ID,
   name: "VWorld",
   version: "0.1.0",
-  // The `vworld://` raster tiles it adds render on the globe too, through the
-  // same registered MapLibre protocol handler that Cesium's
-  // ProtocolImageryProvider calls directly (cesium-protocol-imagery.ts) — no
-  // engine-specific code in this file needs it.
+  // Its vworld:// tiles already render on the globe via the shared
+  // MapLibre protocol handler (cesium-protocol-imagery.ts).
   engines: ["maplibre", "cesium"],
   // Deliberately *not* activeByDefault: the user asked for it off, so the
   // plugin (and its toolbar menu) appear only once switched on from the Plugins
