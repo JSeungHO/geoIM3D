@@ -212,7 +212,7 @@ describe("local Gaussian Splat file drop", () => {
 
     assert.match(
       shell,
-      /gaussianSplatPlacementAtMapCenter\(\s*useAppStore\.getState\(\)\.mapView\.center\s*\)/,
+      /gaussianSplatPlacementAtMapCenter\(\s*useAppStore\.getState\(\)\.mapView\.center\s*,?\s*\)/,
     );
     assert.equal(
       shell.match(/addDroppedObject\([^;]+splatPlacement\s*,?\s*\)/g)?.length,
