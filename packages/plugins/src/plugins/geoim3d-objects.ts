@@ -312,7 +312,7 @@ interface LoadedObject {
   loaderId: string;
   name: string;
   kind: ObjectKind;
-  /** The paired 3D Tiles layer, when the object came from a preset that has one. */
+  /** Set on a tileset-only entry: its own layer id (the same as `layerId`). */
   tilesetLayerId?: string;
   /** Set when there is no splat behind this entry — a tileset added on its own. */
   tilesetOnly?: boolean;
@@ -325,7 +325,34 @@ interface LoadedObject {
   /** True when `readableUrl` must be revoked once the object is gone. */
   revocable: boolean;
   transform: ObjectTransform;
+  /** Links back to the {@link ActiveObjectSession} this entry materializes, if any. */
+  sessionKey?: string;
 }
+
+/**
+ * What a preset (or an ad-hoc load) currently has on the map, kept outside
+ * `state.objects` — which every engine switch wipes, since `PluginManager`
+ * deactivates every active plugin (ours included, despite declaring
+ * `engines: ["maplibre", "cesium"]`) on any `primaryRenderer` change and this
+ * plugin's own `activate()` does not otherwise remember what was loaded.
+ * `materializeSession` reads this to put back whichever single representation
+ * — the splat on MapLibre, the tileset companion on the globe — the
+ * now-current engine can actually draw, instead of the object just staying
+ * gone or (for a preset's tileset, added straight to the store rather than
+ * tracked here) an orphan neither engine renders.
+ */
+interface ActiveObjectSession {
+  /** Stable across reloads: a preset's id, or its source otherwise. */
+  key: string;
+  source: string;
+  name: string;
+  transform: ObjectTransform;
+  /** Set when this object has a 3D Tiles version only the globe can show. */
+  tilesetUrl?: string;
+  tilesetTransform?: ObjectTransform;
+}
+
+const activeSessions = new Map<string, ActiveObjectSession>();
 
 interface PanelState {
   app: GeoLibreAppAPI | null;
@@ -498,18 +525,87 @@ function createTilesetStoreLayer(
   };
 }
 
-/** Adds a preset's tileset to the layer list once; true whenever the preset has one. */
-function ensureTilesetLayer(preset: ObjectPreset): boolean {
-  if (!preset.tileset) return false;
+/**
+ * Puts a session's tileset companion on the map (idempotent) and lists it in
+ * the panel so its placement can still be edited while it's the only thing
+ * standing in for the object.
+ */
+function materializeTilesetSession(session: ActiveObjectSession): void {
+  if (!session.tilesetUrl) return;
+  const layerId = `${session.key}-tileset`;
   const store = useAppStore.getState();
-  const id = `${preset.id}-tileset`;
-  if (!store.layers.some((layer) => layer.id === id)) {
+  if (!store.layers.some((layer) => layer.id === layerId)) {
     store.addLayer(
-      createTilesetStoreLayer(id, preset.name, preset.tileset, initialTilesetTransform(preset)),
+      createTilesetStoreLayer(
+        layerId,
+        session.name,
+        session.tilesetUrl,
+        session.tilesetTransform ?? session.transform,
+      ),
     );
   }
+  if (!state.objects.some((entry) => entry.layerId === layerId)) {
+    state.objects.push({
+      layerId,
+      loaderId: "",
+      name: session.name,
+      kind: objectKind(session.source) ?? "splat",
+      source: session.source,
+      readableUrl: session.tilesetUrl,
+      revocable: false,
+      transform: session.transform,
+      tilesetLayerId: layerId,
+      tilesetTransform: session.tilesetTransform ?? session.transform,
+      tilesetOnly: true,
+      sessionKey: session.key,
+    });
+  }
   watchTilesetLoading();
-  return true;
+  rerenderPanel();
+}
+
+/**
+ * Loads exactly the representation the current engine can draw for a
+ * remembered session — the splat on MapLibre, the tileset companion on the
+ * globe. Called for the initial load and again from `activate()` on every
+ * engine switch, which is the only way a session survives one (see
+ * {@link ActiveObjectSession}). Idempotent: a session already materialized
+ * for the current engine is left alone.
+ */
+async function materializeSession(app: GeoLibreAppAPI, key: string): Promise<void> {
+  const session = activeSessions.get(key);
+  if (!session) return;
+
+  if (primaryViewBridge?.isGlobeActive()) {
+    materializeTilesetSession(session);
+    return;
+  }
+
+  if (state.objects.some((entry) => entry.sessionKey === key)) return;
+  let prepared: { url: string; revocable: boolean } | undefined;
+  if (!/^https?:\/\//i.test(session.source)) {
+    if (!localObjectResolver) {
+      setStatus(labels.errorPresetUnavailable);
+      rerenderPanel();
+      return;
+    }
+    const picked = await localObjectResolver(session.source);
+    if (!picked) {
+      setStatus(labels.errorPresetMissing);
+      rerenderPanel();
+      return;
+    }
+    prepared = { url: picked.url, revocable: picked.revocable };
+  }
+  await loadObject(app, session.source, session.name, prepared, session.transform, key);
+}
+
+/** Re-materializes every remembered session for the engine that's current now. */
+async function restoreActiveSessions(app: GeoLibreAppAPI): Promise<void> {
+  // Sequential: loadObject shares `state.busy`, which a parallel batch would race.
+  for (const key of [...activeSessions.keys()]) {
+    await materializeSession(app, key);
+  }
 }
 
 /** Whether a source names a 3D Tiles tileset rather than a splat or a model. */
@@ -559,10 +655,14 @@ function panelObject(): LoadedObject | null {
   return selected ?? state.objects.at(-1) ?? null;
 }
 
-/** True when the panel's fields are pointed at the tileset rather than the splat. */
+/**
+ * True when the panel's fields are pointed at the tileset rather than the
+ * splat. The two are mutually exclusive now (MapLibre shows the splat, the
+ * globe its tileset companion — see ActiveObjectSession), so a tileset-only
+ * entry is the only case left.
+ */
 function isEditingTileset(object: LoadedObject): boolean {
-  if (object.tilesetOnly) return true;
-  return Boolean(object.tilesetLayerId) && Boolean(primaryViewBridge?.isGlobeActive());
+  return object.tilesetOnly === true;
 }
 
 function isObjectLayer(layer: GeoLibreLayer): boolean {
@@ -572,6 +672,15 @@ function isObjectLayer(layer: GeoLibreLayer): boolean {
 let unsubscribeStore: (() => void) | null = null;
 let unsubscribeTilesetLoading: (() => void) | null = null;
 let detachPitchSync: (() => void) | null = null;
+
+/**
+ * Whether the panel was open the moment `deactivate()` ran, so the matching
+ * `activate()` — called right back on an engine switch — can reopen it
+ * instead of leaving it silently closed. Deliberately not in `state`, which
+ * `deactivate()` otherwise resets.
+ */
+let wasRightPanelOpen = false;
+let wasFloatingPanelOpen = false;
 
 /** Counter behind the stable layer ids. Uniqueness within a session is enough. */
 let nextObjectSequence = 1;
@@ -746,18 +855,6 @@ function syncSplatCameraOnPitch(map: {
   return () => map.off("moveend", onMoveEnd);
 }
 
-/** Where an object goes when nothing says otherwise: the middle of the view. */
-function defaultObjectTransform(app: GeoLibreAppAPI, kind: ObjectKind): ObjectTransform {
-  const center = app.getMap?.()?.getCenter();
-  return {
-    longitude: center?.lng ?? 0,
-    latitude: center?.lat ?? 0,
-    altitude: 0,
-    scale: 1,
-    rotation: defaultRotation(kind),
-  };
-}
-
 /** Waits for the map style to finish loading (else the scene layer's add throws mid-basemap-change). */
 function whenStyleReady(map: unknown): Promise<void> {
   const target = map as
@@ -831,15 +928,23 @@ async function whenObjectRendered(control: SplatControlLike, loaderId: string): 
   if (ready) await ready.catch(() => {});
 }
 
-/** Loads an object and adds it to the panel's list. */
+/**
+ * Loads an object and adds it to the panel's list.
+ *
+ * @param sessionKey - Correlates this load with an {@link ActiveObjectSession}
+ *   so an engine switch (which forces this object out and back in) can find
+ *   its way back to the same session. Defaults to `source`, which is enough
+ *   to key a plain URL/file load; a preset passes its own stable id instead,
+ *   since a preset's source URL is not otherwise guaranteed unique across
+ *   reopens the way an ad-hoc load's is.
+ */
 async function loadObject(
   app: GeoLibreAppAPI,
   source: string,
   name: string,
   prepared?: { url: string; revocable: boolean },
   placement?: ObjectTransform,
-  tilesetLayerId?: string,
-  tilesetTransform?: ObjectTransform,
+  sessionKey: string = source,
 ): Promise<void> {
   const kind = objectKind(source);
   if (!kind) {
@@ -860,9 +965,10 @@ async function loadObject(
 
     readable = prepared ?? (await resolveReadableUrl(source));
 
-    // A splat loaded while the globe is up is invisible, unless a tileset for
-    // the same site is going up beside it (then it just waits for a switch back).
-    if (!tilesetLayerId && primaryViewBridge?.isGlobeActive()) throw new Error("globe-active");
+    // The splat renderer draws into the 2D map; nothing shows for it on the
+    // globe (its tileset companion, if any, is what materializeSession shows
+    // there instead — see ActiveObjectSession).
+    if (primaryViewBridge?.isGlobeActive()) throw new Error("globe-active");
 
     await whenStyleReady(app.getMap?.());
 
@@ -891,10 +997,21 @@ async function loadObject(
       readableUrl: readable.url,
       revocable: readable.revocable,
       transform,
-      tilesetLayerId,
-      tilesetTransform,
+      sessionKey,
     };
     state.objects.push(object);
+    // Keep any tileset URL a preset already recorded for this session (set
+    // before this call, in loadPreset) — this call only ever materializes the
+    // splat side.
+    const existingSession = activeSessions.get(sessionKey);
+    activeSessions.set(sessionKey, {
+      key: sessionKey,
+      source,
+      name,
+      transform,
+      tilesetUrl: existingSession?.tilesetUrl,
+      tilesetTransform: existingSession?.tilesetTransform,
+    });
     acquireMercatorProjectionLock(PROJECTION_LOCK_KEY, app, app.getMap?.());
     // A jump, not a flight: the projection switch above ends any animation in
     // progress anyway. Only on load, not on every transform edit.
@@ -914,22 +1031,6 @@ async function loadObject(
     // A blob made for a load that then failed would otherwise be held until
     // the tab closes, and these are hundreds of megabytes.
     if (readable?.revocable) URL.revokeObjectURL(readable.url);
-    // A preset whose splat failed to read still has its tileset on the map; list it too.
-    if (tilesetLayerId && !state.objects.some((entry) => entry.layerId === tilesetLayerId)) {
-      state.objects.push({
-        layerId: tilesetLayerId,
-        loaderId: "",
-        name,
-        kind,
-        source,
-        readableUrl: source,
-        revocable: false,
-        transform: placement ?? defaultObjectTransform(app, kind),
-        tilesetLayerId,
-        tilesetTransform: tilesetTransform ?? placement ?? defaultObjectTransform(app, kind),
-        tilesetOnly: true,
-      });
-    }
     setStatus(loadErrorMessage(error));
   } finally {
     state.busy = false;
@@ -956,8 +1057,11 @@ function removeObject(object: LoadedObject, options?: { alreadyRemovedFromStore?
     releaseMercatorProjectionLock(PROJECTION_LOCK_KEY, state.app);
   }
   if (!options?.alreadyRemovedFromStore) useAppStore.getState().removeLayer(object.layerId);
-  // The tileset was added with the object, so it goes with it (else unreachable).
+  // A tileset-only entry's own layer, if this is one (idempotent alongside the
+  // removeLayer above when they're the same id).
   if (object.tilesetLayerId) useAppStore.getState().removeLayer(object.tilesetLayerId);
+  // Otherwise an engine switch would bring this object straight back.
+  if (object.sessionKey) activeSessions.delete(object.sessionKey);
   rerenderPanel();
 }
 
@@ -982,6 +1086,10 @@ async function applyTransform(object: LoadedObject, transform: ObjectTransform):
   if (isEditingTileset(object)) {
     object.tilesetTransform = transform;
     applyTilesetTransform(object, transform);
+    if (object.sessionKey) {
+      const session = activeSessions.get(object.sessionKey);
+      if (session) session.tilesetTransform = transform;
+    }
     rerenderPanel();
     return;
   }
@@ -1009,6 +1117,10 @@ async function applyTransform(object: LoadedObject, transform: ObjectTransform):
       await whenObjectRendered(control, object.loaderId);
     }
     object.transform = transform;
+    if (object.sessionKey) {
+      const session = activeSessions.get(object.sessionKey);
+      if (session) session.transform = transform;
+    }
     // Move the bounds too, or the zoom button keeps pointing at the old spot.
     const store = useAppStore.getState();
     const existing = store.layers.find((entry) => entry.id === object.layerId);
@@ -1155,34 +1267,19 @@ function deletePreset(id: string): void {
 
 /** Loads a preset back onto the map at the placement it was saved with. */
 async function loadPreset(app: GeoLibreAppAPI, preset: ObjectPreset): Promise<void> {
-  // Opened in either view: the tileset draws on the globe, the splat on 2D.
-  const hasTileset = TILESET_COMPANION_ENABLED && ensureTilesetLayer(preset);
-
-  // A recorded path needs reauthorizing before the loader can read it.
-  let prepared: { url: string; revocable: boolean } | undefined;
-  if (!/^https?:\/\//i.test(preset.source)) {
-    if (!localObjectResolver) {
-      setStatus(labels.errorPresetUnavailable);
-      rerenderPanel();
-      return;
-    }
-    const picked = await localObjectResolver(preset.source);
-    if (!picked) {
-      setStatus(labels.errorPresetMissing);
-      rerenderPanel();
-      return;
-    }
-    prepared = { url: picked.url, revocable: picked.revocable };
-  }
-  await loadObject(
-    app,
-    preset.source,
-    preset.name,
-    prepared,
-    preset.transform,
-    hasTileset ? `${preset.id}-tileset` : undefined,
-    hasTileset ? initialTilesetTransform(preset) : undefined,
-  );
+  const tilesetUrl = TILESET_COMPANION_ENABLED ? preset.tileset : undefined;
+  // Remembered by key so an engine switch (which tears this plugin down and
+  // back up) can put back whichever side the now-current engine draws — see
+  // ActiveObjectSession. materializeSession does the actual loading below.
+  activeSessions.set(preset.id, {
+    key: preset.id,
+    source: preset.source,
+    name: preset.name,
+    transform: preset.transform,
+    tilesetUrl,
+    tilesetTransform: tilesetUrl ? initialTilesetTransform(preset) : undefined,
+  });
+  await materializeSession(app, preset.id);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1586,9 +1683,22 @@ export const geoim3dObjectsPlugin: GeoLibrePlugin = {
       defaultWidth: 340,
       render: mountPanel,
     });
+    // An engine switch closes both panels below (PluginManager deactivates
+    // every active plugin on a primaryRenderer change, ours included); reopen
+    // whichever one was actually open rather than leaving the user's open
+    // panel silently gone.
+    if (wasRightPanelOpen) app.openRightPanel?.(PANEL_ID);
+    if (wasFloatingPanelOpen) app.openFloatingPanel?.(FLOATING_PANEL_ID);
+    // Put back whichever representation — splat or tileset companion — the
+    // engine that's current now can actually draw. See ActiveObjectSession.
+    void restoreActiveSessions(app);
   },
 
   deactivate(app: GeoLibreAppAPI) {
+    // Recorded before closing below, so activate() (called right back on an
+    // engine switch) knows whether to reopen.
+    wasRightPanelOpen = app.getActiveRightPanel?.() === PANEL_ID;
+    wasFloatingPanelOpen = app.getOpenFloatingPanels?.().includes(FLOATING_PANEL_ID) ?? false;
     unsubscribePrimaryView?.();
     unsubscribePrimaryView = null;
     unregisterMenu?.();
