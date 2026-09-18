@@ -1657,6 +1657,13 @@ export const geoim3dObjectsPlugin: GeoLibrePlugin = {
   // Tilesets render on both engines; only splats are MapLibre-only,
   // which PrimaryViewBridge above already accounts for.
   engines: ["maplibre", "cesium"],
+  // Without this, restoreProjectState's project-restore sweep collapses any
+  // right panel this plugin (re)opens from activate() -- including our own
+  // wasRightPanelOpen restore below, which runs through that same restore
+  // path on every engine switch, not just an actual project load. The panel
+  // looked like it vanished; it had just been collapsed to its rail the
+  // instant it opened.
+  restoresPanelCollapseState: true,
 
   activate(app: GeoLibreAppAPI) {
     state.app = app;
