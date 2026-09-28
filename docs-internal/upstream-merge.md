@@ -3,8 +3,75 @@
 geoIM3D는 [opengeos/GeoLibre](https://github.com/opengeos/GeoLibre)의 포크입니다.
 원본에 새 릴리스가 나오면 이 순서대로 가져옵니다.
 
-마지막 수행: **v2.9.0 → v3.0.0 (95커밋, 476파일)**. 충돌 13개 파일. 아래
-내용은 실제로 쓴 명령과 부딪힌 문제를 적은 것입니다.
+마지막 수행: **v3.0.0 → v3.1.0 (220커밋, 994경로)**. 충돌 14개 파일 + git이
+표시하지 않은 의미 충돌(테스트 실패로만 드러남) 다수. 아래 내용은 실제로 쓴
+명령과 부딪힌 문제를 적은 것입니다.
+
+v3.1.0에서 겪은 것:
+
+- **큰 파일 두 개가 병합 불가능한 "통째 충돌"로 나옴** (`store.ts` 75~1552줄
+  전체, `DesktopShell.tsx` 6개 구간 최대 777줄). 원인은 diff3가 아니라 상위가
+  파일을 쪼갠 것 — `store.ts`(2662줄)는 `store/*.ts` 슬라이스 12개로,
+  `DesktopShell.tsx`(3116줄)는 `hooks/desktop-shell/*.ts` 훅 20개로 흩어짐.
+  **이런 파일은 충돌을 한 줄씩 풀지 말고**: ① `git diff <병합-베이스>..dev --
+  <파일>`로 **우리 diff만** 뽑고, ② `git checkout upstream/main -- <파일>`로
+  상위 새 버전을 통째로 받고, ③ 우리 diff가 어디로 이동했는지 새 슬라이스/훅
+  파일에서 찾아 그 자리에 다시 얹습니다. `store.ts`의 `isSessionOnlyLayer`
+  4곳은 `store/layers-slice.ts`로, `DesktopShell.tsx`의 3D 객체 플러그인
+  셸 등록 `useEffect`는 새 파일 `hooks/desktop-shell/useObjectPluginShells.ts`
+  (상위가 쓰는 것과 같은 명명 규칙)로 옮겼습니다. 드롭 핸들러의 스플랫
+  분류 로직도 `DesktopShell.tsx` 자체가 아니라 새로 생긴
+  `hooks/desktop-shell/useFileDrop.ts`로 옮겨야 했습니다 — 소스 텍스트를
+  정규식으로 검사하는 테스트(`tests/gaussian-splat-drop.test.ts`)가 옛
+  파일 경로를 가리키고 있어서 같이 고쳐야 했습니다.
+- **딥링크 OAuth 스킴이 상위와 충돌.** 상위가 `tauri.conf.json`에
+  `plugins.deep-link.desktop.schemes: ["org.geolibre.desktop"]`을 추가(공유
+  로그인 콜백용). 우리 identifier(`kr.co.ejbt.geoim3d`)와 다른 스킴을 그대로
+  두면, 이 기기에 진짜 GeoLibre Desktop이 설치돼 있을 때 OS가 커스텀 URL
+  스킴을 하나만 가져가므로 둘 중 하나의 콜백이 엉뚱한 앱으로 감. 스킴 문자열을
+  우리 identifier로 통일: `tauri.conf.json`(스킴 목록),
+  `src/lib/native-share-auth.ts`(콜백 URL 파싱), `src-tauri/main.desktop`
+  (Linux `MimeType=`의 `x-scheme-handler/`), `src/lib/diagnostics.ts`의
+  `EMBEDDED_URL` 정규식(진단 로그에서 콜백 URL을 레다크션하려면 스킴을
+  인식해야 함) — 네 곳 다 손대야 일관됩니다. 관련 테스트
+  (`tests/native-share-auth.test.ts`, `tests/diagnostics.test.ts`,
+  `tests/linux-desktop-entry.test.ts`)의 하드코딩된 스킴 문자열도 같이 고칩니다.
+- **`vite.config.ts`에 새로 생긴 "부트 번들 예산" 게이트가 fork 때문에 터짐.**
+  상위가 이번에 처음 추가한 `bootBundleBudgetPlugin`(3 MB 상한)은 순정
+  upstream 기준으로 맞춘 것 — VWorld/KMA/3D 객체 세 플러그인이 상위의 다른
+  모든 내장 플러그인과 같은 배열(`usePlugins.ts`)에 나란히 등록되면서(이건
+  상위 자체 패턴과 동일, 우리만 예외 아님) 그만큼 부트 청크가 커짐. 순정
+  upstream을 별도 `git worktree`로 빌드해서 진짜로 통과하는지 먼저 확인한 뒤
+  (이게 우리 병합 탓인지 upstream 자체 회귀인지 구분하는 유일한 확실한 방법),
+  `BOOT_JS_BUDGET_BYTES`를 fork의 실측값(7.05 MB) 위로 올리고 이유를 주석에
+  남김. 무거운 서드파티 라이브러리 자체는(예: GeoAgent의 Strands SDK) 여전히
+  각 플러그인의 `activate()` 안에서 동적 import로 지연 로드됨 — 이건 그대로
+  뒀고, 늘어난 건 플러그인 등록 코드 자체의 무게.
+- **`maplibre-swipe.ts`가 `@geolibre/map`을 직접 import하던 게 상위의 새
+  테스트(`tests/swipe-plugin-mapbox.test.ts`)에서 처음 걸림.** `@geolibre/map`은
+  `MapCanvas`를 재수출하고 그 모듈 그래프가 MapLibre 스타일시트를 끌어와서
+  Node 테스트 러너가 못 읽습니다 — 이 원칙 자체는 오래전부터 알고 있었는데
+  (`geoim3d-tileset-loading.ts`/`TilesetLoadingSource`가 같은 이유로 주입식),
+  `maplibre-swipe.ts`의 Cesium swipe 발행(`setCesiumSwipeState`,
+  `cesiumSwipeSides`)만 예외로 직접 import하고 있었고 이걸 걸러줄 테스트가
+  없었을 뿐. 상위가 새 테스트를 추가하면서 처음 드러남. 같은 DI 패턴으로
+  전환: `maplibre-swipe.ts`에 `CesiumSwipePublisher` 인터페이스 +
+  `setCesiumSwipePublisher`를 추가하고, 순수 함수인 `cesiumSwipeSides`는
+  `@geolibre/map`에서 복사해와 로컬로 두고(어차피 `GeoLibreLayer`만
+  필요해서 Cesium 무관), 호스트(`DesktopShell.tsx`)가 진짜 구현
+  (`setCesiumSwipeState` from `@geolibre/map`)을 연결.
+- **골든 콜 로그 테스트는 재생성 스크립트를 그대로 따라갑니다.** 상위가 새로
+  추가한 `tests/cesium-layer-sync-call-log.test.ts`는
+  `UPDATE_CALL_LOGS=1 node --import tsx --test <파일>` +
+  `npx oxfmt --write tests/fixtures/cesium-layer-sync-call-log.json`로
+  재생성하도록 파일 맨 위에 직접 적혀 있음. 우리 생성자가 `applySwipe()`를
+  즉시 호출해 `scene.requestRender`가 로그 맨 앞에 추가로 찍히는 건 fork의
+  기존 동작(버그 아님) — 재생성 후 diff로 "우리가 아는 이유로 늘어난 호출인지"
+  검토만 하면 됩니다.
+- `geolibre-wasm` `1.5.2 → 1.5.4` — `node scripts/gen-whitebox-menu-catalog.mjs`
+  재실행. 이번엔 카탈로그 내용 자체는 안 바뀜(diff 없음), 그래도 매번 확인.
+- `maplibre-gl` `6.7.0 → 6.10.0` — `docs/maintenance.md` 참고 + `test:frontend`
+  풀 스위트로 확인, 이번엔 실패 없음.
 
 v3.0.0에서 겪은 것:
 
