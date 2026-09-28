@@ -213,6 +213,11 @@ export interface GeoLibreCogLayerOptions {
   opacity?: number;
   /** Insert the new layer directly beneath the layer with this id. */
   beforeLayerId?: string;
+  /**
+   * Fit the map to the COG once it loads (default true). Pass `false` for a
+   * global layer, where fitting would throw away the user's view.
+   */
+  zoomTo?: boolean;
 }
 
 /**
@@ -355,6 +360,20 @@ export interface GeoLibreLayerSummary {
   opacity: number;
 }
 
+/**
+ * A Layers-panel group (folder) as plugins see it. `parentId` is the enclosing
+ * group's id, or `null` for a group at the panel root, so the array a host
+ * returns describes the whole folder tree and not just its top level.
+ */
+export interface GeoLibreLayerGroupSummary {
+  id: string;
+  name: string;
+  parentId: string | null;
+  visible: boolean;
+  opacity: number;
+  collapsed: boolean;
+}
+
 export interface GeoLibreRasterWindowOptions {
   bounds: [number, number, number, number];
   width?: number;
@@ -398,6 +417,12 @@ export interface GeoLibreAppAPI {
    * See AssistantToolSpec for input validation and return-value requirements.
    */
   registerAssistantToolSpec?: (spec: AssistantToolSpec, ownerPluginId?: string) => () => void;
+  /** Append guidance text to the assistant's system prompt while the plugin is
+   * active, e.g. when to call the plugin's tools instead of run_sql. The host
+   * scopes ownership to the calling plugin, removes the text on deactivation,
+   * and refreshes the assistant before its next prompt. Returns a disposer.
+   */
+  registerAssistantGuidance?: (text: string, ownerPluginId?: string) => () => void;
 
   setBasemap: (styleUrl: string) => void;
   addGeoJsonLayer: (name: string, data: FeatureCollection, sourcePath?: string) => string;
@@ -541,7 +566,28 @@ export interface GeoLibreAppAPI {
    */
   unregisterTemporalLayer?: (layerId: string) => void;
   getActiveBasemap: () => string;
+  /**
+   * The style layer ids the active basemap contributes, in paint order.
+   *
+   * The renderer-neutral counterpart to fetching {@link getActiveBasemap} and
+   * reading its `layers`, for a control that needs to tell basemap layers from
+   * project layers. On Mapbox the basemap is often a `mapbox://` style, which
+   * `fetch` rejects outright ("URL scheme \"mapbox\" is not supported"), so a
+   * control that only knows how to fetch silently loses the distinction there.
+   * Empty when no 2D engine is mounted.
+   */
+  getBasemapLayerIds?: () => string[];
   onBasemapChange: (callback: (styleUrl: string) => void) => () => void;
+  /** Current layer ids in the project, in their current order. */
+  getLayers?: () => string[];
+  /**
+   * Subscribe to the project's layer ids, mirroring {@link onBasemapChange}
+   * for layers. `callback` fires whenever a layer is added, removed, or
+   * reordered anywhere in the app — including the user removing one from the
+   * Layers panel, or another plugin adding one. Returns an unsubscribe
+   * function.
+   */
+  onLayersChanged?: (callback: (layerIds: string[]) => void) => () => void;
   fetchArrayBuffer?: (url: string) => Promise<ArrayBuffer>;
   /**
    * Resolve a fetchable URL for an asset shipped alongside an external
@@ -593,8 +639,27 @@ export interface GeoLibreAppAPI {
    * creating a second group with the same name. No-op if the group is gone.
    */
   moveLayersToGroup?: (layerIds: string[], groupId: string | null) => void;
+  /**
+   * Nest a Layers-panel group inside another one, or lift it back to the panel
+   * root with a null parent id. The group-of-groups counterpart of
+   * {@link moveLayersToGroup}, so a plugin can build the same nested folders a
+   * user can build by hand in the Layers panel.
+   *
+   * No-op when either id is unknown, when the group is already in that parent,
+   * or when the move would make a group its own ancestor (the host refuses the
+   * cycle rather than corrupting the tree).
+   */
+  moveLayerGroupToGroup?: (id: string, parentId: string | null) => void;
   /** Remove a Layers-panel group without removing its child layers. */
   removeLayerGroup?: (id: string) => void;
+  /**
+   * Every Layers-panel group, with the parent link that spells out the folder
+   * tree. The read half of the group API: a plugin needs it to address a group
+   * it did not create itself, since {@link addLayerGroup} is otherwise the only
+   * source of group ids. The order is the host's own group order, not the
+   * panel's (which re-orders a group after its parent for display).
+   */
+  listLayerGroups?: () => GeoLibreLayerGroupSummary[];
   fitBounds?: (bounds: [number, number, number, number]) => void;
   /**
    * The geographic extent the primary map currently shows, as
@@ -614,6 +679,28 @@ export interface GeoLibreAppAPI {
   getMap?: () => MapLibreMap | null;
   /** Active primary renderer, including while its canvas is being replaced. */
   getMapRenderer?: () => MapRendererKind;
+  /** Native ArcGIS view; null while another engine is active. */
+  getArcgisView?: () => ReturnType<import("@geolibre/map").ArcgisEngine["getView"]>;
+  /** Native Mapbox map, available only while Mapbox is the primary renderer. */
+  getMapboxMap?: () => ReturnType<import("@geolibre/map").MapboxEngine["getMapboxMap"]>;
+  /**
+   * The mapbox-gl namespace, available only while Mapbox is the primary
+   * renderer. For the rare plugin that must build Mapbox's own `Marker`,
+   * `Popup` or `LngLatBounds` on the map handed out by {@link getMapboxMap}
+   * (MapLibre's classes throw on a mapbox-gl map); everything else stays on
+   * the Style Spec surface `getStyleMap` presents.
+   */
+  getMapboxGl?: () => ReturnType<import("@geolibre/map").MapboxEngine["getMapboxGl"]> | null;
+  /**
+   * The Mapbox access token the primary map was built with — `null` off the
+   * Mapbox renderer, and also on it when the app has no token configured.
+   * Needed only by a plugin that constructs a *second* Mapbox
+   * map: mapbox-gl reads its token from the global `mapboxgl.accessToken`
+   * unless the constructor is handed one, and GeoLibre passes it per map rather
+   * than setting that global, so a second map built without it refuses to
+   * render.
+   */
+  getMapboxAccessToken?: () => string | null;
   /**
    * The primary Cesium globe's native scene, or `null` when the primary map is
    * not a globe (or is still mounting). The globe's counterpart to

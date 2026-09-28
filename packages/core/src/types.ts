@@ -977,6 +977,21 @@ export interface LayerPopupConfig {
   /** `false` drops the synthetic `id` row. Defaults to `true`. */
   showFeatureId?: boolean;
   /**
+   * Widest the click popup may grow, in CSS pixels. Unset keeps the default
+   * (520px, or 420px for a popup carrying an image). Clamped to the range
+   * `resolvePopupMaxWidth` enforces and always capped by the viewport, so a
+   * value wider than the window still leaves the map usable.
+   */
+  maxWidth?: number;
+  /**
+   * Tallest an `"image"` field's thumbnail may draw inside the popup, in CSS
+   * pixels. Unset keeps the default (`min(50vh, 420px)`). Clamped by
+   * `resolvePopupImageHeight`. Pair it with {@link maxWidth} for a
+   * bigger picture: the thumbnail keeps its aspect ratio, so widening the
+   * popup is what lets a landscape photo use the extra height.
+   */
+  imageHeight?: number;
+  /**
    * The fields to show and their order. An empty or absent list keeps today's
    * behavior: every visible property, in the feature's own key order.
    */
@@ -1306,7 +1321,9 @@ export interface AddTileLayerOptions {
   tiles: string[];
   /**
    * Layer discriminator, controlling how the layer is labelled and (for WMS)
-   * dev-server proxied. Defaults to `"xyz"`.
+   * dev-server proxied. Defaults to `"xyz"`. The layer's `source.type` is
+   * always `"raster"`, so any other value (such as `"vector-tiles"` from an
+   * untyped JS caller) throws rather than persisting a mislabelled source.
    */
   type?: "xyz" | "wms" | "wmts" | "raster";
   /** Service or base URL recorded on the source for display and restore. */
@@ -1426,13 +1443,15 @@ export interface MapGridLayout {
  * `"maplibre"` is the 2D MapLibre GL map that owns the app's plugin, styling,
  * and deck.gl integrations. `"cesium"` is the 3D globe (see `CesiumCanvas`),
  * which renders the same shared store state — camera, basemap, layers, group
- * effects — through CesiumJS.
+ * effects — through CesiumJS. `"mapbox"` is Mapbox GL JS and `"arcgis"` the
+ * ArcGIS Maps SDK for JavaScript, loaded from Esri's CDN at runtime (see
+ * `ArcgisCanvas`); both draw the same store state through their own engines.
  *
  * Used both for secondary panes ({@link SecondaryMapView.viewKind}) and for the
  * primary workspace ({@link GeoLibreProject.primaryRenderer}), so the two never
  * drift apart.
  */
-export type MapRendererKind = "maplibre" | "cesium";
+export type MapRendererKind = "maplibre" | "cesium" | "mapbox" | "arcgis";
 
 /**
  * The engine that draws the primary map area when a project says nothing. The
@@ -1613,6 +1632,16 @@ export interface MapPreferences {
   showPointerElevation: boolean;
   /** Whether the built-in 3D terrain control and terrain surface are enabled. */
   terrainEnabled: boolean;
+  /** Mapbox-only style. New projects use Streets; absent follows the shared basemap. */
+  mapboxStyleUrl?: string;
+  /**
+   * ArcGIS-only basemap: an Esri basemap style id (`arcgis/streets`,
+   * `arcgis/imagery`, `osm/standard`, ...). New projects use Streets. Absent
+   * follows the shared basemap, translated to tiles the SDK can draw; the id
+   * is also set aside when no ArcGIS API key is configured, since Esri's
+   * basemap styles service requires one.
+   */
+  arcgisBasemap?: string;
   /** Cesium imagery override; absent follows the shared project basemap. */
   cesiumBasemap?: import("./cesium-imagery").CesiumBasemapId;
   /**
@@ -1693,6 +1722,12 @@ export const DEFAULT_PROJECT_PREFERENCES: ProjectPreferences = {
     showPointerElevation: false,
     terrainEnabled: false,
     coordinateFormat: "dd",
+    mapboxStyleUrl: "mapbox://styles/mapbox/standard",
+    arcgisBasemap: "arcgis/streets",
+    // With an Ion token this is the globe's photographic default. The
+    // availability gate transparently falls back to the project basemap when
+    // no token is configured.
+    cesiumBasemap: "bing-aerial",
   },
   environmentVariables: [],
   geocoding: {

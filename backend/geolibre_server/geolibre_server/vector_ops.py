@@ -39,6 +39,16 @@ _DISTANCE_UNITS = {
 _BUFFER_SIDES = ("outside", "inside", "both")
 
 
+# Strings both engines read as a boolean parameter, matched case-insensitively
+# after stripping. Plain truthiness cannot be shared with the client: `bool([])`
+# is False while JavaScript's `Boolean([])` is true, and a checkbox that arrived
+# as the *string* "false" (a query string, a CSV batch row, a replayed history
+# entry) is truthy in both languages, which is the opposite of what the caller
+# meant. Spelling the accepted words out keeps the two engines on one reading.
+_TRUE_STRINGS = frozenset({"true", "1", "yes", "on"})
+_FALSE_STRINGS = frozenset({"", "false", "0", "no", "off"})
+
+
 class VectorInputTooLarge(ValueError):
     """Raised when an input layer exceeds :data:`MAX_FEATURES`.
 
@@ -93,6 +103,12 @@ def _to_feature_collection(gdf: Any) -> dict:
     return json.loads(gdf.to_json())
 
 
+def _require_finite_bounds(bounds: Any, message: str) -> None:
+    """Raise ValueError when total_bounds coordinates contain NaN/Infinity."""
+    if not all(math.isfinite(v) for v in bounds):
+        raise ValueError(message)
+
+
 def _estimate_metric_crs(gdf: Any) -> Any:
     """Estimate a local metric (UTM) CRS, guarding against antimeridian crossings.
 
@@ -108,6 +124,9 @@ def _estimate_metric_crs(gdf: Any) -> Any:
     genuinely spanning over 180° of longitude without touching the dateline is
     rejected as well.
     """
+    _require_finite_bounds(
+        gdf.total_bounds, "Input layer contains no valid geometry coordinates to project"
+    )
     minx, _, maxx, _ = gdf.total_bounds
     span = maxx - minx
     if span > 180.0:
@@ -118,6 +137,45 @@ def _estimate_metric_crs(gdf: Any) -> Any:
             "before running metric operations."
         )
     return gdf.estimate_utm_crs()
+
+
+def _boolean_param(raw: Any) -> Optional[bool]:
+    """Read a checkbox parameter the way the client's ``booleanParam`` does.
+
+    Args:
+        raw: The raw parameter value as it arrived from the caller.
+
+    Returns:
+        The boolean — an absent or ``None`` value is the unchecked default, a
+        JSON boolean passes through, a finite number is its zero/non-zero
+        truthiness, and a string must be one of :data:`_TRUE_STRINGS` /
+        :data:`_FALSE_STRINGS` — or ``None`` when the value is not a boolean at
+        all (a list, a dict, NaN), so the caller rejects it rather than pick a
+        coercion the client engine does not share.
+    """
+    if raw is None:
+        return False
+    # `bool` first: it is an `int` subclass, so the numeric branch would swallow it.
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, (int, float)):
+        try:
+            finite = math.isfinite(raw)
+        except OverflowError:
+            # `json.loads` keeps an arbitrarily large integer exact, and
+            # `math.isfinite` raises converting it to a float. The same literal
+            # reaches the client as `Infinity`, which `booleanParam` refuses, so
+            # refuse it here too rather than fail the request as a 500.
+            return None
+        return raw != 0 if finite else None
+    if isinstance(raw, str):
+        text = raw.strip().lower()
+        if text in _TRUE_STRINGS:
+            return True
+        if text in _FALSE_STRINGS:
+            return False
+        return None
+    return None
 
 
 # Every tool handler below shares the signature
@@ -135,7 +193,11 @@ def _buffer(
     ``parameters``, buffers in the estimated UTM CRS so the offset is in
     real-world meters, then reprojects back to WGS84. Direction is carried by
     ``side``, so a negative distance is still rejected.
+
+    With ``dissolve`` set, the buffers are merged into a single attribute-less
+    feature with the overlaps between them dissolved away.
     """
+    gpd = _import_geopandas()
     gdf = _load_gdf(geojson, "Input layer")
     # An absent parameter and an explicit JSON `null` both take the default, for
     # all three of units/side/distance — `str(None)` would otherwise reach the
@@ -154,6 +216,11 @@ def _buffer(
         raise ValueError(f"Unknown unit '{units}'. Accepted: {list(_DISTANCE_UNITS)}")
     if side not in _BUFFER_SIDES:
         raise ValueError(f"Unknown buffer side '{side}'. Accepted: {list(_BUFFER_SIDES)}")
+    # Checked before the distance, so a call with a bad dissolve flag and a bad
+    # distance reports the same first error from both engines.
+    dissolve_result = _boolean_param(parameters.get("dissolve"))
+    if dissolve_result is None:
+        raise ValueError("Buffer dissolve must be true or false")
     # Parse the distance only after `units` and `side`, so a call with several
     # bad parameters reports the same *first* error here as on the client (whose
     # `bufferTool.run` checks them in this order). Converting earlier would let
@@ -170,9 +237,11 @@ def _buffer(
         raise ValueError("Buffer distance must be a finite number")
     try:
         distance = float(raw_distance or 0)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         # Surface the tool's own message rather than `float`'s raw "could not
         # convert string to float: 'abc'", which the client never produces.
+        # OverflowError joins them for an integer too large to convert: the same
+        # literal is `Infinity` on the client, which rejects it the same way.
         raise ValueError("Buffer distance must be a finite number") from exc
     if not math.isfinite(distance):
         # `json.loads` accepts NaN/Infinity, so a raw request payload can carry
@@ -211,7 +280,19 @@ def _buffer(
         # Deliberately not "the inward buffer": an outward buffer can also drop a
         # feature when the input geometry is already empty or invalid.
         messages.append(f"Dropped {len(projected) - len(kept)} feature(s) the buffer left empty")
-    return _to_feature_collection(kept), messages
+    result = kept
+    if dissolve_result and len(kept):
+        try:
+            merged = kept.geometry.union_all()
+        except Exception as exc:  # noqa: BLE001 - any GEOS failure is bad input
+            raise ValueError("Unable to dissolve the buffered features") from exc
+        if merged.is_empty:
+            raise ValueError("Unable to dissolve the buffered features")
+        # The merged ring belongs to no single input feature, so it carries no
+        # attributes — the client engine's union drops them the same way.
+        result = gpd.GeoDataFrame(geometry=[merged], crs=kept.crs)
+        messages.append(f"Dissolved {len(kept)} buffer(s) into 1 feature")
+    return _to_feature_collection(result), messages
 
 
 def _centroids(
@@ -266,6 +347,9 @@ def _bounding_box(
     from shapely.geometry import box  # noqa: PLC0415
 
     gdf = _load_gdf(geojson, "Input layer")
+    _require_finite_bounds(
+        gdf.total_bounds, "Input layer contains no valid geometry to compute a bounding box"
+    )
     minx, miny, maxx, maxy = gdf.total_bounds
     result = gpd.GeoDataFrame(geometry=[box(minx, miny, maxx, maxy)], crs=WGS84)
     return _to_feature_collection(result), ["Computed bounding box"]
@@ -279,7 +363,17 @@ def _simplify(
     # Tolerance is in degrees (the geometry stays in WGS84), matching the UI
     # label and the client engine. Do not introduce a metric-projected path
     # here without also reinterpreting the tolerance unit.
-    tolerance = float(parameters.get("tolerance", 0.01) or 0)
+    raw_tolerance = parameters.get("tolerance", 0.01)
+    if raw_tolerance is None:
+        raw_tolerance = 0.01
+    if isinstance(raw_tolerance, bool):
+        raise ValueError("Simplify tolerance must be a finite, non-negative number")
+    try:
+        tolerance = float(raw_tolerance)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("Simplify tolerance must be a finite, non-negative number") from exc
+    if not math.isfinite(tolerance) or tolerance < 0:
+        raise ValueError("Simplify tolerance must be a finite, non-negative number")
     result = gdf.copy()
     result["geometry"] = gdf.geometry.simplify(tolerance)
     return (
@@ -1004,6 +1098,9 @@ def _voronoi(
             points.extend(list(geom.geoms))
     if len(points) < 3:
         raise ValueError("Voronoi / Delaunay needs at least 3 points")
+    # NaN slips past every bounds comparison below, so reject it explicitly.
+    if any(not (math.isfinite(point.x) and math.isfinite(point.y)) for point in points):
+        raise ValueError("Input points must have finite coordinates")
     multipoint = MultiPoint(points)
     # Both diagrams are undefined for collinear/coincident points (a zero-area
     # bounding box); bail with a clear message rather than a degenerate result.
@@ -1026,10 +1123,29 @@ def _voronoi(
         message = f"Delaunay: produced {len(triangles)} triangle(s) from {len(points)} point(s)"
         return _to_feature_collection(result), [message]
     # Clip the (otherwise unbounded outer) cells to the points' bbox expanded by a
-    # 10% margin, matching the client, so they get a finite extent.
+    # 10% margin, matching the client, clamped to WGS84 bounds so coordinates
+    # stay within valid geographic domain. Guard against antimeridian crossings.
+    # Out-of-range points would clamp the envelope to a sliver that no longer
+    # contains them, so reject those up front.
+    if minx < -180.0 or maxx > 180.0 or miny < -90.0 or maxy > 90.0:
+        raise ValueError(
+            "Input points must use valid WGS84 coordinates "
+            "(longitude in [-180, 180], latitude in [-90, 90])"
+        )
     dx = maxx - minx
+    if dx > 180.0:
+        raise ValueError(
+            f"Input points cross the antimeridian (longitude span > 180°, "
+            f"got {dx:.1f}°). Split the layer at the dateline into "
+            "per-hemisphere layers, or reproject to a local projected CRS, "
+            "before running Voronoi."
+        )
     dy = maxy - miny
-    envelope = box(minx - dx * 0.1, miny - dy * 0.1, maxx + dx * 0.1, maxy + dy * 0.1)
+    env_minx = max(-180.0, minx - dx * 0.1)
+    env_maxx = min(180.0, maxx + dx * 0.1)
+    env_miny = max(-90.0, miny - dy * 0.1)
+    env_maxy = min(90.0, maxy + dy * 0.1)
+    envelope = box(env_minx, env_miny, env_maxx, env_maxy)
     diagram = voronoi_diagram(multipoint, envelope=envelope)
     cells = [cell.intersection(envelope) for cell in diagram.geoms]
     # Clipping a cell whose edge coincides with the envelope can yield a

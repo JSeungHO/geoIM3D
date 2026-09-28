@@ -4,7 +4,7 @@
 
 They are grouped together because they behave the same way, not because they share a data source: every one of them opens a **docked side panel** rather than a floating on-map control, so it sits alongside the Layers and Style panels, resizes with them, and can be collapsed. That is also why these entries have no "position" submenu — unlike most plugins, there is no on-map control to place in a corner.
 
-![The Plugins menu with the Web Services submenu open, listing all seventeen catalog and service browsers](https://assets.geolibre.app/images/web-services-menu.webp)
+![The Plugins menu with the Web Services submenu open, listing the catalog and service browsers](https://assets.geolibre.app/images/web-services-menu.webp)
 
 ## How the panels behave
 
@@ -26,6 +26,7 @@ They are grouped together because they behave the same way, not because they sha
 | [Planet Open Data](#planet-open-data) | Planet Labs | Planet's disaster data releases, through the STAC browser |
 | [Earthdata GIS](#earthdata-gis) | NASA EOSDIS | ArcGIS image, map, and feature services, and published web maps |
 | [OpenAerialMap](#openaerialmap) | OpenAerialMap | Openly licensed drone and aerial imagery |
+| [OSM Downloader](#osm-downloader) | OpenStreetMap / Overpass | Buildings, roads, amenities, waterways, land use, or custom OSM tags |
 | [ArcGIS Hub](#arcgis-hub) | Esri | Public datasets published to ArcGIS Hub |
 | [Socrata](#socrata) | Socrata | Government open-data portals |
 | [CKAN](#ckan) | HDX | Humanitarian Data Exchange resources |
@@ -33,6 +34,8 @@ They are grouped together because they behave the same way, not because they sha
 | [Source Cooperative](#source-cooperative) | Source.coop | Cloud-native products (PMTiles, GeoParquet, COG) |
 | [Natural Earth](#natural-earth) | Natural Earth | The Natural Earth vector and raster themes |
 | [Hugging Face](#hugging-face) | Hugging Face | Geospatial files in dataset repos — and uploads |
+| [Satellite Embeddings](#satellite-embeddings) | Source.coop, Tessera | Pre-computed foundation-model embeddings (AlphaEarth, Tessera, Earth Index, …) |
+| [Fields of the World](#fields-of-the-world) | Source.coop | Global agricultural field boundaries (2024, 2025) |
 | [GeoLens](#geolens) | your server | A self-hosted spatial catalog |
 
 ---
@@ -120,6 +123,19 @@ Searches [OpenAerialMap](https://openaerialmap.org/), the open catalog of drone 
 - Result footprints are drawn on the map as a single entry in the Layers panel, so you can hide or restyle them; the selected footprint is highlighted separately.
 - Add a scene to the map, zoom to its footprint, inspect its metadata, or download the source GeoTIFF.
 
+## OSM Downloader
+
+Downloads current OpenStreetMap vector data through the public Overpass API.
+
+- Start from the current map extent or type west, south, east, and north coordinates.
+- Choose buildings, roads, amenities, waterways, land use, all tagged features, or a custom OSM tag key and optional value.
+- Add the result as a normal GeoJSON layer or save it as a `.geojson` file.
+- OSM nodes become points, ways follow OSM's line/area conventions, and multipolygon relations retain their outer and inner rings.
+
+Public Overpass instances are intended for bounded interactive queries. Zoom to the area you need before downloading. To prevent accidentally requesting an enormous result, **All tagged features** is limited to 0.25 square degrees and filtered downloads are limited to 4 square degrees.
+
+The panel identifies the source as © OpenStreetMap contributors and notes the Open Database License (ODbL); keep the required attribution when publishing derived maps or data.
+
 ## ArcGIS Hub
 
 Searches public datasets published to [ArcGIS Hub](https://hub.arcgis.com/).
@@ -174,6 +190,40 @@ Browses geospatial data in [Hugging Face](https://huggingface.co/datasets) datas
 - **Upload** — with a user access token, create a dataset repo and push files into it.
 
 The access token is stored in `localStorage` under your control, sent only as a bearer header to the Hugging Face API, and never written into a layer URL or a saved project.
+
+## Satellite Embeddings
+
+A catalog of popular pre-computed **satellite embedding** datasets — per-pixel or per-patch vectors produced by geospatial foundation models — with search, on-map visualization, and download.
+
+| Dataset | Layout | Resolution | Search | Visualize | Download |
+| --- | --- | --- | --- | --- | --- |
+| [AlphaEarth Foundations](https://source.coop/tge-labs/aef) (Google Satellite Embedding V1), 2017–2025 | 64-band raster | 10 m | ✓ | RGB composite of any three bands | Clipped GeoTIFF, source COG, VRT |
+| [Tessera](https://github.com/ucam-eo/geotessera), 2017–2025 | 128-band raster | 10 m | ✓ | — | Embeddings and scales (`.npy`) |
+| [Earth Index](https://source.coop/earthgenome/earthindexembeddings), 2024 | Points (GeoParquet) | ~320 m | ✓ | Points colored by principal components | Source GeoParquet |
+| Clay, Major TOM, Copernicus-Embed | — | — | Links to the data source only | | |
+
+- Pick a dataset to see its provider, model, resolution, dimensions, years, coverage, and license, with links to the data and the paper.
+- Search by the **current map view** or a **box drawn on the map**, and (for annual datasets) a year. Result footprints are drawn as one entry in the Layers panel; hovering a result outlines it, and clicking a footprint scrolls to its result.
+- **AlphaEarth → Visualize** adds the chosen bands (Earth Engine's `A01`, `A16`, `A09` by default) as an RGB layer, stretching de-quantized values across ±0.3 by default. When the raster rendering engine is **cog-tiler-wasm (WASM)** (the default) the whole tile becomes a regular COG layer, zoomable to full 10 m detail, with its bands and range adjustable in the Style panel; the stretch is applied to the raw int8 values, so colors differ slightly from the de-quantized stretch. The GPU and TiTiler engines cannot read these files, so on those the panel instead renders a snapshot image of the search area (from an overview when the area is large; the status line says so) rather than switching the engine for every raster on the map.
+- **AlphaEarth → GeoTIFF** saves all 64 bands over the search area as a north-up GeoTIFF in the tile's UTM zone, either de-quantized to float32 (unit-length vectors, NoData as NaN) or as the raw int8 values (NoData −128). The clip is built in memory and capped at 256 MB: about 100 km² of float32 values, or 400 km² of int8.
+- **Earth Index → Load points** adds the embeddings inside the search area as a point layer. Each point is colored by the top three principal components of the loaded vectors, so similar places get similar colors.
+
+!!! note "AlphaEarth files are stored bottom-up"
+    The AlphaEarth COGs on Source Cooperative put their southern row first, which many GDAL workflows do not expect. The WASM engine (cog-tiler-wasm 0.3.8 and later) and the panel's own reader flip them; the GPU engine does not yet. The panel also offers each tile's companion `.vrt`, which GDAL reads north-up. The data is licensed CC-BY 4.0: *The AlphaEarth Foundations Satellite Embedding dataset is produced by Google and Google DeepMind.*
+
+## Fields of the World
+
+Browses [Fields of the World](https://fieldsofthe.world) (FTW), the global agricultural field boundaries predicted from Sentinel-2 imagery by the FTW PRUE model. It reads the same public files on [Source Cooperative](https://source.coop/ftw/global-data/) as the [FTW inference app](https://fieldsofthe.world/ftw-inference-app).
+
+- Pick a **year** (2025 or 2024).
+- **Field boundaries** adds that year's global archive as a PMTiles layer, colored by the model's confidence from red (low) to green (high). The 2025 archive has tiles at every zoom; the 2024 alpha archive starts at zoom 10, so zoom in to see its fields.
+- **Field density** adds the global 500 m field-density raster as a COG layer, for the zoomed-out picture. It keeps the current view and hides itself above zoom 12, where the field boundaries take over; both can be changed in the Style panel.
+- The **confidence threshold** (70% by default, as in the FTW app) hides fields the model is less confident about. It applies to every FTW field layer on the map, is saved with the project as the layer's filter, and can be edited later in the Style panel. Downloads are never filtered.
+- **Search tiles** lists the 1° × 1° download tiles in the **current map view** or a **box drawn on the map** that have data for the year, most fields first, with each tile's field count and file size. Their outlines are drawn as one entry in the Layers panel; hovering a result outlines it, and clicking an outline selects its result.
+- Each tile offers **Add to map** (its fields as an editable GeoJSON layer, styled and filtered like the archive), **GeoParquet** (the source file, unchanged), and **GeoJSON**. With **Only fields in the search area** checked (the default), Add to map and GeoJSON keep only the fields overlapping the search area. The file is read one row group at a time, so even the largest tiles (about 3 million fields) can be clipped to a small box; the result is limited to 250,000 fields on the map or 1,000,000 in a GeoJSON file. Download the GeoParquet for anything larger.
+
+!!! note "Running the FTW model"
+    The plugin shows and downloads the published global predictions. To run the FTW model on your own area and Sentinel-2 scenes, use the [FTW inference app](https://fieldsofthe.world/ftw-inference-app) or the [ftw-baselines](https://github.com/fieldsoftheworld/ftw-baselines) command-line tools, then add the result to GeoLibre. The data is licensed CC-BY-4.0.
 
 ## GeoLens
 

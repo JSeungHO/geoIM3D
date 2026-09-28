@@ -147,7 +147,7 @@ export type EmbedCommand =
   | { type: "listLayers" }
   | { type: "setFilter"; layerId: string; expression: unknown[] | null }
   | { type: "getRenderer" }
-  | { type: "setRenderer"; renderer: "maplibre" | "cesium" }
+  | { type: "setRenderer"; renderer: "maplibre" | "cesium" | "mapbox" | "arcgis" }
   | { type: "getViewport" }
   | { type: "addLayer"; spec: AddLayerSpec }
   | { type: "addData"; url: string; styleUrl: string | null; fit: boolean }
@@ -508,8 +508,13 @@ export function parseEmbedRequest(
     case "getRenderer":
       return { command: { type: "getRenderer" }, requestId };
     case "setRenderer":
-      if (payload.renderer !== "maplibre" && payload.renderer !== "cesium")
-        return fail("setRenderer: renderer must be maplibre or cesium");
+      if (
+        payload.renderer !== "maplibre" &&
+        payload.renderer !== "cesium" &&
+        payload.renderer !== "mapbox" &&
+        payload.renderer !== "arcgis"
+      )
+        return fail("setRenderer: renderer must be maplibre, cesium, mapbox, or arcgis");
       return { command: { type: "setRenderer", renderer: payload.renderer }, requestId };
     case "setView": {
       const target = parseSetView(payload);

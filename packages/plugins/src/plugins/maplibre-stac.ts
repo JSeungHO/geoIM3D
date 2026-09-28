@@ -1,7 +1,14 @@
 import { DEFAULT_LAYER_STYLE, useAppStore } from "@geolibre/core";
-import { fillLayerId, lineLayerId } from "@geolibre/map/style-layer-ids";
+import {
+  fillLayerId,
+  lineLayerId,
+  mapboxFillLayerId,
+  mapboxLineLayerId,
+} from "@geolibre/map/style-layer-ids";
 import type { FeatureCollection, Geometry } from "geojson";
-import type { GeoJSONSource, MapMouseEvent, Map as MapLibreMap } from "maplibre-gl";
+import type { GeoJSONSource, Map as MapLibreMap } from "maplibre-gl";
+import type { Map as MapboxMap } from "mapbox-gl";
+
 import type {
   GeoLibreAppAPI,
   GeoLibreCogLayerOptions,
@@ -71,6 +78,18 @@ export const PLANET_DISASTER_DATA_CATALOG_URL =
 // while `footprintLayerId` only lives for the session. This marker is how a
 // later search — or a reopened project — recognizes the layer as ours instead
 // of adding a second copy.
+type StacPointerEvent = { point: { x: number; y: number } };
+type StacMap = Omit<MapLibreMap | MapboxMap, "getSource" | "on" | "off"> & {
+  getSource(id: string): unknown;
+  on(type: "click" | "mousemove", listener: (event: StacPointerEvent) => void): unknown;
+  off(type: "click" | "mousemove", listener: (event: StacPointerEvent) => void): unknown;
+};
+
+/** STAC uses the native GeoJSON, picking and pointer APIs shared by both engines. */
+function getStacMap(app: GeoLibreAppAPI | null): StacMap | null {
+  return app?.getMap?.() ?? app?.getMapboxMap?.() ?? null;
+}
+
 const FOOTPRINT_SOURCE_KIND = "stac-footprints";
 const DRAW_SOURCE = "geolibre-stac-draw-bbox";
 const DRAW_FILL = "geolibre-stac-draw-bbox-fill";
@@ -364,6 +383,11 @@ let unregisterPanel: (() => void) | null = null;
 let disposePanel: (() => void) | null = null;
 let panelContainer: HTMLElement | null = null;
 let initialCatalogUrl = "";
+// A catalog asked for from outside the panel (the `?stac=` deep link), taking the place of the
+// plugin's own preset on its next activation.
+let requestedCatalogUrl = "";
+// Which createStacPlugin() instance owns the shared state above, since they all share it.
+let activePluginId: string | null = null;
 interface CatalogBrowserOptions {
   loadIndex?: typeof loadStacIndex;
   indexFromConnection?: (connection: StacConnection) => StacIndexCatalog[];
@@ -426,7 +450,7 @@ function field(label: string, type = "text"): { wrap: HTMLElement; input: HTMLIn
 }
 
 function currentExtent(): [number, number, number, number] | undefined {
-  const bounds = appRef?.getMap?.()?.getBounds();
+  const bounds = getStacMap(appRef)?.getBounds();
   if (!bounds) return undefined;
   const west = Math.max(-180, bounds.getWest());
   const east = Math.min(180, bounds.getEast());
@@ -452,13 +476,13 @@ function removeFootprints(): void {
   footprintLayerId = null;
 }
 
-function removeDrawBox(map: MapLibreMap): void {
+function removeDrawBox(map: StacMap): void {
   if (map.getLayer(DRAW_LINE)) map.removeLayer(DRAW_LINE);
   if (map.getLayer(DRAW_FILL)) map.removeLayer(DRAW_FILL);
   if (map.getSource(DRAW_SOURCE)) map.removeSource(DRAW_SOURCE);
 }
 
-function showDrawBox(map: MapLibreMap, bbox: [number, number, number, number]): void {
+function showDrawBox(map: StacMap, bbox: [number, number, number, number]): void {
   const [west, south, east, north] = bbox;
   const data: FeatureCollection = {
     type: "FeatureCollection",
@@ -508,7 +532,7 @@ function showDrawBox(map: MapLibreMap, bbox: [number, number, number, number]): 
 function beginBboxDraw(
   onComplete: (bbox: [number, number, number, number]) => void,
 ): (() => void) | null {
-  const map = appRef?.getMap?.();
+  const map = getStacMap(appRef);
   if (!map) return null;
   const canvas = map.getCanvas();
   let start: { lng: number; lat: number } | null = null;
@@ -601,14 +625,14 @@ function showFootprints(items: StacItem[]): void {
   });
 }
 
-function removeSelectionHighlight(map: MapLibreMap): void {
+function removeSelectionHighlight(map: StacMap): void {
   if (map.getLayer(SELECT_LINE)) map.removeLayer(SELECT_LINE);
   if (map.getLayer(SELECT_FILL)) map.removeLayer(SELECT_FILL);
   if (map.getSource(SELECT_SOURCE)) map.removeSource(SELECT_SOURCE);
 }
 
 function showSelectionHighlight(geometry: Geometry | null): void {
-  const map = appRef?.getMap?.();
+  const map = getStacMap(appRef);
   if (!map) return;
   if (!geometry) {
     removeSelectionHighlight(map);
@@ -639,11 +663,14 @@ function showSelectionHighlight(geometry: Geometry | null): void {
 }
 
 /** Native style layers backing the footprint store layer, if it is on the map. */
-function footprintStyleLayers(map: MapLibreMap): string[] {
+function footprintStyleLayers(map: StacMap): string[] {
   if (!footprintLayerId) return [];
-  return [fillLayerId(footprintLayerId), lineLayerId(footprintLayerId)].filter((id) =>
-    map.getLayer(id),
-  );
+  return [
+    fillLayerId(footprintLayerId),
+    lineLayerId(footprintLayerId),
+    mapboxFillLayerId(footprintLayerId),
+    mapboxLineLayerId(footprintLayerId),
+  ].filter((id) => map.getLayer(id));
 }
 
 function assetLabel(key: string, asset: StacAsset): string {
@@ -1399,14 +1426,19 @@ function buildPanel(container: HTMLElement): () => void {
     return labels.showing(allItems.length);
   };
 
-  // A double-click means the same here as in the tree: search this one.
-  collectionSelect.addEventListener("dblclick", () => {
+  /** Search the chosen collection and send the map to its extent. */
+  function searchChosenCollection(): void {
     const chosen = collectionSelect.selectedOptions[0]?.value;
     const extent = connection?.collections.find((collection) => collection.id === chosen)?.extent;
     const box = horizontalBbox(extent?.spatial?.bbox?.[0]);
-    void runSearch(false);
+    // The map is only on its way to the collection, so "limit to map extent" would still read the
+    // bounds it is leaving. The collection's own extent stands in for them; a typed bbox still wins.
+    const inView = useExtent.checked && !bboxField.input.value.trim() ? box : undefined;
+    void runSearch(false, undefined, inView);
     if (box) appRef?.fitBounds?.(box);
-  });
+  }
+  // A double-click means the same here as in the tree: search this one.
+  collectionSelect.addEventListener("dblclick", searchChosenCollection);
 
   /** The tree asked for a collection: search it, and send the map to it. */
   function showCollection(href: string, bbox?: [number, number, number, number]): void {
@@ -1431,7 +1463,11 @@ function buildPanel(container: HTMLElement): () => void {
    * The caller may take it first, when it has its own late answer to check; taking it here would
    * mean it moves on a call that does nothing.
    */
-  async function runSearch(append: boolean, generation?: number): Promise<void> {
+  async function runSearch(
+    append: boolean,
+    generation?: number,
+    extent?: [number, number, number, number],
+  ): Promise<void> {
     if (!connection) return;
     const search = generation ?? ++searchGeneration;
 
@@ -1449,7 +1485,7 @@ function buildPanel(container: HTMLElement): () => void {
       walking = new AbortController();
       const reading = AbortSignal.any([walking.signal, controller.signal]);
       const options = {
-        bbox: parseBbox(),
+        bbox: extent ?? parseBbox(),
         datetime,
         collections: selectedCollections,
         entries: connection.isApi ? [] : tree.selection(),
@@ -1524,6 +1560,16 @@ function buildPanel(container: HTMLElement): () => void {
       renderSection.hidden = false;
       clearSearchResults(false);
       setStatus(connection.description || labels.connected);
+      // The URL named one collection of an API: search it, as a double-click on it would.
+      const focus = connection.focusCollection;
+      const focusOption = Array.from(collectionSelect.options).find(
+        (option) => option.value === focus,
+      );
+      if (focusOption) {
+        focusOption.selected = true;
+        focusOption.scrollIntoView?.({ block: "nearest" });
+        searchChosenCollection();
+      }
       return connection;
     } catch (error) {
       connection = null;
@@ -1564,32 +1610,32 @@ function buildPanel(container: HTMLElement): () => void {
   clearDrawButton.addEventListener("click", () => {
     bboxField.input.value = "";
     clearDrawButton.hidden = true;
-    const map = appRef?.getMap?.();
+    const map = getStacMap(appRef);
     if (map) removeDrawBox(map);
     setStatus(labels.drawnBboxCleared);
   });
 
   // Clicking a footprint selects the matching result card. The bbox-draw mode
   // owns the pointer while it is active, so both handlers stand down for it.
-  const footprintIdAt = (event: MapMouseEvent): string | null => {
-    const map = appRef?.getMap?.();
+  const footprintIdAt = (event: StacPointerEvent): string | null => {
+    const map = getStacMap(appRef);
     if (!map || cancelDraw) return null;
     const layers = footprintStyleLayers(map);
     if (!layers.length) return null;
-    const feature = map.queryRenderedFeatures(event.point, { layers })[0];
+    const feature = map.queryRenderedFeatures([event.point.x, event.point.y], { layers })[0];
     const id = feature?.properties?.id;
     return typeof id === "string" ? id : null;
   };
-  const onMapClick = (event: MapMouseEvent): void => {
+  const onMapClick = (event: StacPointerEvent): void => {
     const id = footprintIdAt(event);
     if (id) selectItem(id, true);
   };
-  const onMapMove = (event: MapMouseEvent): void => {
-    const map = appRef?.getMap?.();
+  const onMapMove = (event: StacPointerEvent): void => {
+    const map = getStacMap(appRef);
     if (!map || cancelDraw) return;
     map.getCanvas().style.cursor = footprintIdAt(event) ? "pointer" : "";
   };
-  const map = appRef?.getMap?.();
+  const map = getStacMap(appRef);
   map?.on("click", onMapClick);
   map?.on("mousemove", onMapMove);
 
@@ -1626,7 +1672,7 @@ function buildPanel(container: HTMLElement): () => void {
     searchGeneration += 1;
     // The footprints are the user's layer now, so closing the panel leaves them
     // on the map; only deactivating the plugin tears them down.
-    const activeMap = appRef?.getMap?.();
+    const activeMap = getStacMap(appRef);
     if (activeMap) {
       activeMap.off("click", onMapClick);
       activeMap.off("mousemove", onMapMove);
@@ -1641,6 +1687,32 @@ function mountPanel(container: HTMLElement): void {
   disposePanel?.();
   panelContainer = container;
   disposePanel = buildPanel(container);
+}
+
+/** Drop a {@link requestStacCatalogUrl} request no activation took up. */
+export function cancelStacCatalogRequest(): void {
+  requestedCatalogUrl = "";
+}
+
+/**
+ * Open the STAC Catalogs browser on a catalog, API, or API collection URL and connect to it.
+ *
+ * Takes effect on the STAC Catalogs plugin's next activation, or at once when it is already active.
+ *
+ * Args:
+ *   url: The STAC URL to connect to.
+ */
+export function requestStacCatalogUrl(url: string): void {
+  // Only the STAC Catalogs browser takes the request in place. A sibling's (Planet, Portolan) state
+  // is left for the activation that replaces it, which reads the request.
+  if (activePluginId !== STAC_PLUGIN_ID) {
+    requestedCatalogUrl = url;
+    return;
+  }
+  initialCatalogUrl = url;
+  if (panelContainer) mountPanel(panelContainer);
+  // Active with its panel closed: opening the panel mounts it on the requested catalog.
+  else appRef?.openRightPanel?.(STAC_PLUGIN_ID);
 }
 
 /**
@@ -1661,13 +1733,14 @@ function createStacPlugin(
     id,
     name,
     version: "0.1.0",
-    // MapLibre only: the panel is engine-neutral, but item footprints, the
-    // "current view" search bbox, the draw-bbox tool, and footprint
-    // click/hover all go through `app.getMap()`, which is null off MapLibre.
-    engines: ["maplibre"],
+    // Footprints and interaction use the shared native GeoJSON APIs.
+    engines: ["maplibre", "mapbox"],
     exclusiveGroup: "stac-catalog-browser",
     activate(app) {
-      initialCatalogUrl = presetCatalogUrl;
+      // The `?stac=` request is for the STAC Catalogs browser, never a sibling preset.
+      initialCatalogUrl = (id === STAC_PLUGIN_ID && requestedCatalogUrl) || presetCatalogUrl;
+      if (id === STAC_PLUGIN_ID) requestedCatalogUrl = "";
+      activePluginId = id;
       browserOptions = options;
       appRef = app;
       unregisterPanel =
@@ -1697,12 +1770,13 @@ function createStacPlugin(
       unregisterPanel?.();
       unregisterPanel = null;
       removeFootprints();
-      const map = app.getMap?.();
+      const map = getStacMap(app);
       if (map) {
         removeDrawBox(map);
         removeSelectionHighlight(map);
       }
       appRef = null;
+      activePluginId = null;
       initialCatalogUrl = "";
       browserOptions = {};
     },

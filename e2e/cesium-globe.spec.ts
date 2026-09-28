@@ -34,6 +34,16 @@ function bboxReadout(page: Page) {
   return page.getByText(/^BBox:/);
 }
 
+/**
+ * Pick a renderer for the second pane from its rendering-engine dropdown (the
+ * per-pane 2D/3D toggle became a MapLibre / Mapbox / Cesium menu when the
+ * Mapbox engine arrived).
+ */
+async function pickPaneRenderer(page: Page, label: "MapLibre" | "Cesium"): Promise<void> {
+  await page.getByRole("button", { name: "Rendering engine for map 2" }).click();
+  await page.getByRole("menuitemradio", { name: label }).click();
+}
+
 /** Split the workspace into two panes via View → Split View → Two columns. */
 async function splitIntoTwoPanes(page: Page): Promise<void> {
   await page.getByRole("button", { name: "View", exact: true }).click();
@@ -53,11 +63,12 @@ test.describe("Cesium 3D globe pane", () => {
     await waitForMap(page);
     await splitIntoTwoPanes(page);
 
-    // The toggle is offered with or without an Ion token (#2180). Its presence
-    // here, in a CI run with no secret configured, is the keyless guarantee.
-    const globeToggle = page.getByRole("button", { name: "Show map 2 as a 3D globe" });
-    await expect(globeToggle).toBeVisible();
-    await globeToggle.click();
+    // The globe is offered with or without an Ion token (#2180). Its presence
+    // in the menu here, in a CI run with no secret configured, is the keyless
+    // guarantee.
+    const engineMenu = page.getByRole("button", { name: "Rendering engine for map 2" });
+    await expect(engineMenu).toBeVisible();
+    await pickPaneRenderer(page, "Cesium");
 
     // The engine is a ~4.9 MB lazily imported chunk that then loads its Workers
     // and Assets from CESIUM_BASE_URL, so allow well past the default timeout
@@ -74,8 +85,13 @@ test.describe("Cesium 3D globe pane", () => {
     // the hint about what an Ion token would add. This is the assertion that
     // distinguishes the keyless path from the tokened one — and the one that
     // catches a build the config's env override could not reach.
+    //
+    // Match the leading phrase only. The hint interpolates a Settings button
+    // whose label is part of the catalog string, so pinning the whole sentence
+    // breaks whenever that label is reworded — #2526 renamed it to "Settings →
+    // Environment variables" and took this test down with it.
     await expect(
-      page.getByText("Add a Cesium Ion token in Settings for terrain and Ion imagery"),
+      page.getByText(/Add a Cesium Ion token in/),
       "the globe pane came up with an Ion token, so this run is not testing the keyless path. " +
         "playwright.config.ts blanks CESIUM_TOKEN/VITE_CESIUM_TOKEN for the build, but that misses " +
         "a token in apps/geolibre-desktop/.env.local (read off disk by vite.config.ts), and is not " +
@@ -109,9 +125,9 @@ test.describe("Cesium 3D globe pane", () => {
     // basemap teardown — and then mounts a MapLibre pane in its place. A
     // destroy that threw, or Cesium state left holding the container, shows up
     // as the 2D canvas never appearing.
-    await page.getByRole("button", { name: "Show map 2 as a 2D map" }).click();
+    await pickPaneRenderer(page, "MapLibre");
     await expect(page.getByTestId("secondary-map-canvas")).toBeVisible({ timeout: 30_000 });
     await expect(page.getByTestId("cesium-canvas")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Show map 2 as a 3D globe" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Rendering engine for map 2" })).toBeVisible();
   });
 });

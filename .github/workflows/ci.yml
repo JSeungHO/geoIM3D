@@ -42,8 +42,52 @@ jobs:
       - name: Audit npm dependencies (high and critical)
         run: npm run audit:ci
 
+  lint:
+    # Lint and types on their own, so a lint-ratchet or type failure reports in
+    # a few minutes instead of at the end of "Build and test" (which still runs
+    # both through `npm run ci`). The type check is `tsc -b` without the Vite
+    # build, the same command as `npm run typecheck:fast`.
+    name: Lint and type check
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # `--max-warnings` in the lint script is a ratchet: a PR that adds a
+      # warning fails here. Fix it (or disable it on that line with a reason);
+      # lower the limit when warnings are fixed.
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check (tsc -b, no Vite build)
+        # The app imports @geolibre/embed through its built dist/ types, which
+        # the desktop workspace's prebuild normally produces.
+        run: |
+          npm run build -w @geolibre/embed
+          npx tsc -b apps/geolibre-desktop --noEmit
+
   e2e:
-    name: E2E smoke (Playwright)
+    # Only the `core` Playwright project gates a PR: the app boots and renders a
+    # map, and the shared UI surfaces still work. The per-feature specs
+    # (mapbox/cesium/stac/export/...) are the `features` project and run in
+    # e2e-full.yml — nightly, on demand, or on a PR labelled `full-e2e`.
+    #
+    # This job was the sole critical path of CI at 29-39 min (everything else
+    # finishes in <= 9 min), and ~35.9 min of that was test execution at one
+    # worker; the build inside it is only ~16 s.
+    name: E2E core (Playwright)
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
@@ -80,8 +124,8 @@ jobs:
         if: steps.pw-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
-      - name: Run E2E smoke tests
-        run: npm run test:e2e
+      - name: Run E2E core tests
+        run: npm run test:e2e -- --project=core
         env:
           VITE_GEE_OAUTH_CLIENT_ID: ${{ secrets.VITE_GEE_OAUTH_CLIENT_ID }}
 
@@ -261,3 +305,42 @@ jobs:
 
       - name: Test projects and identity server
         run: python -m pytest backend/geolibre_server_api/tests
+
+  projects-identity-postgres:
+    name: Identity PostgreSQL concurrency gate
+    runs-on: ubuntu-22.04
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: geolibre_test
+          POSTGRES_USER: geolibre
+          POSTGRES_PASSWORD: geolibre
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U geolibre -d geolibre_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install the projects-and-identity API with the postgres extra
+        run: python -m pip install -e "backend/geolibre_server_api[test,postgres]"
+
+      # OAuth code consumption, refresh rotation, family revocation, and legacy
+      # PAT policy creation rely on database uniqueness and row locking. Exercise
+      # those boundaries on PostgreSQL rather than SQLite's process-local writes.
+      - name: Run the postgres-marked concurrency gate
+        env:
+          GEOLIBRE_TEST_POSTGRES_URL: postgresql+psycopg://geolibre:geolibre@127.0.0.1:5432/geolibre_test
+        run: python -m pytest backend/geolibre_server_api/tests -m postgres

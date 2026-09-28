@@ -1,38 +1,79 @@
-import { getAssistantToolsVersion } from "@geolibre/plugins/assistant-tool-registry";
-import { useAppStore } from "@geolibre/core";
-import { Agent } from "@strands-agents/sdk";
-import { configForProvider, createModel, resolveProviderConfig } from "./provider";
+import {
+  getAssistantToolsVersion,
+  listAssistantToolEntries,
+} from "@geolibre/plugins/assistant-tool-registry";
+import { OPENFREEMAP_BASEMAPS, useAppStore } from "@geolibre/core";
+import { Agent, type Tool } from "@strands-agents/sdk";
+import i18next from "i18next";
+import { configForProvider, createModel, readRuntimeEnv, resolveProviderConfig } from "./provider";
+import { NAMED_TILE_BASEMAPS } from "./basemaps";
+import {
+  resolveFastPathAction,
+  runToolDirectly,
+  type FastPathAction,
+  type FastPathState,
+} from "./fast-path";
+import { resolveSystemOneEndpoint } from "./system-one";
+import { typesafeFetch } from "./typesafe-fetch";
 import {
   assistantSelectionKey,
   configForProfile,
   type AssistantProviderSelection,
 } from "./profiles";
 import type { AssistantProfile } from "./provider";
-import { createAssistantTools, describeLayers, type AssistantToolDeps } from "./tools";
-
-/** System prompt establishing the assistant's role, tools, and guardrails. */
-const SYSTEM_PROMPT = `You are GeoLibre's geospatial assistant. You help the user explore and analyze the data already loaded in their map by calling the provided tools.
-
-Guidelines:
-- Always act through the tools. Never claim to have changed the map unless a tool call succeeded.
-- Call list_layers to discover the current layers, their attribute fields, and the SQL table names before referencing them.
-- For data questions, prefer run_sql with a single read-only DuckDB Spatial SQL statement against the SQL table names from list_layers. Show the SQL you ran. Only add the result as a layer when the user asks to map it or when geometry is clearly wanted.
-- For styling requests, use apply_symbology with the layer's real field names.
-- For vector geoprocessing (buffer, clip, dissolve, intersection, difference, union, spatial join, simplify, centroids, DGGS/H3 grids, …), call list_algorithms to discover ids and typed parameters, then run_algorithm with the algorithm id and parameters. H3, S2, A5, DGGRID and DGGAL grids all come from dggs-grid / dggs-bin via their dggsType parameter, and dggs-compact compacts or expands an existing cell layer for H3, S2, A5 and DGGAL but not DGGRID; there is no separate h3-grid id. A 'layer' parameter takes a layer id. Build a multi-step pipeline by feeding one run's returned result layer id into the next.
-- For raster work (hydrology, terrain, LiDAR, image processing, raster↔vector conversion), the vector algorithms do not apply: call list_whitebox_tools with a \`search\` keyword to find the tool and its exact parameter names, then run_whitebox_tool. A raster/vector input parameter takes a layer id. Never tell the user a raster operation is unavailable without searching this catalog first. When a workflow needs depression filling, use fill_depressions_wang_and_liu rather than the plain fill_depressions tool.
-- When the user asks to create, design, or build a reusable Model Builder model, do not execute the pipeline immediately. Call list_model_algorithms, then create_model_builder_model to save a validated editable graph and open it for review.
-- To add satellite/aerial imagery or other earth-observation data, use search_stac and add_stac_layer against the Planetary Computer (collections such as sentinel-2-l2a, landsat-c2-l2, naip, cop-dem-glo-30); the bounding box defaults to the current view.
-- To add tile basemaps (OpenStreetMap, OpenTopoMap, CARTO Dark Matter, etc.), use add_tile_layer with a known name or an XYZ url, rather than asking the user or saying you cannot.
-- Use web_search when you need current information from the internet.
-- When no dedicated tool fits the request (e.g. changing the map projection to globe, enabling terrain or sky, setting a custom paint/layout property), do not say you can't — use run_maplibre_js to accomplish it with a small JavaScript snippet against the live \`map\` object.
-- For data processing or computation (numpy/pandas/geopandas, custom analysis), use run_python; a \`geolibre\` object is available there to drive the map.
-- Keep replies short. Report exactly what each tool did (e.g. the SQL run, the rows returned, the layer added/styled). Every change is undoable, so prefer acting over asking when the request is clear.
-- Never fabricate field names, layer names, or results — read them with the tools first.`;
+import { describeLayers } from "./layer-summary";
+import { buildSystemPrompt } from "./system-prompt";
+import {
+  ConversationPluginTools,
+  createLoadPluginToolsTool,
+  formatPluginToolCatalog,
+  type PluginToolLoadResult,
+} from "./tool-scope";
+import { createHostAssistantTools, type AssistantToolDeps } from "./tools";
 
 /** A streamed update surfaced to the chat UI. */
 export type AssistantStreamEvent =
   | { type: "text"; text: string }
-  | { type: "tool"; name: string; input: unknown; error?: string };
+  | {
+      type: "tool";
+      name: string;
+      input: unknown;
+      error?: string;
+      /**
+       * True when the fast path routed this call instead of the model.
+       *
+       * Surfaced because the feature is built to fail silently: without a mark
+       * on the turn, "the fast path is off" and "the fast path is not helping"
+       * look identical, which is how a misbuilt endpoint URL survived a whole
+       * benchmarking round.
+       */
+      routed?: boolean;
+    };
+
+/**
+ * The live map state the fast path routes against.
+ *
+ * Only the layers the user could name are offered: a layer the model cannot see
+ * is one it cannot pick by mistake, and the choice list is what bounds the
+ * request's size.
+ */
+function fastPathState(): FastPathState {
+  return {
+    layers: useAppStore.getState().layers.map((layer) => ({
+      id: layer.id,
+      name: layer.name,
+      type: layer.type,
+    })),
+    styleBasemaps: OPENFREEMAP_BASEMAPS.map((basemap) => ({
+      id: basemap.id,
+      name: basemap.name,
+    })),
+    tileBasemaps: NAMED_TILE_BASEMAPS.map((basemap) => ({
+      id: basemap.id,
+      name: basemap.label,
+    })),
+  };
+}
 
 /**
  * A long-lived assistant session wrapping a Strands {@link Agent}. The agent is
@@ -61,6 +102,16 @@ export class AssistantSession {
    * matching the initial `selection`/`profile` state above.
    */
   private selectionKey: string = assistantSelectionKey(null);
+  /** Aborts an in-flight fast-path request when the user stops the run. */
+  private fastPathAbort: AbortController | null = null;
+  /**
+   * Plugin tools this conversation can call, including those the model loaded
+   * with `load_plugin_tools`; cleared with the conversation in {@link reset}.
+   */
+  private readonly pluginTools = new ConversationPluginTools();
+  /** Tool instances for direct (non-model) invocation by the fast path. */
+  private cachedTools: Tool[] | null = null;
+  private cachedToolsVersion = -1;
 
   constructor(private readonly deps: AssistantToolDeps) {}
 
@@ -103,20 +154,116 @@ export class AssistantSession {
     this.agent?.cancel();
     this.agent = null;
     this.lastContext = null;
+    this.pluginTools.clear();
   }
 
   /** Cancel the in-flight model/tool run, if any. */
   cancel(): void {
+    this.fastPathAbort?.abort();
     this.agent?.cancel();
+  }
+
+  /**
+   * Try to answer the prompt without the model, yielding the events the agent
+   * would have produced. Returns false when the request is not a fast-path one,
+   * which is the common case and must cost nothing but the routing request.
+   */
+  private async *streamFastPath(prompt: string): AsyncGenerator<AssistantStreamEvent, boolean> {
+    const endpoint = resolveSystemOneEndpoint(readRuntimeEnv());
+    if (!endpoint) return false;
+
+    const state = fastPathState();
+    const abort = new AbortController();
+    this.fastPathAbort = abort;
+    let action: FastPathAction | null = null;
+    try {
+      action = await resolveFastPathAction({
+        prompt,
+        state,
+        endpoint,
+        fetchImpl: await typesafeFetch(),
+        signal: abort.signal,
+      });
+    } finally {
+      this.fastPathAbort = null;
+    }
+    // `resolveFastPathAction` reports a cancelled request the same way as a
+    // timeout or a refusal — as "no action" — so the abort has to be read from
+    // the signal. Falling through here would send the prompt to the model the
+    // user just pressed Stop on, and on the first turn of a session
+    // `agent?.cancel()` is a no-op because no agent exists yet. Only `cancel()`
+    // touches this signal; the routing timeout aborts a controller of its own.
+    if (abort.signal.aborted) return true;
+    if (!action) return false;
+
+    const tool = this.toolNamed(action.tool);
+    // A tool the fast path names but the registry does not hold would be a bug,
+    // not a user-visible failure: fall through rather than surface it.
+    if (!tool) return false;
+
+    const error = await runToolDirectly(tool, action.input);
+    console.debug(
+      `[geolibre] assistant fast path: ${action.tool} ${JSON.stringify(action.input)}` +
+        (error ? ` — failed: ${error}` : ""),
+    );
+    yield { type: "tool", name: action.tool, input: action.input, error, routed: true };
+    // The transcript already shows the call; this line is what voice mode reads
+    // back, so a silent success would leave a hands-free user with no answer.
+    yield {
+      type: "text",
+      text: error ? i18next.t("assistant.fastPath.failed") : i18next.t("assistant.fastPath.done"),
+    };
+    return true;
+  }
+
+  /** The host tool with this name, from a cache shared across prompts. */
+  private toolNamed(name: string): Tool | null {
+    const version = getAssistantToolsVersion();
+    if (!this.cachedTools || this.cachedToolsVersion !== version) {
+      this.cachedTools = createHostAssistantTools(this.deps);
+      this.cachedToolsVersion = version;
+    }
+    return this.cachedTools.find((tool) => tool.name === name) ?? null;
+  }
+
+  /**
+   * The tools and system prompt for the next model call. Host tools are always
+   * sent; plugin tools are sent in full only while they fit under the eager
+   * limit, and otherwise are listed in the prompt and loaded on demand.
+   */
+  private composeAgentInputs(): { tools: Tool[]; systemPrompt: string } {
+    const scope = this.pluginTools.scope(listAssistantToolEntries());
+    const tools = [...scope.active, ...createHostAssistantTools(this.deps)];
+    if (scope.catalog.length > 0) {
+      tools.push(createLoadPluginToolsTool((names) => this.loadPluginTools(names)));
+    }
+    return {
+      tools,
+      systemPrompt: buildSystemPrompt(undefined, formatPluginToolCatalog(scope.catalog)),
+    };
+  }
+
+  /**
+   * Make deferred plugin tools callable on the live agent. Called from inside
+   * a model turn; the SDK reads the tool registry before each model call, so
+   * the loaded specs reach the model on its next step.
+   */
+  private loadPluginTools(names: string[]): PluginToolLoadResult {
+    const { tools, result } = this.pluginTools.load(listAssistantToolEntries(), names);
+    if (tools.length > 0) this.agent?.toolRegistry.addOrReplace(tools);
+    return result;
   }
 
   private async ensureAgent(): Promise<Agent> {
     if (this.agent) {
       if (this.toolsVersion !== getAssistantToolsVersion()) {
         // Refresh between prompts, retaining the agent and its conversation.
-        const tools = createAssistantTools(this.deps);
+        // Plugin guidance shares the version counter, so the prompt is
+        // recomposed alongside the tools.
+        const { tools, systemPrompt } = this.composeAgentInputs();
         this.agent.toolRegistry.clear();
         this.agent.toolRegistry.add(tools);
+        this.agent.systemPrompt = systemPrompt;
         this.toolsVersion = getAssistantToolsVersion();
       }
       return this.agent;
@@ -136,15 +283,12 @@ export class AssistantSession {
       throw new Error(
         pinned
           ? `No API key for the selected provider "${pinned}". Add its key in Settings → Environment Variables, or pick another provider.`
-          : "No LLM API key is configured. Add GEMINI_API_KEY, GOOGLE_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY in Settings → Environment Variables.",
+          : "No LLM API key is configured. Add GEMINI_API_KEY, GOOGLE_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY in Settings → Environment Variables.",
       );
     }
     const model = await createModel(config);
-    this.agent = new Agent({
-      model,
-      tools: createAssistantTools(this.deps),
-      systemPrompt: SYSTEM_PROMPT,
-    });
+    const { tools, systemPrompt } = this.composeAgentInputs();
+    this.agent = new Agent({ model, tools, systemPrompt });
     this.toolsVersion = getAssistantToolsVersion();
     return this.agent;
   }
@@ -162,6 +306,12 @@ export class AssistantSession {
     if (this.streaming) throw new Error("An assistant response is already in progress.");
     this.streaming = true;
     try {
+      // Simple map commands are routed and executed without the model at all.
+      // This runs before ensureAgent so it also works while no LLM provider is
+      // configured — and, crucially, before any conversation state is touched,
+      // so a fast-path turn leaves the agent's history exactly as it found it.
+      if (yield* this.streamFastPath(prompt)) return;
+
       const agent = await this.ensureAgent();
       // Only prepend the layer context when it changed since the last message, so
       // long conversations don't re-send the full layer list on every turn.

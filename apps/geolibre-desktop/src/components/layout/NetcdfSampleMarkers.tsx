@@ -1,6 +1,7 @@
-import * as maplibregl from "maplibre-gl";
 import { type RefObject, useEffect, useSyncExternalStore } from "react";
 import type { MapEngine } from "@geolibre/map";
+import { createAnnotationMarker, type AnnotationMarker } from "@geolibre/plugins";
+import { engineMarkerMap } from "../../lib/engine-style-map";
 import { netcdfSeriesColor } from "../../lib/netcdf-profile-series";
 import {
   getNetcdfProfileSamples,
@@ -66,15 +67,17 @@ export function NetcdfSampleMarkers({
   );
 
   useEffect(() => {
-    const map = mapControllerRef.current?.getMap();
+    // MapLibre's Marker, or a projected DOM marker on any other renderer.
+    const map = engineMarkerMap(mapControllerRef.current);
     if (!map) return;
-    const live = new Map<number, maplibregl.Marker>();
+    const live = new Map<number, AnnotationMarker>();
     for (const sample of samples) {
       live.set(
         sample.id,
-        new maplibregl.Marker({ element: buildMarkerElement(sample), anchor: "center" })
-          .setLngLat([sample.lng, sample.lat])
-          .addTo(map),
+        createAnnotationMarker(map, {
+          element: buildMarkerElement(sample),
+          anchor: "center",
+        }).setLngLat([sample.lng, sample.lat]),
       );
     }
     // Rebuilding the whole set each time keeps this to one short effect. It runs

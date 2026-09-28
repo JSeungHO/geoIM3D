@@ -114,15 +114,17 @@ export function createEmptyProject(
     layers: [],
     layerGroups: [],
     styles: {},
-    preferences: options.ellipsoidId
-      ? {
-          ...DEFAULT_PROJECT_PREFERENCES,
-          map: {
-            ...DEFAULT_PROJECT_PREFERENCES.map,
-            ellipsoidId: getEllipsoid(options.ellipsoidId).id,
-          },
-        }
-      : DEFAULT_PROJECT_PREFERENCES,
+    // A copy, never the shared constant: a caller that edits the new project's
+    // preferences — `project.preferences.map.cesiumBasemap = …` — would
+    // otherwise rewrite the app-wide defaults for the rest of the process, and
+    // every later "what is the default" read would answer with its edit.
+    preferences: {
+      ...DEFAULT_PROJECT_PREFERENCES,
+      map: {
+        ...DEFAULT_PROJECT_PREFERENCES.map,
+        ...(options.ellipsoidId ? { ellipsoidId: getEllipsoid(options.ellipsoidId).id } : {}),
+      },
+    },
     legend: { ...DEFAULT_LEGEND_CONFIG },
     comments: [],
     metadata: {},
@@ -182,6 +184,9 @@ function isGeoJsonValue(value: object): boolean {
  *   `""` at the root — the argument `JSON.stringify` passes to `toJSON`.
  * @param ancestors Containers currently open on the recursion stack, used to
  *   detect cycles.
+ * @param presets Objects whose serialized text is already known at the depth
+ *   they sit at, written verbatim instead of being walked again. Used by
+ *   {@link serializeProjectWithLayerCache} to splice in cached layers.
  * @returns The serialized text, or undefined for values `JSON.stringify` also
  *   drops (undefined, functions, symbols).
  */
@@ -190,7 +195,12 @@ function serializeProjectValue(
   depth: number,
   key: string,
   ancestors: Set<object>,
+  presets?: ReadonlyMap<object, string>,
 ): string | undefined {
+  if (presets !== undefined && value !== null && typeof value === "object") {
+    const preset = presets.get(value);
+    if (preset !== undefined) return preset;
+  }
   if (value !== null && typeof value === "object") {
     // Honor the toJSON hook the way JSON.stringify does, so a value that
     // replaces itself is inspected in its replaced form. It receives the same
@@ -226,13 +236,14 @@ function serializeProjectValue(
       const entries = Array.from(
         { length: value.length },
         (_unused, index) =>
-          serializeProjectValue(value[index], depth + 1, String(index), ancestors) ?? "null",
+          serializeProjectValue(value[index], depth + 1, String(index), ancestors, presets) ??
+          "null",
       );
       return `[\n${pad}${entries.join(`,\n${pad}`)}\n${closePad}]`;
     }
     const entries: string[] = [];
     for (const [entryKey, entry] of Object.entries(value)) {
-      const serialized = serializeProjectValue(entry, depth + 1, entryKey, ancestors);
+      const serialized = serializeProjectValue(entry, depth + 1, entryKey, ancestors, presets);
       // An unserializable object value is omitted, matching JSON.stringify.
       if (serialized === undefined) continue;
       entries.push(`${JSON.stringify(entryKey)}: ${serialized}`);
@@ -258,7 +269,85 @@ export const DEFAULT_MAP_CENTER: [number, number] = [126.978, 37.5665];
 export const DEFAULT_MAP_ZOOM = 11;
 
 export function serializeProject(project: GeoLibreProject): string {
-  return serializeProjectValue(geoim3dProjectForSerialization(project), 0, "", new Set()) ?? "null";
+  project = geoim3dProjectForSerialization(project);
+  return (
+    serializeProjectValue(
+      { ...project, layers: project.layers.map(portableLayer) },
+      0,
+      "",
+      new Set(),
+    ) ?? "null"
+  );
+}
+
+/**
+ * Per-layer serialized text kept across {@link serializeProjectWithLayerCache}
+ * calls, keyed by the layer record each entry was built from. A `WeakMap`, so a
+ * layer the store has replaced or removed drops its text with it.
+ */
+export type ProjectLayerSerializationCache = WeakMap<object, { index: number; text: string }>;
+
+/** Create an empty {@link ProjectLayerSerializationCache}. */
+export function createProjectLayerSerializationCache(): ProjectLayerSerializationCache {
+  return new WeakMap();
+}
+
+/**
+ * Serialize a project exactly as {@link serializeProject} does, reusing the
+ * text of every layer whose source record is unchanged since an earlier call.
+ *
+ * Feature data lives inside layer records, so re-stringifying every layer on
+ * each autosave costs megabytes of main-thread work for a project with large
+ * GeoJSON layers — even when only the camera moved (GeoLibre#2633). The store
+ * replaces a layer object whenever it changes, so object identity is a sound
+ * cache key: a camera move reuses every layer, and an edit to one layer
+ * re-serializes only that one.
+ *
+ * `layerSources[i]` must be the record `project.layers[i]` was derived from
+ * (e.g. the store's `layers`, before `projectFromStore` prepared them), and that
+ * derivation must depend on the record alone — as `buildProjectSnapshot`'s does
+ * — or a cached entry could outlive a change it should have reflected. When the
+ * two arrays differ in length the cache is bypassed rather than trusted.
+ *
+ * @param project Project to serialize, as built from `layerSources`.
+ * @param layerSources Immutable source record for each entry of
+ *   `project.layers`, in the same order, used as the cache key.
+ * @param cache Cache shared between calls; see
+ *   {@link createProjectLayerSerializationCache}.
+ * @returns The same text {@link serializeProject} returns for `project`.
+ */
+export function serializeProjectWithLayerCache(
+  project: GeoLibreProject,
+  layerSources: readonly object[],
+  cache: ProjectLayerSerializationCache,
+): string {
+  // geoim3dProjectForSerialization returns `project` unchanged when there is
+  // nothing to exclude (the common case), so this costs one reference check.
+  // When it does exclude a layer, `layerSources`'s per-index correspondence
+  // with `project.layers` no longer holds, so fall back to the uncached path
+  // -- rare: only while a locally dropped 3D object/splat is loaded.
+  const filtered = geoim3dProjectForSerialization(project);
+  if (filtered !== project) return serializeProject(project);
+  if (layerSources.length !== project.layers.length) return serializeProject(project);
+  const layers = project.layers.map(portableLayer);
+  // Presets are keyed by layer object, so a record listed twice would get one
+  // index's text in both places. The store never does that; bypass if it does.
+  if (new Set(layers).size !== layers.length) return serializeProject(project);
+  const presets = new Map<object, string>();
+  layers.forEach((layer, index) => {
+    const source = layerSources[index];
+    const cached = cache.get(source);
+    // The layer is serialized under its array index as the key (a `toJSON`
+    // hook would see it), so text is reused only at the index it was built for.
+    let text = cached?.index === index ? cached.text : undefined;
+    if (text === undefined) {
+      // Depth 2: the root object is depth 0 and its `layers` array depth 1.
+      text = serializeProjectValue(layer, 2, String(index), new Set()) ?? "null";
+      cache.set(source, { index, text });
+    }
+    presets.set(layer, text);
+  });
+  return serializeProjectValue({ ...project, layers }, 0, "", new Set(), presets) ?? "null";
 }
 
 export function parseProject(json: string): GeoLibreProject {
@@ -332,7 +421,7 @@ export function parseProject(json: string): GeoLibreProject {
     // The primary renderer is independent of the grid, so it sits outside the
     // `mapLayout` block above: a 1x1 Cesium project has no grid to persist.
     ...(normalizePrimaryRenderer(data.primaryRenderer)
-      ? { primaryRenderer: "cesium" as const }
+      ? { primaryRenderer: normalizePrimaryRenderer(data.primaryRenderer)! }
       : {}),
     ...(styleLibrary.length > 0 ? { styleLibrary } : {}),
     ...(parsedComments.length > 0 ? { comments: parsedComments } : {}),
@@ -938,11 +1027,12 @@ export function normalizeMapLayout(value: unknown): MapGridLayout | null {
  * Returns null for the default 2D map — absent, unknown, or an explicit
  * `"maplibre"` — because the field is only written when it is not the default,
  * so a MapLibre project serializes byte-identically to before this existed.
- * The return type is narrowed to `"cesium" | null` rather than the full
- * {@link MapRendererKind} for that reason: `"maplibre"` is never a result.
+ * The return type is narrowed to `"cesium" | "mapbox" | "arcgis" | null` rather
+ * than the full {@link MapRendererKind} for that reason: `"maplibre"` is never a
+ * result.
  */
-export function normalizePrimaryRenderer(value: unknown): "cesium" | null {
-  return value === "cesium" ? "cesium" : null;
+export function normalizePrimaryRenderer(value: unknown): "cesium" | "mapbox" | "arcgis" | null {
+  return value === "cesium" || value === "mapbox" || value === "arcgis" ? value : null;
 }
 
 /**
@@ -964,7 +1054,10 @@ export function normalizeSecondaryMapViews(value: unknown): SecondaryMapView[] |
     // Only the known engine ids survive; an absent/unknown value is omitted so
     // the pane defaults to the 2D map (back-compat with pre-globe projects).
     const viewKind =
-      candidate.viewKind === "cesium" || candidate.viewKind === "maplibre"
+      candidate.viewKind === "cesium" ||
+      candidate.viewKind === "maplibre" ||
+      candidate.viewKind === "mapbox" ||
+      candidate.viewKind === "arcgis"
         ? candidate.viewKind
         : undefined;
     views.push({
@@ -1228,6 +1321,17 @@ function normalizeProjectPreferences(preferences: unknown): ProjectPreferences {
         (map as Partial<ProjectPreferences["map"]>).showPointerElevation,
         DEFAULT_PROJECT_PREFERENCES.map.showPointerElevation,
       ),
+      // Missing means follow the saved project basemap. Do not reapply the
+      // new-project Streets default after a user has selected a shared style.
+      mapboxStyleUrl:
+        normalizeString((map as Partial<ProjectPreferences["map"]>).mapboxStyleUrl) || undefined,
+      arcgisBasemap:
+        normalizeString((map as Partial<ProjectPreferences["map"]>).arcgisBasemap) || undefined,
+      // Missing means follow the saved project basemap, as it does for
+      // `mapboxStyleUrl` above: a project written before this field existed
+      // chose nothing, and reapplying the new-project default would repaint
+      // its globe with Ion imagery the next time it opened. New projects get
+      // the default from `DEFAULT_PROJECT_PREFERENCES` and save it explicitly.
       cesiumBasemap: normalizeCesiumBasemap(
         (map as Partial<ProjectPreferences["map"]>).cesiumBasemap,
       ),
@@ -1446,7 +1550,44 @@ function isPlainObject(value: object): boolean {
   return prototype === Object.prototype || prototype === null;
 }
 
+/** Browser byte URLs belong to the live session, never a saved project. */
+function withoutLocalRasterBytes(layer: GeoLibreLayer): GeoLibreLayer {
+  if (layer.metadata?.localBytesUrl === undefined) return layer;
+  const { localBytesUrl: _localBytesUrl, ...metadata } = layer.metadata;
+  return { ...layer, metadata };
+}
+
+/**
+ * Drop a Zarr layer's request headers. They authenticate the store (a bearer
+ * token, an API key), so they are credentials: the Zarr adds keep them in a
+ * session-only map the renderer reads (`registerZarrHeaders` in
+ * @geolibre/map), but a project saved before that change carries them on
+ * `source` (opengeos/GeoLibre#2643). Not applied on parse, so such a project
+ * still authenticates for the session it is opened in.
+ *
+ * @param layer - Any layer.
+ * @returns The layer without `source.headers` when it is a Zarr layer, else
+ *   the same object.
+ */
+function withoutZarrHeaders(layer: GeoLibreLayer): GeoLibreLayer {
+  if (layer.type !== "zarr" || layer.source?.headers === undefined) return layer;
+  const { headers: _headers, ...source } = layer.source;
+  return { ...layer, source };
+}
+
+/**
+ * Strip the session-only state every serializer must leave out, whether or not
+ * the project came through `projectFromStore`.
+ *
+ * @param layer - Any layer.
+ * @returns The layer as it may be written to a project file.
+ */
+function portableLayer(layer: GeoLibreLayer): GeoLibreLayer {
+  return withoutZarrHeaders(withoutLocalRasterBytes(layer));
+}
+
 function normalizeLayer(layer: GeoLibreLayer): GeoLibreLayer {
+  layer = withoutLocalRasterBytes(layer);
   // `capabilities` is split off the spread rather than overwritten: a raw value
   // that normalizes to nothing (`{}`, an array, a string, an object with no
   // boolean flag) must not survive into the normalized layer and be written
@@ -1670,7 +1811,7 @@ export function projectFromStore(state: {
     // a single-pane Cesium project persists `primaryRenderer` with no
     // `mapLayout`, and a MapLibre project writes neither.
     ...(normalizePrimaryRenderer(state.primaryRenderer)
-      ? { primaryRenderer: "cesium" as const }
+      ? { primaryRenderer: normalizePrimaryRenderer(state.primaryRenderer)! }
       : {}),
     ...(styleLibrary.length > 0 ? { styleLibrary } : {}),
     ...(comments.length > 0 ? { comments } : {}),
@@ -1694,6 +1835,7 @@ function hasRestorableSourceUrl(layer: GeoLibreLayer): boolean {
 }
 
 function prepareLayerForSave(layer: GeoLibreLayer): GeoLibreLayer {
+  layer = portableLayer(layer);
   // This flag describes unsaved changes to the live source, not persisted
   // project state. A reference-only save reloads the original geometries;
   // carrying the flag into that project would warn about nonexistent edits.
@@ -1713,6 +1855,24 @@ function prepareLayerForSave(layer: GeoLibreLayer): GeoLibreLayer {
   if (layer.embedFilter !== undefined) {
     const { embedFilter: _embedFilter, ...rest } = layer;
     layer = rest;
+  }
+
+  // Some live plugin layers publish a large in-memory row model solely for
+  // the Attribute Table and rebuild it from their feed on activation. Keeping
+  // those rows in the store makes them queryable; embedding them in every
+  // project/autosave would persist stale positions and can cross the history
+  // snapshot ceiling.
+  if (layer.geojson && layer.metadata.transientGeojson === true) {
+    const { geojson: _geojson, ...rest } = layer;
+    layer = rest;
+  }
+
+  // Live CZML feeds likewise rebuild their renderer payload on activation.
+  // Persisting thousands of packets in every autosave duplicates the feed,
+  // stores stale positions, and can exceed the history snapshot limit.
+  if (layer.source.czmlData !== undefined && layer.metadata.transientCzml === true) {
+    const { czmlData: _czmlData, ...source } = layer.source;
+    layer = { ...layer, source };
   }
 
   // External native layers that restore their features from a source URL keep
@@ -1770,18 +1930,37 @@ function prepareLayerForSave(layer: GeoLibreLayer): GeoLibreLayer {
   const metadata = { ...layer.metadata };
   delete metadata.resolvedUrl;
 
+  // The collapse below rewinds a resolved short URL (or a desktop protocol URL)
+  // back to what the user typed, because those tile URLs are not portable. A
+  // TileJSON layer is the exception: `tiles` holds the document's own https
+  // templates, which are portable, while its `originalUrl` is the *document*
+  // URL and carries no {z}/{x}/{y}. Collapsing onto it would leave the saved
+  // layer unable to request a tile until a re-fetch succeeds — and
+  // `resolveProjectXyzLayers` keeps the on-disk layer when the document is
+  // unreachable, so an offline reopen would strand it. Rewind only `url`.
+  const tiles = typeof layer.metadata.tilejsonUrl === "string" ? {} : { tiles: [originalUrl] };
+
   return {
     ...layer,
     source: {
       ...layer.source,
-      tiles: [originalUrl],
+      ...tiles,
       url: originalUrl,
     },
     metadata,
   };
 }
 
-function portableWmsTileUrl(tile: unknown): unknown {
+/**
+ * The plain HTTP(S) WMS template inside the desktop app's `geolibre-wms://`
+ * wrapper (its CORS-exempt native fetcher), or the tile unchanged when it is
+ * not wrapped or the wrapped URL is not HTTP(S). Shared by project export and
+ * the ArcGIS engine's story-export templates.
+ *
+ * @param tile - A tile template, wrapped or not.
+ * @returns The unwrapped template, or `tile` itself.
+ */
+export function portableWmsTileUrl(tile: unknown): unknown {
   // Keep this protocol prefix in sync with WMS_TILE_PROTOCOL in the desktop
   // app, which packages/core cannot import without reversing dependencies.
   if (typeof tile !== "string" || !tile.startsWith("geolibre-wms://")) return tile;

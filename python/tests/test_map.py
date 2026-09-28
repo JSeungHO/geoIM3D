@@ -1393,6 +1393,36 @@ def test_add_geojson_also_accepts_a_popup(m):
     assert _last_layer(m)["popup"] == {"fields": [{"field": "name"}]}
 
 
+def test_add_markers_accepts_the_popup_size_shorthands(m):
+    m.add_markers(
+        [{"lng": -122.9, "lat": 47.0, "name": "Olympia", "photo": "https://x.test/a.jpg"}],
+        popup=["name", {"field": "photo", "kind": "image"}],
+        popup_max_width=480,
+        popup_image_height=320,
+    )
+    layer = _last_layer(m)
+    assert layer["popup"]["maxWidth"] == 480
+    assert layer["popup"]["imageHeight"] == 320
+    # The sizes are popup keys, not style keys; left in the style the app would
+    # never read them.
+    assert "popup_max_width" not in layer["style"]
+    assert "popup_image_height" not in layer["style"]
+
+
+def test_popup_size_shorthand_works_without_a_popup_argument(m):
+    m.add_markers([(-100, 40)], popup_max_width=480)
+    assert _last_layer(m)["popup"] == {"maxWidth": 480}
+
+
+def test_set_popup_records_the_sizes(m):
+    layer_id = m.add_markers([(-100, 40)], popup=["a"])
+    m.set_popup(layer_id, max_width=600, image_height=400, merge=True)
+    popup = m.get_layer(layer_id).popup
+    assert popup["maxWidth"] == 600
+    assert popup["imageHeight"] == 400
+    assert popup["fields"] == [{"field": "a"}]
+
+
 def test_set_popup_replaces_the_config(m):
     layer_id = m.add_markers([(-100, 40)], popup=["a", "b"])
     m.set_popup(layer_id, ["c"], title="c")
@@ -1439,3 +1469,40 @@ def test_layer_set_popup_bumps_the_sync_sequence(m):
     seq = m._seq
     layer.set_popup(["a"])
     assert m._seq > seq
+
+
+def test_mapbox_renderer_roundtrip(m, tmp_path):
+    """Mapbox survives project save/load and mixed renderer split views."""
+    from geolibre import Map
+
+    m.set_renderer("mapbox")
+    m.set_map_layout(1, 2, view_kinds=["mapbox", "cesium"])
+    assert m.get_renderer() == "mapbox"
+    pane = m.project["secondaryMapViews"][0]
+    m.set_renderer("mapbox", pane_id=pane["id"])
+    path = tmp_path / "mapbox.geolibre.json"
+    m.save_project(path)
+    reopened = Map(renderer="mapbox")
+    reopened.load_project(path)
+    assert reopened.get_renderer() == "mapbox"
+    assert reopened.get_renderer(pane_id=pane["id"]) == "mapbox"
+
+
+def test_arcgis_renderer_roundtrip(m, tmp_path):
+    """ArcGIS survives project save/load and mixed renderer split views."""
+    from geolibre import Map
+
+    m.set_renderer("arcgis")
+    m.set_map_layout(1, 3, view_kinds=["arcgis", "maplibre", "cesium"])
+    assert m.get_renderer() == "arcgis"
+    maplibre_pane, cesium_pane = m.project["secondaryMapViews"]
+    m.set_renderer("arcgis", pane_id=cesium_pane["id"])
+    path = tmp_path / "arcgis.geolibre.json"
+    m.save_project(path)
+    reopened = Map(renderer="arcgis")
+    reopened.load_project(path)
+    # A mixed layout survives: the primary and one pane on ArcGIS, the other
+    # pane still on MapLibre.
+    assert reopened.get_renderer() == "arcgis"
+    assert reopened.get_renderer(pane_id=maplibre_pane["id"]) == "maplibre"
+    assert reopened.get_renderer(pane_id=cesium_pane["id"]) == "arcgis"

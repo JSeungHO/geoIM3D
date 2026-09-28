@@ -4,7 +4,7 @@ import { parseHTML } from "linkedom";
 import { VectorControl, type VectorLayerInfo } from "maplibre-gl-vector";
 import { DUCKDB_VECTOR_FEATURE_WARN_COUNT, useAppStore } from "@geolibre/core";
 import {
-  bridgeVectorControlToCesium,
+  bridgeVectorControlToStore,
   exceedsCesiumVectorLimit,
 } from "../packages/plugins/src/plugins/vector-cesium-bridge";
 import {
@@ -47,7 +47,7 @@ it("imports polygon geometry through the real vector control without MapLibre so
   } as unknown as MapLibreMap;
   const fitted: unknown[] = [];
   const control = new VectorControl({ enablePicker: false });
-  bridgeVectorControlToCesium(control, {
+  bridgeVectorControlToStore(control, {
     fitBounds: (bounds) => fitted.push(bounds),
   } as GeoLibreAppAPI);
   for (const event of ["layeradded", "layerupdated", "layerremoved"] as const) {
@@ -177,7 +177,7 @@ it("materializes small tiled layers as GeoJSON records and leaves oversize ones 
   const originalWarn = console.warn;
   console.warn = (...args: unknown[]) => warnings.push(args[0]);
   try {
-    bridgeVectorControlToCesium(control as unknown as VectorControl, {} as GeoLibreAppAPI);
+    bridgeVectorControlToStore(control as unknown as VectorControl, {} as GeoLibreAppAPI);
     control.on("layeradded", () => syncVectorLayersToStore(control));
     control.onAdd({} as MapLibreMap);
     infos = [

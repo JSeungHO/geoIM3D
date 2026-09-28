@@ -146,6 +146,114 @@ test("connectStac discovers relative API links and collections", async () => {
   assert.deepEqual(calls, ["https://example.com/stac/", "https://example.com/stac/collections"]);
 });
 
+test("connectStac follows paginated collection links", async () => {
+  const calls: string[] = [];
+  const fetcher = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    calls.push(url);
+    if (url.endsWith("/collections")) {
+      return jsonResponse({
+        collections: [{ id: "first", title: "First" }],
+        links: [{ rel: "next", href: "./collections?offset=1" }],
+      });
+    }
+    if (url.endsWith("/collections?offset=1")) {
+      return jsonResponse({ collections: [{ id: "hrdem-lidar", title: "HRDEM LiDAR" }] });
+    }
+    return jsonResponse({
+      id: "demo",
+      title: "Demo STAC",
+      conformsTo: ["https://api.stacspec.org/v1.0.0/item-search"],
+      links: [
+        { rel: "search", href: "./search" },
+        { rel: "data", href: "./collections" },
+      ],
+    });
+  }) as typeof fetch;
+
+  const connection = await connectStac("https://example.com/stac/", fetcher);
+  assert.deepEqual(
+    connection.collections.map((collection) => collection.id),
+    ["first", "hrdem-lidar"],
+  );
+  assert.deepEqual(calls, [
+    "https://example.com/stac/",
+    "https://example.com/stac/collections",
+    "https://example.com/stac/collections?offset=1",
+  ]);
+});
+
+test("connectStac keeps the collection pages it read when a later page fails", async () => {
+  const fetcher = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.endsWith("/collections")) {
+      return jsonResponse({
+        collections: [{ id: "first", title: "First" }],
+        links: [{ rel: "next", href: "./collections?offset=1" }],
+      });
+    }
+    if (url.endsWith("/collections?offset=1")) throw new Error("network");
+    return jsonResponse({
+      id: "demo",
+      links: [{ rel: "data", href: "./collections" }],
+    });
+  }) as typeof fetch;
+
+  const connection = await connectStac("https://example.com/stac/", fetcher);
+  assert.deepEqual(
+    connection.collections.map((collection) => collection.id),
+    ["first"],
+  );
+});
+
+test("connectStac keeps the collection pages it read when a later page is JSON null", async () => {
+  const fetcher = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.endsWith("/collections")) {
+      return jsonResponse({
+        collections: [{ id: "first", title: "First" }],
+        links: [{ rel: "next", href: "./collections?offset=1" }],
+      });
+    }
+    if (url.endsWith("/collections?offset=1")) return jsonResponse(null);
+    return jsonResponse({
+      id: "demo",
+      links: [{ rel: "data", href: "./collections" }],
+    });
+  }) as typeof fetch;
+
+  const connection = await connectStac("https://example.com/stac/", fetcher);
+  assert.deepEqual(
+    connection.collections.map((collection) => collection.id),
+    ["first"],
+  );
+});
+
+test("connectStac stops following collection pages at the page cap", async () => {
+  let pages = 0;
+  const fetcher = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    const offset = new URL(url).searchParams.get("offset");
+    if (url.includes("/collections")) {
+      pages += 1;
+      const next = Number(offset ?? 0) + 1;
+      // Every page advertises another one, so only the cap ends the walk.
+      return jsonResponse({
+        collections: [{ id: `collection-${offset ?? 0}` }],
+        links: [{ rel: "next", href: `./collections?offset=${next}` }],
+      });
+    }
+    return jsonResponse({
+      id: "demo",
+      links: [{ rel: "data", href: "./collections" }],
+    });
+  }) as typeof fetch;
+
+  const connection = await connectStac("https://example.com/stac/", fetcher);
+  assert.equal(pages, 50);
+  assert.equal(connection.collections.length, 50);
+});
+
 test("connectStac reads only the root of a static catalog", async () => {
   const fetched: string[] = [];
   const fetcher = (async (input: RequestInfo | URL) => {
@@ -173,6 +281,125 @@ test("connectStac reads only the root of a static catalog", async () => {
       ["unlabelled", "container"],
     ],
   );
+});
+
+test("connectStac connects an API collection URL to its API, focused on the collection", async () => {
+  const fetched: string[] = [];
+  const fetcher = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    fetched.push(url);
+    if (url === "https://example.com/stac/collections/sst") {
+      return jsonResponse({
+        type: "Collection",
+        id: "sst",
+        title: "Sea surface temperature",
+        links: [
+          { rel: "items", href: "./sst/items" },
+          { rel: "root", href: "https://example.com/stac/" },
+        ],
+      });
+    }
+    if (url.endsWith("/collections")) {
+      // A paged listing that stopped before this collection must still offer it.
+      return jsonResponse({ collections: [{ id: "argo" }] });
+    }
+    return jsonResponse({
+      type: "Catalog",
+      id: "demo",
+      title: "Demo API",
+      links: [
+        { rel: "search", href: "./search" },
+        { rel: "data", href: "./collections" },
+      ],
+    });
+  }) as typeof fetch;
+
+  const connection = await connectStac("https://example.com/stac/collections/sst", fetcher);
+  assert.equal(connection.isApi, true);
+  assert.equal(connection.title, "Demo API");
+  assert.equal(connection.searchUrl, "https://example.com/stac/search");
+  assert.equal(connection.focusCollection, "sst");
+  assert.deepEqual(
+    connection.collections.map((collection) => collection.id),
+    ["argo", "sst"],
+  );
+  assert.deepEqual(fetched, [
+    "https://example.com/stac/collections/sst",
+    "https://example.com/stac/",
+    "https://example.com/stac/collections",
+  ]);
+});
+
+test("connectStac keeps a collection whose root is not an API as a static catalog", async () => {
+  const fetcher = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.endsWith("/maps/collection.json")) {
+      return jsonResponse({
+        type: "Collection",
+        id: "maps",
+        links: [
+          { rel: "item", href: "./a.json" },
+          { rel: "root", href: "../catalog.json" },
+        ],
+      });
+    }
+    return jsonResponse({ type: "Catalog", id: "warehouse", links: [] });
+  }) as typeof fetch;
+
+  const connection = await connectStac("https://example.com/stac/maps/collection.json", fetcher);
+  assert.equal(connection.isApi, false);
+  assert.equal(connection.focusCollection, undefined);
+  assert.equal(connection.title, "maps");
+});
+
+test("connectStac focuses a collection that carries its own search link on its API", async () => {
+  const fetcher = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === "https://example.com/stac/collections/sst") {
+      return jsonResponse({
+        type: "Collection",
+        id: "sst",
+        links: [
+          { rel: "search", href: "./sst/search" },
+          { rel: "root", href: "https://example.com/stac/" },
+        ],
+      });
+    }
+    if (url.endsWith("/collections")) return jsonResponse({ collections: [{ id: "sst" }] });
+    return jsonResponse({
+      type: "Catalog",
+      id: "demo",
+      links: [
+        { rel: "search", href: "./search" },
+        { rel: "data", href: "./collections" },
+      ],
+    });
+  }) as typeof fetch;
+
+  const connection = await connectStac("https://example.com/stac/collections/sst", fetcher);
+  assert.equal(connection.searchUrl, "https://example.com/stac/search");
+  assert.equal(connection.focusCollection, "sst");
+  assert.deepEqual(
+    connection.collections.map((collection) => collection.id),
+    ["sst"],
+  );
+});
+
+test("connectStac follows a collection's root link only one hop", async () => {
+  const fetched: string[] = [];
+  const fetcher = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    fetched.push(url);
+    // Every document claims to be a collection whose root is the next one along.
+    const next =
+      url === "https://example.com/a" ? "https://example.com/b" : "https://example.com/a";
+    return jsonResponse({ type: "Collection", id: url, links: [{ rel: "root", href: next }] });
+  }) as typeof fetch;
+
+  const connection = await connectStac("https://example.com/a", fetcher);
+  assert.equal(connection.isApi, false);
+  assert.equal(connection.focusCollection, undefined);
+  assert.deepEqual(fetched, ["https://example.com/a", "https://example.com/b"]);
 });
 
 test("connectStac redirects the retired USGS static catalog to its supported API", async () => {

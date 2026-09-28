@@ -8,7 +8,7 @@
  */
 import { getActiveMeanRadiusMeters } from "@geolibre/core";
 import { zipSync } from "fflate";
-import { jsPDF } from "jspdf";
+import type { jsPDF } from "jspdf";
 import type { MapEngine } from "@geolibre/map";
 import { isFullViewportMapCanvas } from "@geolibre/map/map-capture";
 import { drawLayout, pageMm, pagePx, resolvePageSize, type LayoutOptions } from "./print-layout";
@@ -40,7 +40,7 @@ interface MapLike {
   getCanvas(): HTMLCanvasElement;
   getContainer(): HTMLElement;
   getBearing(): number;
-  unproject(point: [number, number]): { lng: number; lat: number };
+  unproject(point: [number, number]): { lng: number; lat: number } | null;
   project(lngLat: [number, number]): { x: number; y: number };
   /** Force a synchronous redraw so the preserved drawing buffer is current. */
   redraw?(): void;
@@ -108,10 +108,20 @@ function cropCaptureToClip(
   return cropped;
 }
 
-/** Capture either engine while retaining the print scale and geographic crop. */
+/**
+ * Capture either engine while retaining the print scale and geographic crop.
+ *
+ * @param engine - The live map engine.
+ * @param clip - Optional geographic extent to crop to.
+ * @param decorate - Paints over the full-viewport capture before it is
+ *   cropped (the atlas mask off a Style Spec engine), given capture pixels
+ *   per CSS pixel.
+ * @returns The captured map.
+ */
 export async function captureEngineMapImage(
   engine: MapEngine,
   clip?: CaptureClip | null,
+  decorate?: (context: CanvasRenderingContext2D, scale: number) => void,
 ): Promise<CapturedMap> {
   const surface = engine.getRenderSurface();
   if (!surface) throw new Error("The map is not ready yet");
@@ -125,6 +135,8 @@ export async function captureEngineMapImage(
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Could not create the print canvas");
     context.drawImage(bitmap, 0, 0);
+    const cssWidth = surface.getCanvas().clientWidth || surface.getContainer().clientWidth;
+    decorate?.(context, cssWidth > 0 ? canvas.width / cssWidth : window.devicePixelRatio || 1);
     return captureMapImage(surface, clip, canvas);
   } finally {
     bitmap.close();
@@ -217,6 +229,9 @@ export function captureMapImage(
   const span = Math.min(100, cssWidth / 2);
   const left = map.unproject([centerX - span / 2, centerY]);
   const right = map.unproject([centerX + span / 2, centerY]);
+  if (!left || !right) {
+    throw new Error("Could not measure the print scale outside the map view");
+  }
   const metersPerCssPx = haversineMeters(left, right) / span;
   const metersPerPixel = dpr > 0 ? metersPerCssPx / dpr : metersPerCssPx;
 
@@ -365,6 +380,7 @@ export async function exportLayoutPdf(
   filename: string,
   dpi = 150,
 ): Promise<string | null> {
+  const JsPdf = await loadJsPdf();
   const size = resolvePageSize(opts);
   const { widthMm, heightMm } = pageMm(size);
   const canvas = renderToCanvas(opts, dpi);
@@ -373,7 +389,7 @@ export async function exportLayoutPdf(
   // first, so the toggle alone can disagree with the actual page shape. jsPDF
   // normalizes the format array to match the orientation (portrait forces
   // width <= height), so the two must be consistent or the page gets rotated.
-  const pdf = new jsPDF({
+  const pdf = new JsPdf({
     orientation: widthMm >= heightMm ? "landscape" : "portrait",
     unit: "mm",
     format: [widthMm, heightMm],
@@ -388,6 +404,16 @@ export async function exportLayoutPdf(
     browserTypes: [{ description: "PDF Document", accept: { "application/pdf": [".pdf"] } }],
     mimeType: "application/pdf",
   });
+}
+
+/**
+ * Imports jsPDF (~0.4 MB) on first PDF export instead of at app startup.
+ *
+ * @returns The jsPDF constructor.
+ */
+async function loadJsPdf(): Promise<typeof jsPDF> {
+  const { jsPDF: JsPdf } = await import("jspdf");
+  return JsPdf;
 }
 
 /**
@@ -421,6 +447,9 @@ export async function exportAtlasPdf(
 ): Promise<string | null> {
   const { total, optionsForPage, onProgress } = source;
   if (total < 1) throw new Error("Atlas export needs at least one page");
+  // Load jsPDF before driving the map through every page, so a failed import
+  // (e.g. offline) stops the export up front.
+  const JsPdf = await loadJsPdf();
   let pdf: jsPDF | null = null;
   for (let i = 0; i < total; i++) {
     onProgress?.(i + 1, total);
@@ -430,7 +459,7 @@ export async function exportAtlasPdf(
     const orientation = widthMm >= heightMm ? "landscape" : "portrait";
     const canvas = renderToCanvas(opts, dpi);
     if (!pdf) {
-      pdf = new jsPDF({ orientation, unit: "mm", format: [widthMm, heightMm] });
+      pdf = new JsPdf({ orientation, unit: "mm", format: [widthMm, heightMm] });
     } else {
       // The page size is fixed while the dialog iterates, but pass it per page
       // anyway so a mid-export change can never mis-scale the remaining pages.

@@ -12,6 +12,9 @@
  */
 import { jsPDF } from "jspdf";
 import { pageMm, resolvePageSize, type Orientation, type PaperSizeId } from "./print-layout";
+import { htmlToPlainText, singleLine } from "./storymap-text";
+
+export { htmlToPlainText, singleLine } from "./storymap-text";
 
 /** An image to embed: a canvas (app) or a PNG/JPEG data URL (tests), plus its
  * natural pixel dimensions so the aspect ratio can be preserved. */
@@ -99,91 +102,6 @@ const LINE_SPACING = 1.15;
 /** Convert a font point size to its rendered line height in millimetres. */
 function lineHeightMm(fontSizePt: number): number {
   return fontSizePt * PT_TO_MM * LINE_SPACING;
-}
-
-/**
- * Named HTML entities a WYSIWYG story editor commonly emits, mapped to their
- * characters. Numeric entities (`&#160;`, `&#xA0;`) are handled separately.
- * Runs in Node for tests too, so this cannot rely on the DOM to decode.
- */
-const HTML_ENTITIES: Record<string, string> = {
-  nbsp: " ",
-  amp: "&",
-  lt: "<",
-  gt: ">",
-  quot: '"',
-  apos: "'",
-  mdash: "—",
-  ndash: "–",
-  hellip: "…",
-  ldquo: "“",
-  rdquo: "”",
-  lsquo: "‘",
-  rsquo: "’",
-  laquo: "«",
-  raquo: "»",
-  copy: "©",
-  reg: "®",
-  trade: "™",
-  deg: "°",
-};
-
-/** Decode the named and numeric HTML entities in a string to their characters. */
-function decodeEntities(text: string): string {
-  return text.replace(/&(#x?[0-9a-f]+|[a-z][a-z0-9]*);/gi, (match, body) => {
-    if (body[0] === "#") {
-      const code =
-        body[1] === "x" || body[1] === "X"
-          ? parseInt(body.slice(2), 16)
-          : parseInt(body.slice(1), 10);
-      // Guard the Unicode range: fromCodePoint throws (RangeError) above
-      // 0x10FFFF (which would abort the export), and a code point of 0 would
-      // insert a null byte that can corrupt the PDF text stream. Both are HTML
-      // "parse errors", so leave the token as-is.
-      return Number.isInteger(code) && code >= 1 && code <= 0x10ffff
-        ? String.fromCodePoint(code)
-        : match;
-    }
-    const named = HTML_ENTITIES[body.toLowerCase()];
-    return named ?? match;
-  });
-}
-
-/**
- * Reduce an HTML (or plain) chapter description to single-spaced plain text.
- *
- * Block-level tags become line breaks, remaining tags are dropped, and named
- * and numeric HTML entities are decoded so the handout reads cleanly. This is
- * presentation-only (the text is drawn, never parsed as HTML), so a permissive
- * strip is sufficient.
- *
- * @param html The chapter description, possibly containing HTML.
- * @returns Plain text with normalized whitespace.
- */
-export function htmlToPlainText(html: string): string {
-  return decodeEntities(
-    html
-      // Drop <script>/<style> blocks with their contents first; the generic tag
-      // strip below only removes delimiters and would leave their text behind.
-      .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, "")
-      .replace(/<\s*br\s*\/?\s*>/gi, "\n")
-      .replace(/<\/\s*(p|div|li|h[1-6]|tr)\s*>/gi, "\n")
-      // Strip remaining tags, honouring quoted attribute values so a `>` inside
-      // an attribute (e.g. title="a > b") doesn't end the match early and leak
-      // the rest of the tag as text.
-      .replace(/<[^>"']*(?:"[^"]*"[^>"']*|'[^']*'[^>"']*)*>/g, ""),
-  )
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .replace(/[ \t]*\n[ \t]*/g, "\n")
-    .trim();
-}
-
-/** Reduce HTML/multi-line text to a single line of plain text for headers. */
-export function singleLine(value: string): string {
-  return htmlToPlainText(value)
-    .replace(/\s*\n\s*/g, " ")
-    .trim();
 }
 
 /**

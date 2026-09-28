@@ -6,6 +6,10 @@ export const PORTOLAN_REGISTRY_URL =
 const USGS_ASTROGEOLOGY_API_URL = "https://stac.astrogeology.usgs.gov/api";
 // No item-search endpoint to ask, so a page is however much of the tree the walk covers.
 const STATIC_SEARCH_READS_PER_PAGE = 300;
+// A `next` chain is only as finite as the server makes it, and `visited` catches a cycle that
+// repeats a URL, not a long walk of distinct ones. Stop after this many pages and use what was
+// reached, the same bound STATIC_SEARCH_READS_PER_PAGE puts on a static catalog crawl.
+const COLLECTION_PAGES_MAX = 50;
 const STATIC_SEARCH_CONCURRENCY = 12;
 
 export interface StacIndexCatalog {
@@ -91,6 +95,11 @@ export interface StacConnection {
   /** A static catalog's top-level children, to be opened on demand. Empty for an API. */
   children?: StacCatalogNode[];
   root: Record<string, unknown>;
+  /**
+   * The collection the URL named, when it was one collection of a STAC API: the connection is to
+   * the API it belongs to, so it can be searched, and this is the collection to search.
+   */
+  focusCollection?: string;
 }
 
 export interface StacCatalogNode {
@@ -403,6 +412,52 @@ function collectionBbox(
   return horizontalBbox(Array.isArray(boxes) ? boxes[0] : undefined);
 }
 
+function isStacCollection(value: unknown): value is StacCollection {
+  return (
+    Boolean(value) && typeof value === "object" && typeof (value as StacCollection).id === "string"
+  );
+}
+
+/** One page of a `/collections` response: the collections it carries and the links off it. */
+interface StacCollectionsPage {
+  collections?: unknown;
+  links?: unknown;
+}
+
+async function loadStacCollections(
+  href: string,
+  fetcher: FetchLike,
+  signal?: AbortSignal,
+): Promise<StacCollection[]> {
+  const collections: StacCollection[] = [];
+  const visited = new Set<string>();
+  let pageUrl: string | undefined = href;
+
+  while (pageUrl && !visited.has(pageUrl) && visited.size < COLLECTION_PAGES_MAX) {
+    visited.add(pageUrl);
+    // The annotation is load-bearing: narrowing `pageUrl` here means following it through the
+    // assignment at the bottom of the loop, which reads `data` — a cycle TypeScript reports as
+    // TS7022 unless `data` states its own type.
+    let data: StacCollectionsPage | null;
+    try {
+      data = await fetchJson<StacCollectionsPage | null>(pageUrl, { signal }, fetcher);
+    } catch {
+      // A page failing does not un-fetch the pages before it. The caller treats discovery as
+      // optional, so the pages that did arrive are worth more than the whole crawl thrown away.
+      break;
+    }
+    // `response.json()` hands back a JSON `null` body as `null`, which no field read survives —
+    // and a page that is not an object carries neither collections nor a link onward.
+    if (typeof data !== "object" || data === null) break;
+    if (Array.isArray(data.collections)) {
+      collections.push(...data.collections.filter(isStacCollection));
+    }
+    pageUrl = linksOf(data.links, pageUrl).find((link) => link.rel === "next")?.href;
+  }
+
+  return collections;
+}
+
 /** Presents a Collection's own assets as one item so the existing asset browser can render it. */
 function collectionAssetItem(document: Record<string, unknown>, url: string): StacItem | undefined {
   if (document.type !== "Collection" || typeof document.id !== "string") return undefined;
@@ -459,10 +514,71 @@ export async function openCatalogNode(
   };
 }
 
-export async function connectStac(
+/**
+ * Connect to the STAC API a collection document belongs to, focused on that collection.
+ *
+ * A collection of an API (`/collections/{id}`) carries no search link of its own, so connecting to
+ * it directly would find nothing to search. Its `root` link names the API, which does.
+ *
+ * Args:
+ *   document: The fetched document the user's URL returned.
+ *   links: The document's links, resolved against `url`.
+ *   url: The URL the document was fetched from.
+ *   fetcher: The fetch implementation.
+ *   signal: Aborts the root request.
+ *
+ * Returns:
+ *   The API's connection with `focusCollection` set, or undefined when the document is not a
+ *   collection, its root is not an API, or the root cannot be read (the caller then treats the
+ *   collection as a static catalog, as before).
+ */
+async function apiOfCollection(
+  document: Record<string, unknown>,
+  links: StacLink[],
+  url: string,
+  fetcher: FetchLike,
+  signal?: AbortSignal,
+): Promise<StacConnection | undefined> {
+  // A collection that carries its own search link is still one of its API's collections, and
+  // connecting to the API is what lists it and lets the panel search it.
+  if (document.type !== "Collection" || typeof document.id !== "string") return undefined;
+  const rootHref = links.find((link) => link.rel === "root")?.href;
+  if (!rootHref || !httpUrl(rootHref) || browserCatalogHref(rootHref) === url) return undefined;
+  let api: StacConnection;
+  try {
+    // One hop only: a root misreported as another collection must not start a chain of fetches.
+    api = await connectStacAt(rootHref, fetcher, signal, false);
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    // Say why, since the static-catalog fallback looks the same as a root that is not an API.
+    console.warn(
+      `[STAC] Could not read the API root ${rootHref} of collection ${document.id}`,
+      error,
+    );
+    return undefined;
+  }
+  if (!api.isApi) return undefined;
+  const id = document.id;
+  // The collections walk stops after a page cap, so a large API may not have listed this one.
+  const collections = api.collections.some((collection) => collection.id === id)
+    ? api.collections
+    : [...api.collections, document as unknown as StacCollection];
+  return { ...api, collections, focusCollection: id };
+}
+
+export function connectStac(
   inputUrl: string,
   fetcher: FetchLike = fetch,
   signal?: AbortSignal,
+): Promise<StacConnection> {
+  return connectStacAt(inputUrl, fetcher, signal, true);
+}
+
+async function connectStacAt(
+  inputUrl: string,
+  fetcher: FetchLike,
+  signal: AbortSignal | undefined,
+  followCollectionRoot: boolean,
 ): Promise<StacConnection> {
   if (!httpUrl(inputUrl)) throw new Error("Enter a valid HTTP or HTTPS STAC URL");
   const url = browserCatalogHref(inputUrl);
@@ -470,6 +586,10 @@ export async function connectStac(
   if (typeof root !== "object" || root === null)
     throw new Error("The URL did not return a STAC document");
   const links = linksOf(root.links, url);
+  const apiConnection = followCollectionRoot
+    ? await apiOfCollection(root, links, url, fetcher, signal)
+    : undefined;
+  if (apiConnection) return apiConnection;
   const conforms = Array.isArray(root.conformsTo) ? root.conformsTo.map(String) : [];
   const searchLink = links.find((link) => link.rel === "search");
   const isApi =
@@ -483,14 +603,11 @@ export async function connectStac(
   );
   if (collectionsLink) {
     try {
-      const data = await fetchJson<{ collections?: StacCollection[] }>(
-        collectionsLink.href,
-        { signal },
-        fetcher,
-      );
-      if (Array.isArray(data.collections)) collections = data.collections;
+      collections = await loadStacCollections(collectionsLink.href, fetcher, signal);
     } catch {
-      // Collection discovery is helpful but not required for item search.
+      // Collection discovery is helpful but not required for item search. A failed or malformed
+      // page no longer reaches here -- loadStacCollections stops the walk and returns what it
+      // gathered -- so this stays only as a backstop for anything it does not anticipate.
     }
   }
 

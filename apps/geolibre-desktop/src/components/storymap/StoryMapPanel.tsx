@@ -17,6 +17,7 @@ import {
   type StoryLayerOpacityChange,
   type StoryMap,
   type StorySlideMode,
+  useLayersWhen,
 } from "@geolibre/core";
 import type { MapEngine } from "@geolibre/map";
 import {
@@ -56,7 +57,8 @@ import {
 } from "lucide-react";
 import { saveTextFileWithFallback } from "../../lib/tauri-io";
 import { promptDownloadNameIfNeeded } from "../../hooks/useFileNamePrompt";
-import { buildStoryMapHtml } from "../../lib/storymap-export";
+import { buildStoryMapHtml, storyExportCandidates } from "../../lib/storymap-export";
+import { bakeStoryMarkerImages } from "../../lib/storymap-marker-images";
 import { StoryMapHandoutDialog } from "./StoryMapHandoutDialog";
 
 interface StoryMapPanelProps {
@@ -84,7 +86,8 @@ export function StoryMapPanel({ mapControllerRef }: StoryMapPanelProps) {
   const setPresenting = useAppStore((s) => s.setStorymapPresenting);
   const setComposing = useAppStore((s) => s.setStorymapComposing);
   const storymap = useAppStore((s) => s.storymap);
-  const layers = useAppStore((s) => s.layers);
+  // Layers are only read while the panel is open (it stays mounted closed).
+  const layers = useLayersWhen(open);
   const basemapStyleUrl = useAppStore((s) => s.basemapStyleUrl);
   const projection = useAppStore((s) => s.preferences.map.projection);
 
@@ -360,6 +363,8 @@ export function StoryMapPanel({ mapControllerRef }: StoryMapPanelProps) {
         layers: layersForExport,
         projection,
         navToggleLabel: t("storymap.toggleNav"),
+        // Bake only the layers the export can include, not the whole project.
+        markerImages: await bakeStoryMarkerImages(storyExportCandidates(story, layersForExport)),
       });
       const slug =
         (story.title || "story-map")

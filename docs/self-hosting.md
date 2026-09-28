@@ -50,10 +50,12 @@ apply:
   [`?url=` deep link](user-guide/embedding.md#url-parameters) is fetched the same
   way, so a project file behind your SSO layer loads when the app is served from
   that same origin, and fails with a network/CORS error when it is not.
-- **Content Security Policy.** The Docker image and the desktop app both allow
-  `https:` in `connect-src`, plus loopback for local development. A self-hosted
-  data server must therefore be reachable over **HTTPS** (plain `http://` works
-  only on `localhost` / `127.0.0.1`).
+- **Content Security Policy.** The Docker image allows `https:` in
+  `connect-src`, plus loopback for local development, so a self-hosted data
+  server reached through it must be over **HTTPS** (plain `http://` works only
+  on `localhost` / `127.0.0.1`). The desktop app additionally allows plain
+  `http:` to any host, so it can reach a self-hosted Ollama, SamGeo, or other
+  service on your local network without HTTPS (issue #2620).
 
 Putting GeoLibre and the data on one origin turns all five of these from
 configuration problems into non-problems.
@@ -140,6 +142,7 @@ Settings that matter for a private deployment:
 | --- | --- | --- |
 | `GEOLIBRE_SHARE_URL` | `off`, or your own server | `off` removes Share and the Project Gallery entirely, so no project can be published to `share.geolibre.app` by accident. A URL points both at your own [projects server](server-api.md). |
 | `GEOLIBRE_COLLAB_URL` | unset, or your own relay | Unset leaves [live collaboration](collaboration.md) dark. Set it to a `wss://` relay you run if you want multiplayer editing without the hosted relay. |
+| `GEOLIBRE_GEOLENS_URL` | unset for the image default, `same-origin`, your GeoLens URL, or `off` | Pre-fills and automatically connects the GeoLens plugin. The stock image defaults to the browser origin, which suits a GeoLens API co-located behind the same reverse proxy. A URL must be a server root without a query or fragment. `off` keeps the panel idle until the user chooses a server. The last successful server is remembered per browser. |
 | `GEOLIBRE_AUTH_USER` / `GEOLIBRE_AUTH_PASSWORD` | set, for a quick single credential | nginx Basic Auth over the app and the `/sidecar` API. One shared credential, not accounts. Use a real auth proxy for multi-user or SSO. |
 | `GEOLIBRE_CLERK_PUBLISHABLE_KEY` | unset, or a Clerk publishable key | Unset keeps the app public and does not load Clerk. A key requires individual users to sign in before the web interface renders; protect server APIs separately. |
 | `GEOLIBRE_CLERK_WAITLIST` | unset, or `1` alongside a Clerk key | Adds Clerk's waitlist form to the sign-in screen, so visitors can request access and you approve each one from the Clerk Dashboard. Leave unset for an invite-only ("restricted") instance, where nothing would act on a request. |

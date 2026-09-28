@@ -36,7 +36,8 @@ import {
   unwireVectorStoreSync,
   wireVectorStoreSync,
 } from "./vector-layer-sync";
-import { bridgeVectorControlToCesium, exceedsCesiumVectorLimit } from "./vector-cesium-bridge";
+import { bridgeVectorControlToStore, exceedsCesiumVectorLimit } from "./vector-cesium-bridge";
+import { applyVectorContainerColors, groupVectorContainerImports } from "./vector-container-group";
 import { readableStacLayerHref } from "./stac-signing";
 import type { FeatureCollection } from "geojson";
 
@@ -48,7 +49,7 @@ const VECTOR_PANEL_CLASS = "geolibre-vector-panel";
 // loads (the spatial extension's GDAL readers), but a guard so a hand-edited
 // project cannot point `sourcePath` at an arbitrary file on disk. Matched
 // case-insensitively against the end of the path. Keep this in sync with
-// `VECTOR_FILE_DIALOG_EXTENSIONS` in the desktop app's `tauri-io.ts` (the
+// `VECTOR_FILE_DIALOG_EXTENSIONS` in the desktop app's `file-io/paths.ts` (the
 // package boundary prevents sharing the list): a format loadable through the
 // picker but missing here would be dropped on reopen.
 const RESTORABLE_VECTOR_PATH =
@@ -246,6 +247,11 @@ export function closeVectorLayerPanel(app: GeoLibreAppAPI): void {
 export async function reloadVectorControlLayer(id: string): Promise<VectorLayerInfo | undefined> {
   if (!vectorControl) return undefined;
   return vectorControl.reloadLayer(id);
+}
+
+/** Read complete source features for an imported vector layer, including tiled layers. */
+export async function getVectorLayerGeoJSON(id: string): Promise<FeatureCollection | null> {
+  return vectorControl?.getLayerGeoJSON(id) ?? null;
 }
 
 /**
@@ -786,6 +792,25 @@ export async function addVectorLayersFromUrl(
   return addVectorLayersThroughControl(control, url, options);
 }
 
+/** Import a local container with the control's layer picker and rendering path. */
+export async function addVectorFileToMap(
+  app: GeoLibreAppAPI,
+  file: File,
+  options: VectorLayerOptions = {},
+): Promise<number> {
+  const control = await ensureVectorControl(app);
+  if (!control) throw new Error("The vector control is unavailable.");
+  const id = crypto.randomUUID();
+  try {
+    await control.addData(file, { ...options, id });
+  } catch (error) {
+    if (isVectorLayerSelectionCancelled(error)) return 0;
+    throw error;
+  }
+  return control.getLayers().filter((layer) => layer.id === id || layer.id.startsWith(`${id}-`))
+    .length;
+}
+
 /** The subset of VectorControl used to add a remote dataset (eases testing). */
 export type VectorUrlSink = Pick<VectorControl, "addData" | "getLayers">;
 
@@ -899,7 +924,8 @@ function createVectorControl(
     },
   });
 
-  if (app.getMapRenderer?.() === "cesium") bridgeVectorControlToCesium(control, app);
+  if (["cesium", "mapbox", "arcgis"].includes(app.getMapRenderer?.() ?? ""))
+    bridgeVectorControlToStore(control, app);
 
   for (const event of ["layeradded", "layerremoved", "layerupdated"] as const) {
     control.on(event, () => syncVectorLayersToStore(control));
@@ -911,6 +937,10 @@ function createVectorControl(
   const panelStateSyncHandler: VectorControlEventHandler = () => syncVectorLayersToStore(control);
   control.on("expand", panelStateSyncHandler);
   control.on("collapse", panelStateSyncHandler);
+  groupVectorContainerImports(control, (name, ids, style) => {
+    applyVectorContainerColors(ids, style);
+    useAppStore.getState().addLayerGroup(name, ids);
+  });
   wireVectorStoreSync(control);
   patchVectorControlOnRemove(control, panelStateSyncHandler);
 

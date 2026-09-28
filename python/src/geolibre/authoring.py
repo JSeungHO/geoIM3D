@@ -562,6 +562,8 @@ def set_popup(
     title_expression: str | None = None,
     body_expression: str | None = None,
     show_feature_id: bool | None = None,
+    max_width: int | None = None,
+    image_height: int | None = None,
     tooltip: Any = None,
     merge: bool = False,
 ) -> dict[str, Any]:
@@ -583,6 +585,8 @@ def set_popup(
         title_expression: MapLibre expression source producing the title.
         body_expression: MapLibre expression source producing the popup body.
         show_feature_id: ``False`` drops the synthetic ``id`` row.
+        max_width: Widest the click popup may draw, in CSS pixels.
+        image_height: Tallest an ``"image"`` field may draw, in CSS pixels.
         tooltip: Hover shorthand -- a property name, a sequence of names,
             ``True`` to flag every configured field, or ``False`` to turn the
             tooltip off.
@@ -606,6 +610,8 @@ def set_popup(
         title_expression=title_expression,
         body_expression=body_expression,
         show_feature_id=show_feature_id,
+        max_width=max_width,
+        image_height=image_height,
     )
     if merge:
         current = layer.get("popup")
@@ -733,7 +739,7 @@ def classify_layer(
 # -- camera and basemap -------------------------------------------------------
 
 
-_RENDERERS = frozenset({"maplibre", "cesium"})
+_RENDERERS = frozenset({"maplibre", "cesium", "mapbox", "arcgis"})
 
 
 def _is_renderer(value: Any) -> bool:
@@ -752,8 +758,8 @@ def secondary_panes(project: dict[str, Any]) -> list[dict[str, Any]]:
 
     Raises:
         ValueError: If the field is not a list of pane objects carrying a
-            unique string ``id`` and, when present, a ``maplibre``/``cesium``
-            ``viewKind`` (an omitted ``viewKind`` means ``maplibre``), e.g.
+            unique string ``id`` and, when present, a ``maplibre``/``cesium``/``mapbox``/
+            ``arcgis`` ``viewKind`` (an omitted ``viewKind`` means ``maplibre``), e.g.
             from a hand-edited project file.
     """
     panes = project.get("secondaryMapViews", [])
@@ -765,7 +771,7 @@ def secondary_panes(project: dict[str, Any]) -> list[dict[str, Any]]:
     ):
         raise ValueError(
             "secondaryMapViews must be a list of pane objects with an id "
-            "and a maplibre or cesium viewKind"
+            "and a maplibre, cesium, mapbox, or arcgis viewKind"
         )
     if len({p["id"] for p in panes}) != len(panes):
         raise ValueError("secondaryMapViews pane ids must be unique")
@@ -773,9 +779,9 @@ def secondary_panes(project: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def set_renderer(project: dict[str, Any], renderer: str, *, pane_id: str | None = None) -> str:
-    """Select ``maplibre`` or ``cesium`` for the primary map or a secondary pane."""
+    """Select ``maplibre``, ``cesium``, ``mapbox``, or ``arcgis`` for the primary map or a pane."""
     if not _is_renderer(renderer):
-        raise ValueError("renderer must be maplibre or cesium")
+        raise ValueError("renderer must be maplibre, cesium, mapbox, or arcgis")
     if pane_id is None:
         project["primaryRenderer"] = renderer
     else:
@@ -801,7 +807,9 @@ def set_map_layout(
     if view_kinds is not None and (
         len(view_kinds) != count or not all(_is_renderer(k) for k in view_kinds)
     ):
-        raise ValueError("view_kinds must contain one maplibre or cesium renderer per pane")
+        raise ValueError(
+            "view_kinds must contain one maplibre, cesium, mapbox, or arcgis renderer per pane"
+        )
     panes = copy.deepcopy(secondary_panes(project)[: count - 1])
     while len(panes) < count - 1:
         panes.append(

@@ -13,10 +13,29 @@
  * so a layer whose tiles load after a pan/zoom is picked up too.
  */
 import { useAppStore, type GeoLibreLayer } from "@geolibre/core";
-import { sourceId } from "@geolibre/map";
-import type { Map as MapLibreMap } from "maplibre-gl";
+import { sourceId, mapboxSourceId } from "@geolibre/map/style-layer-ids";
+import type { Feature } from "geojson";
+import type { MapEngine } from "@geolibre/map";
 import { useEffect } from "react";
 import type { createAppAPI } from "./usePlugins";
+
+/** Read-only tile query shared by MapLibre and Mapbox. */
+interface TileFeatureMap {
+  querySourceFeatures(sourceId: string, options?: { sourceLayer?: string }): Feature[];
+  on(event: "idle", listener: () => void): unknown;
+  off(event: "idle", listener: () => void): unknown;
+}
+
+/** Select the native tile-query map without treating Mapbox as MapLibre. */
+export function vectorTileMap(engine: MapEngine | null | undefined): TileFeatureMap | null {
+  const map = engine?.getMap();
+  if (map) return map;
+  return engine?.kind === "mapbox" &&
+    "getMapboxMap" in engine &&
+    typeof engine.getMapboxMap === "function"
+    ? engine.getMapboxMap()
+    : null;
+}
 
 /** Layer types drawn from vector tiles (no local features to inspect). */
 const VECTOR_TILE_TYPES = new Set<GeoLibreLayer["type"]>(["vector-tiles", "pmtiles", "mbtiles"]);
@@ -49,13 +68,17 @@ export function isVectorTileLayer(layer: GeoLibreLayer): boolean {
 
 /** A bounded sample of features currently loaded for a vector-tile layer. */
 export function loadedVectorTileFeatures(
-  map: MapLibreMap,
+  map: Pick<TileFeatureMap, "querySourceFeatures">,
   layer: GeoLibreLayer,
-): ReturnType<MapLibreMap["querySourceFeatures"]> {
+  renderer: string = "maplibre",
+): Feature[] {
   const sourceLayer = sourceLayerOf(layer);
   try {
     return map
-      .querySourceFeatures(liveSourceId(layer), sourceLayer ? { sourceLayer } : undefined)
+      .querySourceFeatures(
+        renderer === "mapbox" ? mapboxSourceId(layer.id) : liveSourceId(layer),
+        sourceLayer ? { sourceLayer } : undefined,
+      )
       .slice(0, 400);
   } catch {
     return []; // source not added yet
@@ -63,9 +86,7 @@ export function loadedVectorTileFeatures(
 }
 
 /** The dominant geometry kind among sampled tile features, or null. */
-function dominantGeometry(
-  features: ReturnType<MapLibreMap["querySourceFeatures"]>,
-): "point" | "line" | "polygon" | null {
+function dominantGeometry(features: Feature[]): "point" | "line" | "polygon" | null {
   if (!features || features.length === 0) return null;
   let polygon = 0;
   let line = 0;
@@ -84,7 +105,7 @@ function dominantGeometry(
 }
 
 /** Sorted attribute names present in sampled tile features. */
-function attributeFields(features: ReturnType<MapLibreMap["querySourceFeatures"]>): string[] {
+function attributeFields(features: Feature[]): string[] {
   const fields = new Set<string>();
   for (const feature of features) {
     for (const field of Object.keys(feature.properties ?? {})) fields.add(field);
@@ -92,6 +113,40 @@ function attributeFields(features: ReturnType<MapLibreMap["querySourceFeatures"]
   return Array.from(fields).sort((a, b) =>
     a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }),
   );
+}
+
+/**
+ * Whether a vector-tile layer still lacks its geometry type or attribute fields.
+ *
+ * @param layer - The layer to check.
+ * @returns `true` when the layer is a vector-tile layer awaiting a backfill.
+ */
+function needsGeometryBackfill(layer: GeoLibreLayer): boolean {
+  return (
+    VECTOR_TILE_TYPES.has(layer.type) &&
+    (typeof layer.metadata.geometryType !== "string" ||
+      !Array.isArray(layer.metadata.fields) ||
+      layer.metadata.fields.length === 0)
+  );
+}
+
+/**
+ * The ids and sources of the layers awaiting a backfill, joined into one
+ * comparable string.
+ *
+ * @param layers - The store's layers.
+ * @returns A newline-joined id list; empty when nothing is pending.
+ */
+function backfillPendingKey(layers: readonly GeoLibreLayer[]): string {
+  let key = "";
+  for (const layer of layers) {
+    // The source is part of the key: swapping a pending layer's source (same
+    // id, metadata still missing) must re-attach and backfill the new one.
+    if (needsGeometryBackfill(layer)) {
+      key += `${JSON.stringify([layer.id, layer.source, layer.metadata.sourceLayers])}\n`;
+    }
+  }
+  return key;
 }
 
 /**
@@ -106,28 +161,23 @@ export function useVectorTileGeometryBackfill(
   app: ReturnType<typeof createAppAPI>,
   mapReadyGeneration: number,
 ): void {
-  const layers = useAppStore((state) => state.layers);
+  // Subscribe to the ids still awaiting a backfill (a string, so it compares by
+  // value), not the whole `layers` array: the host (TopToolbar) would otherwise
+  // re-render on every edit of any layer. The effect only needs to re-attach
+  // when that set changes.
+  const pendingKey = useAppStore((state) => backfillPendingKey(state.layers));
 
   useEffect(() => {
-    const map = app.getMap?.();
+    const map = app.getMap?.() ?? app.getMapboxMap?.();
     if (!map) return;
 
-    const needsBackfill = () =>
-      useAppStore
-        .getState()
-        .layers.filter(
-          (layer) =>
-            VECTOR_TILE_TYPES.has(layer.type) &&
-            (typeof layer.metadata.geometryType !== "string" ||
-              !Array.isArray(layer.metadata.fields) ||
-              layer.metadata.fields.length === 0),
-        );
+    const needsBackfill = () => useAppStore.getState().layers.filter(needsGeometryBackfill);
 
     if (needsBackfill().length === 0) return;
 
     const backfill = (): void => {
       for (const layer of needsBackfill()) {
-        const features = loadedVectorTileFeatures(map, layer);
+        const features = loadedVectorTileFeatures(map, layer, app.getMapRenderer?.());
         if (features.length === 0) continue;
         const geometryType = dominantGeometry(features);
         const fields = attributeFields(features);
@@ -158,5 +208,5 @@ export function useVectorTileGeometryBackfill(
     return () => {
       map.off("idle", backfill);
     };
-  }, [app, layers, mapReadyGeneration]);
+  }, [app, pendingKey, mapReadyGeneration]);
 }

@@ -1,6 +1,7 @@
 import type { Feature, FeatureCollection, Polygon } from "geojson";
 import type { GeoJSONSource, Map as MapLibreMap, MapMouseEvent } from "maplibre-gl";
 import type { GeoLibreAppAPI, GeoLibrePlugin } from "../types";
+import { getStyleMap } from "./style-map";
 
 export const TILECODE_PLUGIN_ID = "maplibre-tilecode";
 
@@ -12,6 +13,9 @@ const LABEL_LAYER_ID = "geolibre-tilecode-grid-label";
 const SELECTED_SOURCE_ID = "geolibre-tilecode-selected-source";
 const SELECTED_FILL_LAYER_ID = "geolibre-tilecode-selected-fill";
 const SELECTED_LINE_LAYER_ID = "geolibre-tilecode-selected-line";
+const NEIGHBORS_SOURCE_ID = "geolibre-tilecode-neighbors-source";
+const NEIGHBORS_FILL_LAYER_ID = "geolibre-tilecode-neighbors-fill";
+const NEIGHBORS_LINE_LAYER_ID = "geolibre-tilecode-neighbors-line";
 const PARENT_SOURCE_ID = "geolibre-tilecode-parent-source";
 const PARENT_LINE_LAYER_ID = "geolibre-tilecode-parent-line";
 
@@ -133,7 +137,10 @@ let panelContainer: HTMLElement | null = null;
 /** The selected tile's tilecode, e.g. "z8x203y112" (encodes x, y, and zoom). */
 let selectedCell: string | null = null;
 
-let currentGrid: FeatureCollection<Polygon> = { type: "FeatureCollection", features: [] };
+let currentGrid: FeatureCollection<Polygon> = {
+  type: "FeatureCollection",
+  features: [],
+};
 let currentError: string | null = null;
 let cachedTextFont: string[] | null = null;
 let pendingRefresh: number | null = null;
@@ -436,8 +443,8 @@ export function tilecodeParentCell(cell: string): string | null {
 }
 
 /**
- * The tile plus its (up to 8) surrounding tiles: x wraps around the world,
- * y is clipped at the mercator top and bottom rows.
+ * The tile plus its (up to 4) edge neighbors (N/S/E/W). Diagonals are omitted.
+ * x wraps around the world; y is clipped at the mercator top and bottom rows.
  */
 export function tilecodeNeighborCells(cell: string): string[] {
   const tile = tilecodeToTile(cell);
@@ -445,14 +452,16 @@ export function tilecodeNeighborCells(cell: string): string[] {
   const [x, y, z] = tile;
   const size = 2 ** z;
   const ids = new Set<string>([cell]);
-  for (const dx of [-1, 0, 1]) {
-    for (const dy of [-1, 0, 1]) {
-      if (dx === 0 && dy === 0) continue;
-      const ny = y + dy;
-      if (ny < 0 || ny >= size) continue;
-      const nx = (((x + dx) % size) + size) % size;
-      ids.add(tileToTilecode([nx, ny, z]));
-    }
+  for (const [dx, dy] of [
+    [-1, 0],
+    [1, 0],
+    [0, -1],
+    [0, 1],
+  ] as const) {
+    const ny = y + dy;
+    if (ny < 0 || ny >= size) continue;
+    const nx = (((x + dx) % size) + size) % size;
+    ids.add(tileToTilecode([nx, ny, z]));
   }
   return [...ids];
 }
@@ -461,6 +470,8 @@ function removeLayers(activeMap: MapLibreMap): void {
   for (const id of [
     SELECTED_LINE_LAYER_ID,
     SELECTED_FILL_LAYER_ID,
+    NEIGHBORS_LINE_LAYER_ID,
+    NEIGHBORS_FILL_LAYER_ID,
     PARENT_LINE_LAYER_ID,
     LABEL_LAYER_ID,
     LINE_LAYER_ID,
@@ -468,7 +479,7 @@ function removeLayers(activeMap: MapLibreMap): void {
   ]) {
     if (activeMap.getLayer(id)) activeMap.removeLayer(id);
   }
-  for (const id of [SELECTED_SOURCE_ID, PARENT_SOURCE_ID, SOURCE_ID]) {
+  for (const id of [SELECTED_SOURCE_ID, NEIGHBORS_SOURCE_ID, PARENT_SOURCE_ID, SOURCE_ID]) {
     if (activeMap.getSource(id)) activeMap.removeSource(id);
   }
 }
@@ -481,13 +492,19 @@ function ensureLayers(): void {
       id: FILL_LAYER_ID,
       type: "fill",
       source: SOURCE_ID,
-      paint: { "fill-color": settings.fillColor, "fill-opacity": settings.fillOpacity },
+      paint: {
+        "fill-color": settings.fillColor,
+        "fill-opacity": settings.fillOpacity,
+      },
     });
     map.addLayer({
       id: LINE_LAYER_ID,
       type: "line",
       source: SOURCE_ID,
-      paint: { "line-color": settings.lineColor, "line-width": settings.lineWidth },
+      paint: {
+        "line-color": settings.lineColor,
+        "line-width": settings.lineWidth,
+      },
     });
     map.addLayer({
       id: LABEL_LAYER_ID,
@@ -507,8 +524,8 @@ function ensureLayers(): void {
       },
     });
   }
-  // Added before the selected layers so the selected tile stays on top of its
-  // (larger, surrounding) parent.
+  // Parent and neighbors are added before the selected layers so the clicked
+  // tile stays on top of its (larger) parent and neighbor outlines.
   if (!map.getSource(PARENT_SOURCE_ID)) {
     map.addSource(PARENT_SOURCE_ID, {
       type: "geojson",
@@ -519,8 +536,30 @@ function ensureLayers(): void {
       type: "line",
       source: PARENT_SOURCE_ID,
       paint: {
-        "line-color": "#f59e0b",
+        "line-color": "#b45309",
         "line-width": SELECTED_LINE_WIDTH * 2,
+        "line-dasharray": [2, 2],
+      },
+    });
+  }
+  if (!map.getSource(NEIGHBORS_SOURCE_ID)) {
+    map.addSource(NEIGHBORS_SOURCE_ID, {
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [] },
+    });
+    map.addLayer({
+      id: NEIGHBORS_FILL_LAYER_ID,
+      type: "fill",
+      source: NEIGHBORS_SOURCE_ID,
+      paint: { "fill-color": "#f59e0b", "fill-opacity": 0.15 },
+    });
+    map.addLayer({
+      id: NEIGHBORS_LINE_LAYER_ID,
+      type: "line",
+      source: NEIGHBORS_SOURCE_ID,
+      paint: {
+        "line-color": "#f59e0b",
+        "line-width": SELECTED_LINE_WIDTH,
         "line-dasharray": [2, 2],
       },
     });
@@ -585,16 +624,21 @@ function refresh(): void {
   if (panelContainer) renderPanel(panelContainer);
 }
 
-function selectedCells(): string[] {
-  if (!selectedCell) return [];
-  return settings.includeNeighbors ? tilecodeNeighborCells(selectedCell) : [selectedCell];
-}
-
 function updateSelectedSource(): void {
   const source = map?.getSource(SELECTED_SOURCE_ID) as GeoJSONSource | undefined;
   source?.setData({
     type: "FeatureCollection",
-    features: selectedCells().map((cell) => tilecodeCellFeature(cell)),
+    features: selectedCell ? [tilecodeCellFeature(selectedCell)] : [],
+  });
+  const neighborsSource = map?.getSource(NEIGHBORS_SOURCE_ID) as GeoJSONSource | undefined;
+  neighborsSource?.setData({
+    type: "FeatureCollection",
+    features:
+      settings.includeNeighbors && selectedCell
+        ? tilecodeNeighborCells(selectedCell)
+            .filter((cell) => cell !== selectedCell)
+            .map((cell) => tilecodeCellFeature(cell))
+        : [],
   });
   const parent = settings.includeParent && selectedCell ? tilecodeParentCell(selectedCell) : null;
   const parentSource = map?.getSource(PARENT_SOURCE_ID) as GeoJSONSource | undefined;
@@ -857,8 +901,12 @@ export const maplibreTilecodePlugin: GeoLibrePlugin = {
   id: TILECODE_PLUGIN_ID,
   name: "Tilecode",
   version: "1.0.0",
+  // Draws the grid through the Style Spec surface both 2D engines share
+  // (GeoJSON sources, fill/line/symbol layers, camera and pointer events), read
+  // through getStyleMap so the Mapbox renderer hosts it as well.
+  engines: ["maplibre", "mapbox"],
   activate: (app) => {
-    const activeMap = app.getMap?.();
+    const activeMap = getStyleMap(app);
     if (!activeMap) return false;
     map = activeMap;
     appRef = app;
@@ -900,7 +948,14 @@ export const maplibreTilecodePlugin: GeoLibrePlugin = {
     if (map && clickHandler) map.off("click", clickHandler);
     unsubscribeBasemap?.();
     unregisterPanel?.();
-    if (map) removeLayers(map);
+    // A renderer swap deactivates this plugin after the old map was removed;
+    // a removed mapbox-gl map throws from getLayer (its style is gone), and
+    // there is nothing left to remove.
+    try {
+      if (map) removeLayers(map);
+    } catch {
+      // Already torn down with the map.
+    }
     moveHandler = null;
     clickHandler = null;
     unsubscribeBasemap = null;

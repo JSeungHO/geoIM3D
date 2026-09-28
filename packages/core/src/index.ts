@@ -77,6 +77,18 @@ export {
   type VectorToolKind,
 } from "./store";
 export {
+  NO_LAYERS,
+  selectLayerById,
+  selectLayerIds,
+  selectLayerSummaries,
+  selectLayersWhen,
+  useLayer,
+  useLayerIds,
+  useLayerSummaries,
+  useLayersWhen,
+  type LayerSummary,
+} from "./layer-selectors";
+export {
   getHistoryCoalesceMs,
   setHistoryCoalesceMs,
   getMaxHistoryFeatureCount,
@@ -130,6 +142,7 @@ export {
   type ReverseGeocodeDisplay,
 } from "./geocoding";
 export {
+  getArcgisApiKey,
   getBuildEnvironment,
   getCesiumIonToken,
   getGoogleMapsApiKey,
@@ -145,6 +158,7 @@ export {
   CESIUM_ION_SOURCE_KIND,
   CESIUM_OSM_BUILDINGS_ASSET_ID,
   CESIUM_BING_AERIAL_ASSET_ID,
+  CESIUM_GOOGLE_PHOTOREALISTIC_ASSET_ID,
   cesiumIonAssetId,
   cesiumIonAssetKind,
   createCesiumIonLayer,
@@ -152,6 +166,8 @@ export {
   isCesiumOnlyLayer,
   parseCesiumIonAssetId,
   type CesiumIonAssetKind,
+  type CesiumIonQuickPick,
+  type CesiumIonQuickPickGroup,
   type CesiumIonLayerOptions,
 } from "./cesium-ion";
 export {

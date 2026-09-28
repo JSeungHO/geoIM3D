@@ -32,10 +32,12 @@ export interface GeoLibrePlugin {
    * Renderers this plugin supports. Defaults to `["maplibre"]`.
    * Engine-neutral plugins (e.g. catalog/service browsers that only write to
    * the GeoLibre store) or plugins with multi-engine adapters declare
-   * `["maplibre", "cesium"]`. The Plugins menu gates options against the active
+   * `["maplibre", "cesium"]`; plugins that stay on the Style Spec surface the
+   * two 2D engines share declare `["maplibre", "mapbox"]` (see "Supporting the
+   * Mapbox renderer" below). The Plugins menu gates options against the active
    * renderer.
    */
-  engines?: ("maplibre" | "cesium")[];
+  engines?: ("maplibre" | "mapbox" | "cesium" | "arcgis")[];
   /** Plugins in the same group cannot be active at the same time. */
   exclusiveGroup?: string;
   /** At least one name is required for handleUrlParameters to be called. */
@@ -71,6 +73,15 @@ export interface GeoLibreLayerSummary {
   type: string;
   visible: boolean;
   opacity: number;
+}
+
+export interface GeoLibreLayerGroupSummary {
+  id: string;
+  name: string;
+  parentId: string | null;  // null for a group at the panel root
+  visible: boolean;
+  opacity: number;
+  collapsed: boolean;
 }
 
 export interface GeoLibreSelection {
@@ -162,6 +173,12 @@ export interface GeoLibreAppAPI {
     layer: GeoLibreExternalNativeLayerRegistration,
   ) => void;
   unregisterExternalNativeLayer?: (id: string) => void;
+  // Layers-panel groups (folders). See "Layer groups" below.
+  addLayerGroup?: (name?: string, layerIds?: string[]) => string;
+  listLayerGroups?: () => GeoLibreLayerGroupSummary[];
+  moveLayersToGroup?: (layerIds: string[], groupId: string | null) => void;
+  moveLayerGroupToGroup?: (id: string, parentId: string | null) => void;
+  removeLayerGroup?: (id: string) => void;
   getActiveBasemap: () => string;
   onBasemapChange: (callback: (styleUrl: string) => void) => () => void;
   fetchArrayBuffer?: (url: string) => Promise<ArrayBuffer>;
@@ -171,6 +188,16 @@ export interface GeoLibreAppAPI {
   // getMap()?.getBounds() — see "Reading the viewport" below.
   getViewBounds?: () => [number, number, number, number] | null;
   getMap?: () => import("maplibre-gl").Map | null;
+  // The active primary renderer, including while its canvas is being replaced.
+  getMapRenderer?: () => "maplibre" | "mapbox" | "cesium" | "arcgis";
+  // The native mapbox-gl map, only while Mapbox is the primary renderer; null
+  // otherwise. Built-in plugins read the 2D map through getStyleMap(app), which
+  // falls back to this when getMap() is null — see "Supporting the Mapbox
+  // renderer" below.
+  getMapboxMap?: () => import("mapbox-gl").Map | null;
+  // The primary ArcGIS MapView or SceneView, or null on another renderer.
+  // The shared deck overlay hosts flat maps and local scenes only.
+  getArcgisView?: () => ReturnType<import("@geolibre/map").ArcgisEngine["getView"]>;
   // The primary Cesium globe's scene (namespace, widget, scene, camera, clock,
   // canvas, readView), or null when the primary map is not a globe. The globe's
   // counterpart to getMap for plugins that declare engines: ["maplibre", "cesium"].
@@ -412,6 +439,7 @@ change. If you also touched pages under `docs/`, build the site — CI runs
 | `maplibre-gl-dimensions`      | Adds Dimension tools (linear/angular CAD-style dimension lines, with optional vertex snapping)                     |
 | `maplibre-gl-geoagent`        | Adds GeoAgent map assistant controls                                                                                |
 | `maplibre-gl-lidar`           | Adds LiDAR controls                                                                                                 |
+| `geolibre-ign-lidar-hd`       | Searches IGN LiDAR HD tile coverage (WFS) and downloads point cloud (COPC LAZ) files. Its live-network test is opt-in via `RUN_LIVE_TESTS` (see `tests/ign-lidar-hd.test.ts`) |
 | `maplibre-gl-streetview`      | Adds street view controls                                                                                           |
 | `maplibre-gl-swipe`           | Adds map swipe controls                                                                                             |
 
@@ -529,6 +557,42 @@ These methods are a read-only query surface: calling them does not change the
 GeoLibre store. Plugins must also treat returned GeoJSON features as read-only
 and use host APIs such as `addGeoJsonLayer` when they need to add data.
 
+## Layer groups
+
+A plugin that adds several related layers can put them in a Layers-panel group (a folder) instead of leaving them loose at the panel root, and can nest one group inside another the same way a user can by hand.
+
+```typescript
+// Create a folder, optionally moving existing layers into it. Returns its id.
+const basins = app.addLayerGroup?.("Basins", [catchmentLayerId]) ?? null;
+
+// Append to a folder you created earlier rather than creating a second one
+// with the same name. A null group id lifts the layers back to the root.
+app.moveLayersToGroup?.([outletLayerId], basins);
+
+// Nest a folder inside another one. A null parent lifts it back to the root.
+const subBasins = app.addLayerGroup?.("Sub-basins");
+if (basins && subBasins) app.moveLayerGroupToGroup?.(subBasins, basins);
+
+// Remove the folder without removing the layers inside it.
+if (subBasins) app.removeLayerGroup?.(subBasins);
+```
+
+`moveLayerGroupToGroup` is the group-of-groups counterpart of `moveLayersToGroup`: the same reparenting the Layers panel's own "Move to group" menu performs. It is a no-op when either id is unknown, when the group is already in that parent, and when the move would make a group its own ancestor — the host refuses the cycle rather than corrupting the tree, so a plugin does not have to walk the parent chain itself.
+
+`addLayerGroup` is the only source of group ids for folders a plugin creates. To address a folder it did not create — one the user made, or one another plugin made — read the tree first:
+
+```typescript
+const groups = app.listLayerGroups?.() ?? [];
+const existing = groups.find((group) => group.name === "Basins");
+const roots = groups.filter((group) => group.parentId === null);
+```
+
+`listLayerGroups` returns every group with `parentId` set to the enclosing group's id, or `null` at the root, so the flat array describes the whole folder tree. It is the store's own group order, which is not the panel's: the panel re-orders a group after its parent for display, while a reparent leaves the array alone. Like the other read-only queries, calling it does not change the store.
+
+Group visibility and opacity are **combined** with each child layer's own: a hidden group hides its children on the map without touching their individual `visible` flags, and group opacity multiplies into each child's. `removeLayerGroup` through this API removes only the folder, never its contents: the layers it held move to the panel root, and any groups nested inside it are reparented to the removed folder's own parent.
+
+These methods are typed optional for forward-compatibility with host variants, so call them with optional chaining.
+
 ## Raster and tile layers
 
 `addGeoJsonLayer` registers vector data as a native layer. For raster and tile data there are three matching helpers — `addTileLayer` (XYZ), `addWmtsLayer` (WMTS), and `addWmsLayer` (WMS). Each returns the new layer's id, and the layer appears in the Layers panel with full opacity, reorder, and styling support and persists with the project, so a plugin no longer has to call `getMap().addSource()/addLayer()` directly (which leaves the layer invisible to GeoLibre's layer store).
@@ -563,6 +627,7 @@ export interface GeoLibreCogLayerOptions {
   nodata?: number; // pixel value rendered transparent
   opacity?: number; // default 1
   beforeLayerId?: string;
+  zoomTo?: boolean; // fit the map to the COG once loaded (default true)
 }
 ```
 
@@ -1003,7 +1068,7 @@ If instead you want a plugin compiled into the main JS bundle (no `plugin.json`,
 }
 ```
 
-The `entry` file must export a `GeoLibrePlugin` as either the default export or a named `plugin` export. The exported plugin `id`, `name`, and `version` must match `plugin.json`. The entry must be a self-contained `.js` or `.mjs` bundle because relative module imports inside the zip are not resolved by this first loader. The optional `engines` array declares which map renderers the plugin supports (`"maplibre" | "cesium"`, defaulting to `["maplibre"]`); plugins supporting the 3D globe declare `["maplibre", "cesium"]` so users can toggle them when Cesium is active.
+The `entry` file must export a `GeoLibrePlugin` as either the default export or a named `plugin` export. The exported plugin `id`, `name`, and `version` must match `plugin.json`. The entry must be a self-contained `.js` or `.mjs` bundle because relative module imports inside the zip are not resolved by this first loader. The optional `engines` array declares which of GeoLibre's four map renderers the plugin supports (`"maplibre" | "mapbox" | "cesium" | "arcgis"`, defaulting to `["maplibre"]`). Plugins supporting the native globe add `"cesium"`; plugins that stay on the Style Spec surface can add `"mapbox"` (see "Supporting the Mapbox renderer"); and plugins with an ArcGIS-native adapter can add `"arcgis"` (see the [ArcGIS renderer](arcgis-renderer.md)). The host suspends a plugin when the selected engine is not in this list and restores it when a compatible engine becomes active.
 
 External plugin entries are executed with `import(URL.createObjectURL(...))`, which is why the desktop CSP in `tauri.conf.json` includes `blob:` in `script-src`. Removing `blob:` from `script-src` breaks external plugin loading. Combined with `'unsafe-eval'`, this means code that can create a blob URL can execute scripts, which is acceptable because external plugins are trusted local files installed by the user.
 
@@ -1129,6 +1194,74 @@ The assistant refreshes its tools before the next prompt while retaining its
 conversation history. Plugin callbacks execute plugin-authored code, like a
 panel button; they should use the app API to update layers and other app state.
 
+### Progressive tool disclosure
+
+While active plugins register at most 12 tools in total, every plugin tool is
+sent to the model in full on every request. Past that, the assistant stops
+sending plugin tool schemas up front, so the tool list does not grow with every
+installed plugin. The system prompt instead lists each plugin tool under a
+`Plugin tools:` heading, grouped by plugin, with its name and a one-line summary
+(the first sentence of the first line of its `description`, capped at 160
+characters). The model loads the tools it needs with the host tool
+`load_plugin_tools`, passing exact tool names or a plugin id to load all of that
+plugin's tools. Loaded tools become callable in the same turn and stay loaded
+for the rest of the conversation. GeoLibre's own tools are always sent.
+
+Because the summary is all the model sees before it loads a tool, **open each
+`description` with a sentence that says what the tool does and which data it
+covers**, so tools with the same shape in different plugins or domains (for
+example `query_*_database`) can be told apart without their schemas. Guidance
+registered with `registerAssistantGuidance` is still sent in full and can name
+your tools; the model loads them before calling them.
+
+### Assistant guidance
+
+A tool's description is read only after the model has already decided which
+tool to call; that decision is driven by the system prompt. When a plugin's
+tools need rules about *when* to use them (for example, "call
+`get_pm25_ranking` directly, never as a table function inside `run_sql`"),
+register that text as guidance and the host appends it to the assistant's
+system prompt:
+
+```js
+let disposeGuidance;
+
+export default {
+  id: "air-quality",
+  name: "Air quality",
+  version: "1.0.0",
+  activate(app) {
+    // ...register tools as above...
+    disposeGuidance = app.registerAssistantGuidance?.(
+      [
+        "For PM2.5 questions, call plugin_11_air-quality_get_pm25_ranking directly",
+        "with its own arguments. Never wrap it in run_sql or use it as a FROM clause;",
+        "it is not a SQL table function.",
+      ].join(" "),
+    );
+  },
+  deactivate() {
+    disposeGuidance?.();
+    disposeGuidance = undefined;
+  },
+};
+```
+
+Guidance is appended under a `Plugin guidance:` heading after GeoLibre's own
+prompt, in registration order, each block labelled `[plugin <id>]` with the
+plugin that registered it, and never replaces or edits the host text. The
+heading tells the model the text only governs when and how to call the plugin's
+own tools and that the host guidelines still apply. The text itself is not
+filtered: like plugin code, it is trusted once the plugin is loaded, so only
+install plugins you trust. It must be a non-empty string of at most 4000 characters; identical text from the
+same plugin replaces the earlier registration instead of repeating it. Like
+tools, guidance is activation-only: the host injects the plugin owner, ignores
+any owner argument a plugin supplies, removes the text on deactivation, failed
+activation, and plugin removal, and the app handed to the other lifecycle
+callbacks omits the method. The assistant recomposes its system prompt together
+with its tools before the next prompt, keeping the conversation history.
+Feature-detect the method for older hosts.
+
 The host exposes `app.getMapRenderer()` to read the current primary renderer.
 Engine declarations are enforced by the plugin manager for activation, URL
 parameters, project restoration, and delayed control registration, as well as
@@ -1218,6 +1351,94 @@ if (values.length === 0) return;  // window missed the raster entirely
 Pass a `signal` for anything driven by camera movement and abort the previous
 read when a new one starts, so a fast pan does not queue a backlog of reads
 whose results land out of order.
+
+### Supporting the Mapbox renderer
+
+The Mapbox renderer (`docs/mapbox-renderer.md`) draws with Mapbox GL JS, whose
+runtime API is the Style Spec surface MapLibre grew out of: sources and style
+layers (`addSource`, `addLayer`, `setPaintProperty`, `setLayoutProperty`,
+`setFilter`, `getSource`, `getLayer`, `getStyle`, `moveLayer`), images
+(`addImage`, `updateImage`), the camera (`getBounds`, `getZoom`, `easeTo`,
+`jumpTo`, `fitBounds`, `project`, `unproject`), events (`on` / `off` / `once`),
+the DOM (`getCanvas`, `getContainer`) and picking (`queryRenderedFeatures`).
+`IControl` is the same contract, and `app.addMapControl` mounts a MapLibre-typed
+control on the Mapbox map through an adapter that aliases the
+`.maplibregl-ctrl-*` corner classes; the docked right-panel bridge the Web
+Services panels use mounts through the same door. A plugin that stays on that
+surface declares `engines: ["maplibre", "mapbox"]` and users can toggle it from
+the Plugins menu on either 2D engine; the plugin manager re-activates it
+against the new map on a renderer swap.
+
+`app.getMap()` is `null` on Mapbox by design, so such a plugin must not reach
+the map through it alone — that is the same silent no-op the globe rule above
+guards against. Built-in plugins read the map through
+`getStyleMap(app)` (`packages/plugins/src/plugins/style-map.ts`): the MapLibre
+map when there is one, else the Mapbox map through MapLibre's types (the cast
+the engine itself applies when hosting a control). External plugins do the
+equivalent with `app.getMap?.() ?? app.getMapboxMap?.()`. The cast is honest
+only for the shared surface; a mapbox-gl map has none of MapLibre's extensions:
+
+- `addProtocol` / `removeProtocol` — `pmtiles://`, COG and other custom tile
+  protocols do not load, which is why the COG raster control stays
+  MapLibre-only (Overture Maps instead asks `maplibre-gl-overture-maps` for
+  plain `.pmtiles` URLs, which mapbox-gl 3.30+ reads through its own tile
+  provider). `setTransformRequest` — Mapbox takes `transformRequest`
+  only at construction, so GeoLens private rasters (whose API key is injected
+  per request) are MapLibre-only. Custom `CustomLayerInterface` layers
+  (`capabilities.customLayers` is false on Mapbox). The terrain camera helpers
+  (`calculateCameraOptionsFromCameraLngLatAltRotation`,
+  `getCenterClampedToGround`): Mapbox kept the free camera those replaced, so
+  the Flight Simulator flies it there through `setFreeCameraOptions` and a
+  `MercatorCoordinate` carrying the altitude. The `transform` / `_camera`
+  internals some upstream controls read.
+- `getProjection()` differs in shape: `{ type: "globe" }` on MapLibre,
+  `{ name: "globe" }` on Mapbox; `setProjection` takes `{ type }` on MapLibre
+  and a name string (or `{ name }`) on Mapbox. Read both.
+- MapLibre's `Popup` and `Marker` classes imported from `maplibre-gl` do not
+  work on a mapbox-gl map: their update path reads `map._camera.transform` and
+  throws on the first move. A plugin that needs markers on both engines
+  positions a DOM element through `map.project` instead, as the Elements panel
+  does. When an upstream library insists on constructing the engine's own
+  classes, `app.getMapboxGl()` hands out the mapbox-gl namespace: the Geo Editor
+  feeds its `Marker` / `LngLatBounds` to Geoman's map adapter and its `Popup` to
+  `maplibre-gl-geo-editor`'s `createPopup` option (`geo-editor-mapbox.ts`),
+  Street View feeds its `Marker` to `maplibre-gl-streetview`'s `createMarker`
+  option, Layer Swipe feeds its `Map` to `maplibre-gl-swipe`'s `createMap`
+  option, which builds the clipped comparison pane, and GeoAgent hands
+  `maplibre-gl-geoagent`'s `mapEngine` option the whole namespace
+  (`geoagent-map-engine.ts`) — not a narrowed subset, because its
+  `run_maplibre_script` tool passes it straight to the script it runs. The
+  pattern upstream is the same each time: the library keeps the element and its
+  styling and takes only the engine class that positions it.
+  A plugin that constructs a *second* Mapbox map must also pass
+  `app.getMapboxAccessToken()` in its constructor options: mapbox-gl reads its
+  token from the global `mapboxgl.accessToken` unless handed one, and GeoLibre
+  sets it per map, so a second map built without it renders nothing and logs
+  every frame.
+
+The same frontend audit that scans Cesium-capable plugins scans every plugin
+declaring Mapbox support, follows its relative imports, and fails on a read
+through `app.getMap()` that does not fall back to `getMapboxMap` on the same
+line (mark a deliberate MapLibre-detection branch with
+`engine-audit-allow: getMap-mapbox`) and on any of the MapLibre-only members
+above (`engine-audit-allow: maplibre-only` for a call behind a runtime engine
+check). Both opt-outs are scoped to the call, on its line or just above it.
+
+Store layers work the same way on both 2D engines. A raster or WMS layer a
+control created natively and mirrored into the store as an external native
+layer (`externalNativeLayer: true` with `metadata.sourceId` and
+`nativeLayerIds`, as the Web Services, basemap, Esri Wayback and USGS LiDAR
+index controls do) is adopted by the Mapbox engine under those native ids — it
+is not drawn twice, store visibility/opacity/removal apply to the control's
+layer, and a style reload rebuilds it, exactly as MapLibre's layer-sync does.
+A store layer the engine cannot compile from its `source` — a
+`registerExternalNativeLayer` record with no drawable source, or a kind whose
+pixels only the plugin can produce (`time-slider`, `timelapse`,
+`openaerialmap-footprints`) — counts as plugin-owned (`isMapboxPluginLayer` in
+`packages/map/src/mapbox-layers.ts`): the engine leaves drawing to the plugin
+and only mirrors the store's visibility and opacity onto the plugin's
+`nativeLayerIds` through the shared paint builders, honouring
+`metadata.controlOwnsPaint`.
 
 ### What a MapLibre control gets on the globe
 

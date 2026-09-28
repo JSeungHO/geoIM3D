@@ -1,6 +1,6 @@
 {
   "name": "geolibre",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "private": true,
   "description": "GeoLibre: a free and open-source, lightweight, cloud-native GIS platform for visualizing, exploring, and analyzing geospatial data. It runs in the web browser, on the desktop, on mobile, and inside Jupyter notebooks, all while keeping your data local and private",
   "workspaces": [
@@ -17,7 +17,7 @@
     "build:embed": "node scripts/build-embed.mjs",
     "build:chrome-extension": "node scripts/package-chrome-extension.mjs",
     "typecheck": "npm run build",
-    "lint": "eslint apps packages workers tests",
+    "lint": "eslint apps packages workers tests --max-warnings 264",
     "test": "npm run test:frontend",
     "test:frontend": "node --import tsx --test tests/*.test.ts",
     "test:frontend:coverage": "node scripts/coverage-check.mjs",
@@ -25,10 +25,14 @@
     "test:backend:coverage": "python -m pytest backend/geolibre_server/tests --cov=geolibre_server --cov-report=term-missing --cov-fail-under=55",
     "test:worker": "npm run typecheck -w geolibre-viewer-worker && npm run typecheck -w geolibre-collab-worker && npm run typecheck -w geolibre-collab-node && npm test -w geolibre-collab-node && npm run typecheck -w geolibre-tiles-worker && npm run typecheck -w geolibre-ai-proxy-worker",
     "test:e2e": "playwright test",
+    "test:e2e:core": "playwright test --project=core",
+    "test:e2e:features": "playwright test --project=features",
     "check:rust": "cargo check --manifest-path apps/geolibre-desktop/src-tauri/Cargo.toml",
     "audit:ci": "node scripts/audit-check.mjs",
     "i18n:tools": "node --import tsx scripts/gen-processing-i18n-catalog.mjs",
     "i18n:tools:check": "node --import tsx scripts/gen-processing-i18n-catalog.mjs --check",
+    "typecheck:fast": "npm run build -w @geolibre/embed && tsc -b apps/geolibre-desktop --noEmit",
+    "ci:web": "npm run lint && npm run i18n:tools:check && npm run typecheck:fast && npm run test:frontend",
     "ci": "npm run lint && npm run i18n:tools:check && npm run build && npm run test:frontend:coverage && npm run test:worker && npm run test:backend:coverage && npm run check:rust",
     "tauri": "npm run tauri -w geolibre-desktop",
     "tauri:dev": "npm run tauri dev -w geolibre-desktop",
@@ -44,16 +48,27 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.63.0",
-    "@types/node": "^26.4.1",
-    "eslint": "^10.10.0",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^26.6.2",
+    "esbuild": "^0.28.1",
+    "eslint": "^10.11.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^7.1.1",
     "fflate": "^0.8.3",
+    "happy-dom": "^20.14.5",
     "linkedom": "^0.18.13",
     "tsx": "^4.23.13",
-    "typescript-eslint": "^8.69.0"
+    "typescript-eslint": "^8.70.0"
   },
   "overrides": {
+    "@loaders.gl/compression": {
+      "fflate": "^0.8.3"
+    },
     "brace-expansion": "^5.0.9",
+    "eslint-plugin-jsx-a11y": {
+      "eslint": "$eslint"
+    },
     "fast-uri": "^3.1.7",
     "filelist": "^2.0.2",
     "maplibre-gl": "^6.3.0",
@@ -61,6 +76,9 @@
       "undici": "^7.29.0"
     },
     "sweepline-intersections": "^1.5.0",
+    "texture-compressor": {
+      "image-size": "^2.0.4"
+    },
     "uuid": "^14.0.0"
   },
   "engines": {

@@ -91,8 +91,7 @@ interface ViewMenuProps {
 /**
  * The View menu: step backward/forward through the map's viewport history (the
  * way a browser's back/forward buttons walk page history) and reset the
- * camera's rotation/tilt. Hidden on narrow screens (via
- * `chrome.secondaryButtonClass`) so the menu bar stays one row.
+ * camera's rotation/tilt.
  */
 export function ViewMenu({
   chrome,
@@ -149,7 +148,7 @@ export function ViewMenu({
   // Always offered while the globe owns the primary map, whatever the UI
   // profile says: this submenu is the only way back to the 2D map, and hiding
   // it there would strand a user on a renderer whose tools are all disabled.
-  const showRenderingEngine = show("view.renderingEngine") || primaryRenderer === "cesium";
+  const showRenderingEngine = show("view.renderingEngine") || primaryRenderer !== "maplibre";
   // Zoom, viewport history, orientation, Set View, and the Google Maps/Earth
   // hand-offs read or animate the camera — which every engine has. They were
   // greyed out on the globe only because there was no engine behind the ref to
@@ -183,7 +182,7 @@ export function ViewMenu({
     >
       <DropdownMenuTrigger asChild>
         <Button
-          className={chrome.secondaryButtonClass}
+          className={chrome.buttonClass}
           variant="ghost"
           size={chrome.buttonSize}
           aria-label={t("toolbar.menu.view")}
@@ -338,11 +337,21 @@ export function ViewMenu({
               <DropdownMenuRadioGroup
                 value={primaryRenderer}
                 onValueChange={(value: string) =>
-                  setPrimaryRenderer(value === "cesium" ? "cesium" : "maplibre")
+                  setPrimaryRenderer(
+                    value === "cesium" || value === "mapbox" || value === "arcgis"
+                      ? value
+                      : "maplibre",
+                  )
                 }
               >
                 <DropdownMenuRadioItem value="maplibre">
                   <span className="whitespace-nowrap">{t("toolbar.item.rendererMapLibre")}</span>
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="mapbox">
+                  <span className="whitespace-nowrap">{t("toolbar.item.rendererMapbox")}</span>
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="arcgis">
+                  <span className="whitespace-nowrap">{t("toolbar.item.rendererArcgis")}</span>
                 </DropdownMenuRadioItem>
                 <DropdownMenuRadioItem value="cesium">
                   <span className="whitespace-nowrap">{t("toolbar.item.rendererCesium")}</span>

@@ -165,7 +165,8 @@ export function AddNetcdfDialog({ open, appApi, onOpenChange }: AddNetcdfDialogP
   const addImageOverlayLayer = useAppStore((state) => state.addImageOverlayLayer);
   // The same catalogue the Style panel's Raster symbology offers, so the choice
   // made here and the choice made after the fact are drawn from one list.
-  const rampOptions = useColormapRamps();
+  // Sampled only while the dialog is open: it stays mounted while closed.
+  const rampOptions = useColormapRamps(open);
   // Local file first: it is the common case, and it is the path that renders the
   // pixels itself (see `useImagePath`) rather than through the Zarr control.
   const [source, setSource] = useState<"url" | "file">(DEFAULT_SOURCE);
@@ -232,8 +233,13 @@ export function AddNetcdfDialog({ open, appApi, onOpenChange }: AddNetcdfDialogP
   // added as an image overlay rather than drawn by @carbonplan/zarr-layer, whose
   // `shift_x` uniform lookup throws on drivers that eliminate it (Mesa, so most
   // Linux Intel/AMD machines), leaving the layer permanently blank. See
-  // composeColormappedImage.
-  const useImagePath = dataset !== null && !rgbMode && !hasTimeAxis;
+  // composeColormappedImage. Local cubes with a time axis go through the Zarr
+  // control on both 2D engines (@carbonplan/zarr-layer hosts on Mapbox GL as
+  // well). A remote NetCDF/HDF file has no layer-refs builder — its reader
+  // serves grids, not a store — so a remote cube renders its selected time
+  // slice as an image; without this, submit had no branch for it and added
+  // nothing.
+  const useImagePath = dataset !== null && !rgbMode && (!hasTimeAxis || dataset.kind === "remote");
 
   const closeOpenFile = () => {
     const open = openFileRef.current;

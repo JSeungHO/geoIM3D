@@ -176,14 +176,14 @@ describe("local Gaussian Splat file drop", () => {
 
   it("wires the Tauri native drop handler through splat partitioning before DuckDB", () => {
     const shell = readFileSync(
-      new URL("../apps/geolibre-desktop/src/components/layout/DesktopShell.tsx", import.meta.url),
+      new URL("../apps/geolibre-desktop/src/hooks/desktop-shell/useFileDrop.ts", import.meta.url),
       "utf8",
     );
     const nativeStart = shell.indexOf(".onDragDropEvent(async (event)");
     const browserStart = shell.indexOf("const handleDragEnter", nativeStart);
     const nativeHandler = shell.slice(nativeStart, browserStart);
     const partitionIndex = nativeHandler.indexOf("partitionGaussianSplatPaths(");
-    const duckDbIndex = nativeHandler.indexOf("loadDroppedVectorPaths(restPaths");
+    const duckDbIndex = nativeHandler.indexOf("loadDroppedVectorPaths(containers.remaining");
 
     assert.ok(nativeStart >= 0 && browserStart > nativeStart);
     assert.ok(partitionIndex >= 0, "native handler must partition SOG/PLY paths");
@@ -206,7 +206,7 @@ describe("local Gaussian Splat file drop", () => {
 
   it("passes the current shared map center to browser and native splat loads", () => {
     const shell = readFileSync(
-      new URL("../apps/geolibre-desktop/src/components/layout/DesktopShell.tsx", import.meta.url),
+      new URL("../apps/geolibre-desktop/src/hooks/desktop-shell/useFileDrop.ts", import.meta.url),
       "utf8",
     );
 

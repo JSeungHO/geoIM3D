@@ -1,11 +1,39 @@
+export { MapboxCanvas, type MapboxCanvasProps } from "./MapboxCanvas";
+export { ArcgisCanvas, type ArcgisCanvasProps } from "./ArcgisCanvas";
+export {
+  ArcgisEngine,
+  ARCGIS_CAPABILITIES,
+  ARCGIS_DECK_CAPABILITIES,
+  type ArcgisEngineMessages,
+} from "./arcgis-engine";
+export {
+  arcgisRasterEffect,
+  arcgisUnsupportedStyleSettings,
+  isArcgisSupportedLayer,
+  type ArcgisUnsupportedStyleSetting,
+} from "./arcgis-layers";
+export {
+  ARCGIS_BASEMAP_STYLES,
+  DEFAULT_ARCGIS_BASEMAP,
+  isArcgisBasemapStyle,
+  planArcgisBasemap,
+} from "./arcgis-basemap";
+export { ARCGIS_SDK_CDN, ARCGIS_SDK_HOST, ARCGIS_SDK_VERSION } from "./arcgis-sdk";
+export { MapboxEngine, MAPBOX_CAPABILITIES } from "./mapbox-engine";
+export {
+  isMapboxSupportedLayer,
+  mapboxUnsupportedStyleSettings,
+  styleUsesUnsupportedSource,
+  type MapboxUnsupportedStyleSetting,
+} from "./mapbox-layers";
 export {
   MapCanvas,
   type MapCanvasIdentifyAllLabels,
   type MapCanvasProps,
   type MapCanvasRasterIdentify,
   type MapCanvasRasterIdentifyResult,
-  type MapDiagnosticEvent,
 } from "./MapCanvas";
+export type { MapDiagnosticEvent } from "./map-diagnostic";
 export {
   FEATURE_SELECTION_EVENT,
   featuresIntersectingPolygon,
@@ -23,6 +51,7 @@ export { getPrimaryCesiumControlHost } from "./cesium-control-host";
 // `CesiumCanvas`'s dynamic import exists to keep it off.
 export type { CesiumWidgetControlLabels } from "./cesium-widget-controls";
 export { isCesiumSupportedLayerType } from "./cesium-layer-sync";
+export { classifyLayer, type LayerKind } from "./layer-kind";
 export { arcgisVectorStyle } from "./arcgis-vector-style";
 export {
   CESIUM_CAPABILITIES,
@@ -64,6 +93,7 @@ export {
 export {
   MAPLIBRE_CAPABILITIES,
   type BuiltInMapControl,
+  type CameraIdleEvent,
   type FlyToCamera,
   type IdentifiedFeature,
   type ManualPlacementOptions,
@@ -109,6 +139,7 @@ export {
   lineDecorationColorValue,
 } from "./derived-geometry";
 export { ResetBearingControl } from "./reset-bearing-control";
+export { MapboxGlobeControl, type MapboxGlobeControlOptions } from "./mapbox-globe-control";
 export { MaptoolkitLogoControl } from "./maptoolkit-logo-control";
 export {
   LAYER_OPACITY_FOR_BLEND,
@@ -137,6 +168,7 @@ export {
 export {
   isMapboxStyleUrl,
   loadMapboxStyle,
+  MAPBOX_BASEMAP_STYLES,
   mapboxAccessTokenFromStyleUrl,
   redactMapboxStyleUrl,
   resolveMapboxInternalUrl,
@@ -185,4 +217,4 @@ export {
   type QmlExportResult,
 } from "./qml-export";
 export { applyQmlImport, parseQml, type QmlImportResult } from "./qml-import";
-export { loadMarkerSvgImage } from "./markers";
+export { loadMarkerSvgImage, markerIconSizeValue, renderMarkerCanvas } from "./markers";

@@ -28,13 +28,16 @@ export function exceedsCesiumVectorLimit(
 }
 
 /**
- * Retain the vector panel's presentation records while Cesium renders their
- * geometry through the app store. This adapter belongs only to VectorControl;
- * the globe host still rejects unsupported MapLibre operations by other controls.
+ * Retain the vector panel's presentation records while a non-MapLibre renderer
+ * (the Cesium globe or the Mapbox engine) renders their geometry through the
+ * app store. The bridge is renderer-agnostic: it fakes the MapLibre `Map`
+ * surface the control expects and syncs the materialized layers to the store,
+ * which every engine draws. This adapter belongs only to VectorControl; the
+ * host engines still reject unsupported MapLibre operations by other controls.
  * The overrides cover every map call maplibre-gl-vector 0.11 makes beyond the
  * host's own events, canvas, and container (re-check on a version bump).
  */
-export function bridgeVectorControlToCesium(control: VectorControl, app: GeoLibreAppAPI): void {
+export function bridgeVectorControlToStore(control: VectorControl, app: GeoLibreAppAPI): void {
   const sources = new Map<string, { serialize: () => SourceSpecification }>();
   const layers = new Map<string, LayerSpecification>();
   const images = new Set<string>();

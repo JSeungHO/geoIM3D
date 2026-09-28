@@ -1,4 +1,3 @@
-import { listAssistantTools } from "@geolibre/plugins/assistant-tool-registry";
 import {
   DEFAULT_LAYER_STYLE,
   OPENFREEMAP_BASEMAPS,
@@ -13,12 +12,24 @@ import { tool } from "@strands-agents/sdk";
 import type { FeatureCollection } from "geojson";
 import { z } from "zod";
 import { projectedGeoJsonCrs } from "../crs-utils";
-import { inferPropertyColumns } from "../pglite-sql";
 import { consoleDeps, runConsoleCode } from "../pyodide/pyodide-console";
-import { cleanStatement, maskSqlLiterals, previewLayerTables, runSqlQuery } from "../sql-workspace";
+import { cleanStatement, maskSqlLiterals, runSqlQuery } from "../sql-workspace";
 import { createXyzTileUrlTemplate } from "../xyz-url";
 import { findNamedTileBasemap, NAMED_TILE_BASEMAPS } from "./basemaps";
+import {
+  CATALOG_MAX_KEYWORD_CANDIDATES,
+  mergeCatalogMatches,
+  selectCatalogTools,
+  type CatalogMatch,
+  type CatalogTool,
+} from "./catalog-select";
+import { describeLayers, SQL_GEOMETRY_SOURCE_METADATA_KEY, summarizeLayers } from "./layer-summary";
 import { buildSymbologyStyle } from "./symbology";
+import { readRuntimeEnv } from "./provider";
+import { guardMapForScript } from "./map-script-guard";
+import { resolveSystemOneEndpoint } from "./system-one";
+import { typesafeFetch } from "./typesafe-fetch";
+import { searchWhiteboxTools } from "../whitebox-tool-search";
 import { webSearch } from "./web-search";
 
 /** Dependencies the assistant tools need beyond the global store. */
@@ -38,16 +49,6 @@ export interface AssistantToolDeps {
     tool: "run_python" | "run_maplibre_js";
     code: string;
   }) => Promise<boolean>;
-}
-
-/** A short, model-facing description of one layer (no feature data leaked). */
-interface LayerSummary {
-  id: string;
-  name: string;
-  type: string;
-  geometryType: string | null;
-  featureCount: number;
-  fields: { name: string; type: string }[];
 }
 
 /**
@@ -113,6 +114,46 @@ const MAX_MODEL_ALGORITHM_MATCHES = 25;
 
 /** Full detail for at most this many `list_whitebox_tools` search hits. */
 const MAX_WHITEBOX_MATCHES = 25;
+
+/**
+ * Rank the catalog against a search, semantically first and literally after.
+ *
+ * The two searches answer different questions. The substring filter is exact
+ * and free and is the whole answer when the model already knows the catalog's
+ * word for something; the Jev lookup understands a description of the operation
+ * and is the only thing that answers at all when it does not. Merging them —
+ * ranked semantic hits, then everything the filter found — is strictly better
+ * than either: over 20 raster requests phrased in the user's own words the
+ * filter alone found the right tool 0 times and the merge found it 19 times,
+ * 19 of them first, while for single-keyword searches the merge lifted the
+ * right tool into first place 15 times out of 20 against the filter's 8.
+ *
+ * The lookup needs a credential the deployment may not have, so its absence is
+ * the ordinary case: `selectCatalogTools` returns null and this degrades to
+ * exactly the filter that shipped before it.
+ */
+async function rankWhiteboxSearch(
+  query: string,
+  tools: readonly CatalogTool[],
+  keywordMatches: readonly CatalogTool[],
+): Promise<CatalogMatch[] | null> {
+  const endpoint = resolveSystemOneEndpoint(readRuntimeEnv());
+  if (!endpoint) return null;
+  try {
+    return await selectCatalogTools({
+      query,
+      tools,
+      keywordMatches: keywordMatches.slice(0, CATALOG_MAX_KEYWORD_CANDIDATES),
+      endpoint,
+      fetchImpl: await typesafeFetch(),
+    });
+  } catch (error) {
+    // `selectCatalogTools` resolves rather than throws for every failure it
+    // knows about; this covers the transport import, which does not.
+    console.warn("[GeoLibre] Assistant catalog selection was unavailable:", error);
+    return null;
+  }
+}
 
 /** Statement keywords that write data or have side effects. */
 const SQL_WRITE_KEYWORDS =
@@ -207,56 +248,6 @@ function concatBytes(chunks: Uint8Array[], total: number): Uint8Array {
   return out;
 }
 
-/** Detect a layer's geometry family from its first feature. */
-function geometryTypeOf(layer: GeoLibreLayer): string | null {
-  return layer.geojson?.features?.[0]?.geometry?.type ?? null;
-}
-
-/** Summarize a layer's identity and schema without exposing row data. */
-function summarizeLayer(layer: GeoLibreLayer): LayerSummary {
-  const features = layer.geojson?.features ?? [];
-  return {
-    id: layer.id,
-    name: layer.name,
-    type: layer.type,
-    geometryType: geometryTypeOf(layer),
-    featureCount: features.length,
-    fields: features.length
-      ? inferPropertyColumns(features).map((column) => ({
-          name: column.name,
-          type: column.type,
-        }))
-      : [],
-  };
-}
-
-/**
- * Build a compact, model-facing description of the current layers and the SQL
- * table names they map to. Used to seed the agent's system prompt with names
- * and schemas only — never full datasets.
- */
-export function describeLayers(layers: GeoLibreLayer[]): string {
-  if (layers.length === 0) return "No layers are currently loaded.";
-  // previewLayerTables returns one entry per layer in order, so align by index —
-  // keying by name would collapse layers that share a name onto one table.
-  const tables = previewLayerTables(layers);
-  return layers
-    .map((layer, index) => {
-      const summary = summarizeLayer(layer);
-      const table = tables[index]?.tableName;
-      const fields = summary.fields.map((field) => `${field.name}:${field.type}`).join(", ");
-      return [
-        `- "${layer.name}" (${summary.type}`,
-        summary.geometryType ? `, ${summary.geometryType}` : "",
-        `, ${summary.featureCount} features`,
-        table ? `, SQL table ${table}` : "",
-        `)`,
-        fields ? ` fields: ${fields}` : "",
-      ].join("");
-    })
-    .join("\n");
-}
-
 /** Resolve a layer by id first, then case-insensitive name match. */
 function resolveLayer(reference: string): GeoLibreLayer | null {
   const layers = useAppStore.getState().layers;
@@ -303,10 +294,13 @@ function asFeatureCollection(data: unknown): FeatureCollection {
  * by mutating MapLibre directly — so all changes flow through the app's one-way
  * data flow and are covered by undo/redo.
  *
+ * Plugin-contributed tools are not included: the agent scopes those separately
+ * (see `tool-scope.ts`), since they may be deferred behind `load_plugin_tools`.
+ *
  * @param deps Map-controller accessor for camera tools.
- * @returns The tools to register on the agent.
+ * @returns The host tools, which are always sent to the model.
  */
-export function createAssistantTools(deps: AssistantToolDeps): Tool[] {
+export function createHostAssistantTools(deps: AssistantToolDeps): Tool[] {
   const store = () => useAppStore.getState();
   // Tool results are serialized to the model; the data we return is JSON-safe by
   // construction, so this asserts the shape against Strands' strict JSONValue.
@@ -328,12 +322,8 @@ export function createAssistantTools(deps: AssistantToolDeps): Tool[] {
       : Promise.resolve(true);
 
   /** The current map viewport as [west, south, east, north], or null. */
-  const viewBbox = (): [number, number, number, number] | null => {
-    const map = deps.getMapController()?.getMap();
-    if (!map) return null;
-    const b = map.getBounds();
-    return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
-  };
+  const viewBbox = (): [number, number, number, number] | null =>
+    deps.getMapController()?.getViewBounds() ?? null;
 
   /** Reduce a STAC bbox (2D or 3D) to a 2D [w, s, e, n]. */
   const bbox2d = (bbox: number[]): [number, number, number, number] | null =>
@@ -378,15 +368,15 @@ export function createAssistantTools(deps: AssistantToolDeps): Tool[] {
   const listLayers = tool({
     name: "list_layers",
     description:
-      "List the layers currently loaded in the map, with their id, type, geometry, feature count, attribute field names, and the SQL table name to use in run_sql. Call this before referring to a layer.",
+      "List the layers currently loaded in the map, with their id, type, geometry, feature count, attribute field names, and the SQL table name (sqlTable) to use in run_sql; sqlTable is null for layers that cannot be queried. Call this before referring to a layer.",
     inputSchema: z.object({}),
-    callback: () => json({ layers: store().layers.map(summarizeLayer) }),
+    callback: () => json({ layers: summarizeLayers(store().layers) }),
   });
 
   const runSql = tool({
     name: "run_sql",
     description:
-      "Run a single read-only DuckDB Spatial SQL statement against the loaded layers (use the SQL table names from list_layers) and/or remote files. Returns column names, the row count, and a small preview. Set add_as_layer to add a geometry result to the map.",
+      "Run a single read-only DuckDB Spatial SQL statement against the loaded layers (use the SQL table names from list_layers) and/or remote files. Returns column names, the row count, and a small preview. Set add_as_layer to add a geometry result to the map. A geometry result that reads no layer, table or file comes back with geometrySource 'literal' and a warning: its geometry was typed into the SQL, so never present it as data.",
     inputSchema: z.object({
       sql: z.string().describe("A single SELECT statement (no trailing semicolon needed)."),
       add_as_layer: z
@@ -403,17 +393,37 @@ export function createAssistantTools(deps: AssistantToolDeps): Tool[] {
         throw new Error("Only read-only SELECT/WITH queries are allowed.");
       }
       const result = await runSqlQuery(input.sql, store().layers);
+      // An empty source list means the query reads no layer, table or file, so
+      // its geometry was typed into the SQL (ST_Point(...), a WKT literal)
+      // rather than queried. Still allowed, since "drop a point at Bangkok" is a
+      // fair request, but flagged so neither the model nor a later tool call
+      // mistakes the result for real data (issue #2582).
+      const literalGeometry = Boolean(result.geojson) && result.dataSources?.length === 0;
       let addedLayerId: string | null = null;
       if (input.add_as_layer && result.geojson) {
         addedLayerId = store().addGeoJsonLayer(
           input.layer_name?.trim() || "SQL result",
           result.geojson,
         );
+        if (literalGeometry) {
+          const layer = store().layers.find((entry) => entry.id === addedLayerId);
+          store().updateLayer(addedLayerId, {
+            metadata: { ...layer?.metadata, [SQL_GEOMETRY_SOURCE_METADATA_KEY]: "literal" },
+          });
+        }
       }
       return json({
         columns: result.columns,
         rowCount: result.rowCount,
         hasGeometry: Boolean(result.geojson),
+        ...(result.geojson && result.dataSources ? { dataSources: result.dataSources } : {}),
+        ...(literalGeometry
+          ? {
+              geometrySource: "literal",
+              warning:
+                "This query reads no loaded layer, table or file: its geometry comes from literal values written into the SQL, not from queried data. Do not present it as data.",
+            }
+          : {}),
         preview: result.rows.slice(0, 10),
         addedLayerId,
       });
@@ -513,13 +523,19 @@ export function createAssistantTools(deps: AssistantToolDeps): Tool[] {
 
   const addTileLayer = tool({
     name: "add_tile_layer",
-    description: `Add an XYZ raster tile basemap/layer to the map. Use a known name (${NAMED_TILE_BASEMAPS.map((basemap) => basemap.id).join(", ")}) or a custom XYZ url template containing {z}/{x}/{y}. The layer is placed underneath existing layers so it acts as a basemap.`,
+    description: `Add an XYZ raster tile basemap/layer to the map. Use a known name (${NAMED_TILE_BASEMAPS.map(
+      (basemap) => basemap.id,
+    ).join(
+      ", ",
+    )}) or a custom XYZ url template containing {z}/{x}/{y}. The layer is placed underneath existing layers so it acts as a basemap.`,
     inputSchema: z.object({
       basemap: z
         .string()
         .optional()
         .describe(
-          `Known basemap name, one of: ${NAMED_TILE_BASEMAPS.map((basemap) => basemap.id).join(", ")}.`,
+          `Known basemap name, one of: ${NAMED_TILE_BASEMAPS.map((basemap) => basemap.id).join(
+            ", ",
+          )}.`,
         ),
       url: z
         .string()
@@ -540,7 +556,9 @@ export function createAssistantTools(deps: AssistantToolDeps): Tool[] {
           attribution = attribution || found.attribution;
         } else if (!url) {
           throw new Error(
-            `Unknown basemap "${input.basemap}". Known: ${NAMED_TILE_BASEMAPS.map((basemap) => basemap.id).join(", ")} — or pass a url.`,
+            `Unknown basemap "${input.basemap}". Known: ${NAMED_TILE_BASEMAPS.map(
+              (basemap) => basemap.id,
+            ).join(", ")} — or pass a url.`,
           );
         }
       }
@@ -605,7 +623,9 @@ export function createAssistantTools(deps: AssistantToolDeps): Tool[] {
 
   const setBasemap = tool({
     name: "set_basemap",
-    description: `Switch the basemap. Accepts a known name (${OPENFREEMAP_BASEMAPS.map((basemap) => basemap.id).join(", ")}) or a full style URL.`,
+    description: `Switch the basemap. Accepts a known name (${OPENFREEMAP_BASEMAPS.map(
+      (basemap) => basemap.id,
+    ).join(", ")}) or a full style URL.`,
     inputSchema: z.object({
       basemap: z.string().describe("A basemap name/id or a style URL."),
     }),
@@ -653,7 +673,7 @@ export function createAssistantTools(deps: AssistantToolDeps): Tool[] {
   const runPython = tool({
     name: "run_python",
     description:
-      "Run a Python snippet in the in-app Pyodide runtime for data/compute tasks (numpy, pandas, etc.). A `geolibre` object is in scope to drive the live map, e.g. `geolibre.get_center()` or `geolibre.add_geojson(name, data)`; `await geolibre.load_package('geopandas')` installs packages. Returns captured stdout and the repr of the last expression. The first call boots the Python runtime and can take several seconds. Prefer run_sql for querying layer attributes.",
+      "Run a Python snippet in the in-app Pyodide runtime for data/compute tasks (numpy, pandas, etc.). A `geolibre` object is in scope to drive the live map, e.g. `geolibre.get_center()` or `geolibre.add_geojson(data, name=\"Layer\")`; `await geolibre.load_package('geopandas')` installs packages. Returns captured stdout and the repr of the last expression. The first call boots the Python runtime and can take several seconds. Prefer run_sql for querying layer attributes.",
     inputSchema: z.object({
       code: z.string().describe("Python source to execute."),
     }),
@@ -679,13 +699,16 @@ export function createAssistantTools(deps: AssistantToolDeps): Tool[] {
   const runMaplibreJs = tool({
     name: "run_maplibre_js",
     description:
-      "Fallback for tasks with no dedicated tool (e.g. globe projection, terrain, sky, custom paint/layout properties, controls, markers). Runs a small JavaScript snippet against the live map. The snippet is a function body with `map` (the MapLibre GL JS map) and `maplibregl` (the MapLibre GL JS module, e.g. `maplibregl.TerrainControl`, `maplibregl.Marker`) in scope, and may `return` a JSON-serializable value. Example — switch to globe: `map.setProjection({ type: 'globe' })`. Prefer dedicated tools when one exists; changes made here bypass the store and are NOT undoable.",
+      "Fallback for tasks with no dedicated tool (e.g. globe projection, terrain, sky, custom paint/layout properties, controls, markers). Runs a small JavaScript snippet against the live map. The snippet is a function body with `map` (the MapLibre GL JS map) and `maplibregl` (the MapLibre GL JS module, e.g. `maplibregl.TerrainControl`, `maplibregl.Marker`) in scope, and may `return` a JSON-serializable value. Example — switch to globe: `map.setProjection({ type: 'globe' })`. Prefer dedicated tools when one exists; changes made here bypass the store and are NOT undoable. map.setStyle() and map.remove() are blocked: use set_basemap to change the basemap and remove_layer to remove a layer.",
     inputSchema: z.object({
       code: z.string().describe("JavaScript function body; `map` and `maplibregl` are in scope."),
     }),
     callback: async (input) => {
       if (!(await approveCodeExecution("run_maplibre_js", input.code))) {
-        return json({ ok: false, error: "The user declined to run this code." });
+        return json({
+          ok: false,
+          error: "The user declined to run this code.",
+        });
       }
       const map = deps.getMapController()?.getMap();
       if (!map) throw new Error("The map is not ready yet.");
@@ -694,7 +717,9 @@ export function createAssistantTools(deps: AssistantToolDeps): Tool[] {
         map: unknown,
         maplibregl: unknown,
       ) => unknown;
-      const result = run(map, maplibregl);
+      // Whole-map mutations (setStyle, remove) are blocked: they bypass the
+      // store, so the Layers panel and undo would stop matching the map.
+      const result = run(guardMapForScript(map), maplibregl);
       // Coerce to a JSON-safe value so non-serializable returns (e.g. the map
       // object itself) don't blow up the tool result.
       let safe: JSONValue = null;
@@ -710,7 +735,7 @@ export function createAssistantTools(deps: AssistantToolDeps): Tool[] {
   const applySymbology = tool({
     name: "apply_symbology",
     description:
-      "Color a vector layer by one of its attribute fields using a graduated (numeric) or categorized (text) color ramp. Use list_layers to find field names and color ramps like reds, blues, viridis.",
+      "Color a vector layer by one of its attribute fields using a graduated (numeric) or categorized (text) color ramp. Use list_layers to find field names and color ramps like reds, blues, viridis. For thresholds fixed by an external standard (air-quality bands, agency severity levels), pass `breaks` instead of class_count/scheme. Returns the stops actually applied, which can be fewer than the classes asked for.",
     inputSchema: z.object({
       layer: z.string().describe("Layer name or id."),
       property: z.string().describe("Attribute field to style by."),
@@ -718,6 +743,12 @@ export function createAssistantTools(deps: AssistantToolDeps): Tool[] {
       color_ramp: z.string().optional().describe("Color ramp id (e.g. reds, viridis)."),
       class_count: z.number().optional().describe("Number of classes for graduated mode."),
       scheme: z.enum(["equal-interval", "quantile"]).optional(),
+      breaks: z
+        .array(z.number())
+        .optional()
+        .describe(
+          "Explicit class lower bounds for graduated mode, e.g. [0, 25, 37, 50, 90]. Overrides class_count and scheme. Each value opens a class that runs up to the next one; the last class is open-ended above. At least two distinct values are required; past 12 the map still paints every break but the Style panel's class count reads 12.",
+        ),
     }),
     callback: (input) => {
       const layer = resolveLayer(input.layer);
@@ -728,13 +759,20 @@ export function createAssistantTools(deps: AssistantToolDeps): Tool[] {
         colorRamp: input.color_ramp,
         classCount: input.class_count,
         scheme: input.scheme,
+        breaks: input.breaks,
       });
       store().setLayerStyle(layer.id, style);
+      const stops = style.vectorStyleStops ?? [];
+      // Report the stops, not just how many there are: duplicate breaks collapse
+      // (see createGraduatedClassBreaks), so a request for 5 classes can land on
+      // 3, and explicit breaks are worth echoing back so the caller can confirm
+      // the thresholds that reached the map are the ones it asked for.
       return json({
         layerId: layer.id,
         mode: input.mode,
         property: input.property,
-        classes: style.vectorStyleStops?.length ?? 0,
+        classes: stops.length,
+        stops: stops.map((stop) => ({ value: stop.value, color: stop.color })),
       });
     },
   });
@@ -775,26 +813,29 @@ export function createAssistantTools(deps: AssistantToolDeps): Tool[] {
   const listWhiteboxTools = tool({
     name: "list_whitebox_tools",
     description:
-      "List Whitebox raster/terrain tools that can run in the browser (hydrology such as fill_depressions, d8_pointer, flow accumulation and extract_streams; terrain such as slope, aspect, hillshade; LiDAR; image processing; raster↔vector conversion) with their exact parameter names, kinds and defaults. The catalog runs to ~1000 tools, so pass `search` to filter by name, id or category ('slope', 'stream', 'hydro'); without it you get the category names to search within. Call this before run_whitebox_tool.",
+      "List Whitebox raster/terrain tools that can run in the browser (hydrology such as fill_depressions, d8_pointer, flow accumulation and extract_streams; terrain such as slope, aspect, hillshade; LiDAR; image processing; raster↔vector conversion) with their exact parameter names, kinds and defaults. The catalog runs to ~1000 tools, so always pass `search`; without it you get the category names to search within. `search` is matched both literally and by meaning, so describe the operation in a phrase ('remove sinks from a DEM so water drains off the edge') rather than guessing one keyword — a description finds tools whose names share no words with it. Results are ranked best-first and each carries a `match` of 'semantic' or 'keyword'. Call this before run_whitebox_tool.",
     inputSchema: z.object({
       search: z
         .string()
         .optional()
-        .describe("Filter by tool name, id or category, e.g. 'slope' or 'hydrology'."),
+        .describe(
+          "What you are looking for: a description of the operation ('separate bare earth returns from vegetation in a point cloud') or a keyword ('slope').",
+        ),
     }),
     callback: async (input) => {
       const tools = await (await getScripting()).listWhiteboxTools();
-      const query = input.search?.trim().toLowerCase();
+      const query = input.search?.trim();
       if (query) {
-        const matches = tools.filter((item) =>
-          `${item.name} ${item.id} ${item.category}`.toLowerCase().includes(query),
-        );
-        return json({
-          search: input.search,
-          matched: matches.length,
-          truncated: matches.length > MAX_WHITEBOX_MATCHES,
-          tools: matches.slice(0, MAX_WHITEBOX_MATCHES),
-        });
+        // Shared with the Whitebox toolbox dialog's filter box: a name match
+        // always outranks a tool that merely mentions the query in its summary.
+        const keywordMatches = searchWhiteboxTools(tools, query, (item) => ({
+          name: `${item.name} ${item.id} ${item.category}`,
+          identifiers: [item.id, item.name],
+          summary: item.description,
+        }));
+        const selected = await rankWhiteboxSearch(query, tools, keywordMatches);
+        const merged = mergeCatalogMatches(selected, keywordMatches, tools, MAX_WHITEBOX_MATCHES);
+        return json({ search: query, selected: selected !== null, ...merged });
       }
       // ~1000 tools with full parameter lists is far too much to serialize, so
       // an unfiltered call returns the categories to search within instead.
@@ -807,7 +848,7 @@ export function createAssistantTools(deps: AssistantToolDeps): Tool[] {
         categories: [...categories]
           .sort((a, b) => a[0].localeCompare(b[0]))
           .map(([category, count]) => ({ category, tools: count })),
-        hint: "Call again with `search` (a category, a tool name, or a keyword like 'stream') to get exact ids and parameters.",
+        hint: "Call again with `search` to get exact ids and parameters. A phrase describing the operation ('extract the stream network from a DEM') searches the catalog by meaning; a category or tool name still matches literally.",
       });
     },
   });
@@ -1056,7 +1097,6 @@ export function createAssistantTools(deps: AssistantToolDeps): Tool[] {
   });
 
   return [
-    ...listAssistantTools(),
     listLayers,
     runSql,
     addLayerFromUrl,

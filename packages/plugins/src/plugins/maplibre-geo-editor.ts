@@ -6,10 +6,15 @@ import {
   useAppStore,
   type GeoLibreLayer,
 } from "@geolibre/core";
-import { Geoman, defaultLayerStyles } from "@geoman-io/maplibre-geoman-free";
+import type { Geoman } from "@geoman-io/maplibre-geoman-free";
+import {
+  mapboxFillLayerId,
+  mapboxLineLayerId,
+  mapboxSourceId,
+} from "@geolibre/map/style-layer-ids";
 import type { Feature, FeatureCollection } from "geojson";
 import type * as maplibregl from "maplibre-gl";
-import { GeoEditor, type GeoEditorOptions } from "maplibre-gl-geo-editor";
+import type { GeoEditor, GeoEditorOptions } from "maplibre-gl-geo-editor";
 import {
   type EditedFeatureProperties,
   type GeometryEditTrackingOptions,
@@ -23,6 +28,7 @@ import {
   reconcileEditedFeatures,
   tagFeatureKeys,
 } from "./geo-editor-geometry";
+import type { MapboxGl } from "./geo-editor-mapbox";
 import {
   type ViewImportBaseline,
   type ViewImportExport,
@@ -31,6 +37,7 @@ import {
   captureViewImportBaseline,
   tagViewFeaturesForImport,
 } from "./geo-editor-view-import";
+import { getStyleMap } from "./style-map";
 import type { GeoLibreAppAPI, GeoLibreMapControlPosition, GeoLibrePlugin } from "../types";
 import { GEO_EDITOR_PLUGIN_ID } from "../plugin-ids";
 
@@ -138,6 +145,48 @@ const GEO_EDITOR_OPTIONS = {
   | "onSelectionChange"
 >;
 
+/**
+ * The editor's heavy dependencies (Geoman and maplibre-gl-geo-editor, ~1.1 MB)
+ * are imported on first activation rather than at app startup.
+ */
+interface GeoEditorModules {
+  geoman: typeof import("@geoman-io/maplibre-geoman-free");
+  editor: typeof import("maplibre-gl-geo-editor");
+  mapbox: typeof import("./geo-editor-mapbox");
+}
+
+let geoEditorModules: GeoEditorModules | null = null;
+let geoEditorModulesPromise: Promise<GeoEditorModules> | null = null;
+// Bumped by deactivate so an activation still awaiting the imports does not
+// mount the editor after the plugin was turned off again.
+let geoEditorActivationGeneration = 0;
+
+/**
+ * Loads the editor's packages on first use. A failed load (e.g. offline) is
+ * dropped so the next activation retries the import.
+ *
+ * @returns The loaded modules.
+ */
+function loadGeoEditorModules(): Promise<GeoEditorModules> {
+  if (geoEditorModulesPromise) return geoEditorModulesPromise;
+  const promise = Promise.all([
+    import("@geoman-io/maplibre-geoman-free"),
+    import("maplibre-gl-geo-editor"),
+    import("./geo-editor-mapbox"),
+  ]).then(([geoman, editor, mapbox]) => {
+    // When the stale-chunk handler cancels Vite's preload error, the import
+    // resolves to undefined instead of rejecting; treat that as a failure.
+    if (!geoman || !editor || !mapbox) throw new Error("The Geo Editor packages failed to load");
+    geoEditorModules = { geoman, editor, mapbox };
+    return geoEditorModules;
+  });
+  geoEditorModulesPromise = promise;
+  promise.catch(() => {
+    if (geoEditorModulesPromise === promise) geoEditorModulesPromise = null;
+  });
+  return promise;
+}
+
 let geoEditorControl: GeoEditor | null = null;
 let sketchesLayerId: string | null = null;
 let geoEditorStoreUnsubscribe: (() => void) | null = null;
@@ -213,36 +262,27 @@ export const maplibreGeoEditorPlugin: GeoLibrePlugin = {
   id: GEO_EDITOR_PLUGIN_ID,
   name: "GeoEditor",
   version: "0.9.0",
+  // Geoman and the toolbar both stay on the Style Spec surface the two 2D
+  // engines share once their few MapLibre object constructions are swapped for
+  // mapbox-gl's (see `adaptGeomanToMapbox` and the `createPopup` option below).
+  engines: ["maplibre", "mapbox"],
   activate: (app: GeoLibreAppAPI) => {
-    pluginActive = true;
-    appApi = app;
-
-    if (!geoEditorControl) {
-      geoEditorControl = new GeoEditor(getGeoEditorOptions());
-      const map = app.getMap?.();
-      if (map) {
-        geomanInstance = new Geoman(map, {
-          layerStyles: geomanLayerStylesForMap(map),
-          settings: { useControlsUi: false },
-        });
-        geoEditorControl.setGeoman(geomanInstance);
-        bindGeomanEditSync(map);
-      }
-    }
-
-    const added = app.addMapControl(geoEditorControl, geoEditorPosition);
-    if (!added) {
-      geoEditorControl = null;
-      pluginActive = false;
-      appApi = null;
-      return false;
-    }
-
-    bindSketchesStoreSync();
-    void restoreSketchesLayerToEditor();
-    setTimeout(() => geoEditorControl?.expand(), 0);
+    if (geoEditorControl || geoEditorModules) return activateGeoEditor(app);
+    const generation = ++geoEditorActivationGeneration;
+    return loadGeoEditorModules().then(
+      () => {
+        // Deactivated (or re-activated) while the packages loaded.
+        if (generation !== geoEditorActivationGeneration) return false;
+        return activateGeoEditor(app);
+      },
+      (error: unknown) => {
+        console.error("[GeoLibre] Failed to load the Geo Editor", error);
+        return false;
+      },
+    );
   },
   deactivate: (app: GeoLibreAppAPI) => {
+    geoEditorActivationGeneration += 1;
     // Persist any in-progress geometry edit and restore the editor to Sketches
     // mode before tearing the control down. The write-back is synchronous; only
     // the sketches restore is async, which is moot since the control is removed
@@ -275,9 +315,68 @@ export const maplibreGeoEditorPlugin: GeoLibrePlugin = {
   },
 };
 
-function getGeoEditorOptions(): GeoEditorOptions {
+/**
+ * Creates (when needed) and mounts the editor. Runs once the editor's packages
+ * are loaded.
+ *
+ * @param app - The GeoLibre app API.
+ * @returns False when the editor could not be mounted.
+ */
+function activateGeoEditor(app: GeoLibreAppAPI): false | undefined {
+  pluginActive = true;
+  appApi = app;
+
+  if (!geoEditorControl) {
+    const { geoman, editor, mapbox } = geoEditorModules!;
+    const mapboxMap = app.getMapboxMap?.() ?? null;
+    const mapboxGl = mapboxMap ? (app.getMapboxGl?.() ?? null) : null;
+    // A Mapbox map without the mapbox-gl namespace cannot host Geoman: its
+    // deferred init would run MapLibre's marker and image paths on the
+    // mapbox-gl map and fail. Refuse the activation rather than half-mount.
+    if (mapboxMap && !mapboxGl) {
+      pluginActive = false;
+      appApi = null;
+      return false;
+    }
+    geoEditorControl = new editor.GeoEditor(getGeoEditorOptions(mapboxGl));
+    const map = getStyleMap(app);
+    if (map) {
+      geomanInstance = new geoman.Geoman(map, {
+        layerStyles: geomanLayerStylesForMap(map, mapboxGl !== null),
+        settings: { useControlsUi: false },
+      });
+      // Before anything else: Geoman's deferred init loads its marker image
+      // through the adapter member this swaps.
+      if (mapboxGl && mapboxMap) {
+        mapbox.adaptGeomanToMapbox(geomanInstance, mapboxGl, mapboxMap);
+      }
+      geoEditorControl.setGeoman(geomanInstance);
+      bindGeomanEditSync(map);
+    }
+  }
+
+  const added = app.addMapControl(geoEditorControl, geoEditorPosition);
+  if (!added) {
+    geoEditorControl = null;
+    pluginActive = false;
+    appApi = null;
+    return false;
+  }
+
+  bindSketchesStoreSync();
+  void restoreSketchesLayerToEditor();
+  setTimeout(() => geoEditorControl?.expand(), 0);
+  return undefined;
+}
+
+function getGeoEditorOptions(mapboxGl: MapboxGl | null): GeoEditorOptions {
   return {
     ...GEO_EDITOR_OPTIONS,
+    // Only when present: an explicit `createPopup: undefined` would override
+    // the control's MapLibre default rather than fall through to it.
+    ...(mapboxGl
+      ? { createPopup: geoEditorModules!.mapbox.mapboxGeoEditorPopupFactory(mapboxGl) }
+      : {}),
     position: geoEditorPosition,
     attributePanelTitle: geoEditorLabels.attributePanelTitle,
     attributeSchema: {
@@ -343,21 +442,31 @@ function unbindGeomanEditSync(): void {
   geomanEditSyncMap = null;
 }
 
-function geomanLayerStylesForMap(map: maplibregl.Map) {
-  const layerStyles = structuredClone(defaultLayerStyles);
+function geomanLayerStylesForMap(map: maplibregl.Map, mapbox: boolean) {
+  const layerStyles = structuredClone(geoEditorModules!.geoman.defaultLayerStyles);
+  const textFont = textFontForMapStyle(map, mapbox ? MAPBOX_TEXT_FONT : MAPLIBRE_TEXT_FONT);
 
   for (const sourceLayers of Object.values(layerStyles.text_marker ?? {})) {
     for (const layer of sourceLayers) {
       if (layer.type !== "symbol") continue;
       layer.layout = {
         ...layer.layout,
-        "text-font": textFontForMapStyle(map),
+        "text-font": textFont,
       };
     }
   }
 
   return layerStyles;
 }
+
+/** The font stack the default MapLibre basemaps serve glyphs for. */
+const MAPLIBRE_TEXT_FONT = ["Noto Sans Regular"];
+/**
+ * Mapbox Standard's root style carries no symbol layer to borrow a font from,
+ * and Mapbox's glyph server has no Noto Sans; these are the faces it serves
+ * (the same fallback the DGGS grid labels use on Mapbox).
+ */
+const MAPBOX_TEXT_FONT = ["Open Sans Regular", "Arial Unicode MS Regular"];
 
 // Operators that can start a data-driven text-font expression. A bare
 // ["get", "font"] is all strings, so an every(typeof === "string") check
@@ -382,7 +491,7 @@ const FONT_EXPRESSION_OPERATORS = new Set([
   "format",
 ]);
 
-function textFontForMapStyle(map: maplibregl.Map): string[] {
+function textFontForMapStyle(map: maplibregl.Map, fallback: string[]): string[] {
   for (const styleLayer of map.getStyle().layers ?? []) {
     if (styleLayer.type !== "symbol") continue;
     // Icon-only symbol layers may carry a glyph/sprite font unsuited to text.
@@ -403,7 +512,7 @@ function textFontForMapStyle(map: maplibregl.Map): string[] {
       return fonts as string[];
     }
   }
-  return ["Noto Sans Regular"];
+  return fallback;
 }
 
 function isSketchesLayer(layer: GeoLibreLayer): boolean {
@@ -843,7 +952,7 @@ function vectorSourceIdForLayer(layer: GeoLibreLayer): string | null {
 function writeBackToVectorSource(layer: GeoLibreLayer, collection: FeatureCollection): void {
   const sourceId = vectorSourceIdForLayer(layer);
   if (!sourceId) return;
-  const source = appApi?.getMap?.()?.getSource(sourceId) as
+  const source = getStyleMap(appApi)?.getSource(sourceId) as
     | { setData?: (data: FeatureCollection) => void }
     | undefined;
   if (source && typeof source.setData === "function") {
@@ -862,9 +971,34 @@ async function ensureGeomanReady(): Promise<void> {
   if (!geoman || geoman.loaded) return;
   try {
     await geoman.waitForGeomanLoaded();
-  } catch {
-    // If readiness cannot be awaited, the caller's load will no-op safely.
+  } catch (error) {
+    // The caller's load will no-op safely, but a readiness wait that rejects
+    // is not expected, so leave a trace in the diagnostics log.
+    console.warn("Geo Editor: waiting for Geoman to load failed", error);
   }
+}
+
+// Messages Geoman and maplibre-gl-geo-editor throw when an import runs before
+// Geoman's async init has finished (no instance yet, or no sources yet).
+const GEOMAN_NOT_READY_MESSAGES = ["Missing source", "Geoman not initialized"];
+
+/**
+ * Logs a failed Geoman import unless it is one of the expected "not ready
+ * yet" failures. The callers recover from those (a later store sync restores
+ * again); anything else, such as malformed GeoJSON, would otherwise vanish.
+ * The app captures `console.warn` into its diagnostics log.
+ *
+ * @param context Which operation failed, for the log message.
+ * @param error The rejection from `loadGeoJson`.
+ */
+function warnUnlessGeomanNotReady(context: string, error: unknown): void {
+  if (
+    error instanceof Error &&
+    GEOMAN_NOT_READY_MESSAGES.some((message) => error.message.includes(message))
+  ) {
+    return;
+  }
+  console.warn(`Geo Editor: ${context} failed`, error);
 }
 
 /**
@@ -942,9 +1076,7 @@ export async function startLayerGeometryEdit(
     // A "Missing source" failure means Geoman is not ready yet (handled by the
     // rollback below). Log anything else so unexpected failures (e.g. malformed
     // geojson) are not silently swallowed.
-    if (!(error instanceof Error) || !error.message.includes("Missing source")) {
-      console.warn("startLayerGeometryEdit: loadGeoJson failed", error);
-    }
+    warnUnlessGeomanNotReady("startLayerGeometryEdit: loadGeoJson", error);
   } finally {
     restoringSketchesToEditor = false;
   }
@@ -1071,8 +1203,9 @@ async function restoreSketchesAfterSession(): Promise<void> {
     restoringSketchesToEditor = true;
     try {
       await geoEditorControl.loadGeoJson(savedSketchesCollection, SKETCHES_SOURCE_PATH);
-    } catch {
+    } catch (error) {
       // Geoman may not be ready; the store subscription will re-restore.
+      warnUnlessGeomanNotReady("restoring sketches after an edit session", error);
     } finally {
       restoringSketchesToEditor = false;
     }
@@ -1111,8 +1244,9 @@ async function restoreSketchesLayerToEditor(): Promise<void> {
   restoringSketchesToEditor = true;
   try {
     await geoEditorControl.loadGeoJson(storeCollection, SKETCHES_SOURCE_PATH);
-  } catch {
+  } catch (error) {
     // Geoman may not be ready until the map style finishes loading.
+    warnUnlessGeomanNotReady("loading the Sketches layer into the editor", error);
   } finally {
     restoringSketchesToEditor = false;
   }
@@ -1129,8 +1263,9 @@ async function clearSketchesFromEditor(): Promise<void> {
       { type: "FeatureCollection", features: [] },
       SKETCHES_SOURCE_PATH,
     );
-  } catch {
-    // Ignore when Geoman is not initialized yet.
+  } catch (error) {
+    // Expected when Geoman is not initialized yet.
+    warnUnlessGeomanNotReady("clearing the editor", error);
   } finally {
     restoringSketchesToEditor = false;
   }
@@ -1218,6 +1353,13 @@ function isGeoEditorInteractionMode(): boolean {
   return activeDrawMode !== null || activeEditMode !== null;
 }
 
+/**
+ * The map layers a store GeoJSON layer is drawn with, under both 2D engines'
+ * id schemes: MapLibre's `layer-<id>-*` and the Mapbox engine's
+ * `geolibre-mapbox-<id>-geojson-*` (where the fill layer doubles as the
+ * extrusion). Every consumer checks `getLayer` first, so the ids of the engine
+ * that is not mounted are simply skipped.
+ */
 function sketchesMapLayerIds(layerId: string): string[] {
   return [
     `layer-${layerId}-fill`,
@@ -1225,6 +1367,10 @@ function sketchesMapLayerIds(layerId: string): string[] {
     `layer-${layerId}-line`,
     `layer-${layerId}-circle`,
     `layer-${layerId}-text`,
+    mapboxFillLayerId(layerId),
+    mapboxLineLayerId(layerId),
+    `${mapboxSourceId(layerId)}-geojson-circle`,
+    `${mapboxSourceId(layerId)}-geojson-labels`,
   ];
 }
 
@@ -1287,7 +1433,7 @@ function scheduleApplySketchesMapDisplay(): void {
 }
 
 function scheduleShowGeomanDisplayLayersOnStyleData(): void {
-  const map = appApi?.getMap?.();
+  const map = getStyleMap(appApi);
   if (!map || pendingStyleDataListener) return;
 
   pendingStyleDataListener = () => {
@@ -1312,7 +1458,7 @@ function setSketchesMapLayerSuppressed(suppress: boolean): void {
 }
 
 function setSketchesMapLayersVisibility(layer: GeoLibreLayer): void {
-  const map = appApi?.getMap?.();
+  const map = getStyleMap(appApi);
   if (!map) return;
 
   const visibility = layer.visible && !sketchesMapLayerSuppressed ? "visible" : "none";
@@ -1332,7 +1478,7 @@ function setGeomanDisplayLayersVisibility(
   visibility: "visible" | "none",
   matches: (layer: maplibregl.LayerSpecification) => boolean = isGeomanDisplayLayer,
 ): void {
-  const map = appApi?.getMap?.();
+  const map = getStyleMap(appApi);
   if (!map) return;
   const sketchesLayer = activeEditableLayer(useAppStore.getState().layers);
   // In a session the target is intentionally store-hidden, so its `visible`
@@ -1448,7 +1594,7 @@ function geoEditorTargetAnchorLayerIds(map: maplibregl.Map, layer: GeoLibreLayer
  * does not loop.
  */
 function positionGeoEditorOverlayLayers(): void {
-  const map = appApi?.getMap?.();
+  const map = getStyleMap(appApi);
   if (!map) return;
   const styleLayers = map.getStyle()?.layers;
   if (!styleLayers || styleLayers.length === 0) return;
